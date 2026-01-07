@@ -1,0 +1,60 @@
+[project]
+name = "your-project"
+
+[checks]
+lint = "ruff check ."
+test = "pytest tests/ -q"
+typecheck = "pyright"
+order = [
+    "lint",
+    "typecheck",
+    "test",
+]
+
+[codex]
+exec = "codex"
+sandbox = "read-only"
+
+[claude]
+exec = "claude"
+timeout = 1800
+max_output_tokens = 128000
+
+[claude.transcripts]
+exec = "claude-code-transcripts"
+visibility = "secret"
+
+[git]
+commit_trailer_key = "Claude-Transcript"
+include_run_trailer = true
+
+[loop]
+max_iterations = 5
+fail_on_blockers_only = true
+
+[task_models.discover]
+provider = "claude"
+
+[task_models.interview]
+provider = "claude"
+
+[task_models.research]
+provider = "claude"
+
+[task_models.research_review]
+provider = "codex"
+
+[task_models.plan_generation]
+provider = "claude"
+
+[task_models.plan_review]
+provider = "codex"
+
+[task_models.implementation]
+provider = "claude"
+
+[task_models.implementation_review]
+provider = "codex"
+
+[task_models.fix_generation]
+provider = "claude"
