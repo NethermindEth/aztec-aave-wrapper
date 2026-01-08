@@ -1,0 +1,19 @@
+{
+  "name": "@aztec-aave-wrapper/l1",
+  "version": "0.0.1",
+  "description": "L1 Portal contract for Aztec Aave Wrapper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test -vvv",
+    "coverage": "forge coverage",
+    "fmt": "forge fmt",
+    "fmt:check": "forge fmt --check",
+    "clean": "forge clean"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
