@@ -1,0 +1,17 @@
+{
+  "../l1/lib/forge-std": {
+    "rev": "480d8768e4bc09eb841dbe38aa0f0370de8f8dd8"
+  },
+  "../l1/lib/openzeppelin-contracts": {
+    "rev": "1e5b89110853663f4d7f83c867b3945854f40a76"
+  },
+  "lib/aave-v3-core": {
+    "rev": "782f51917056a53a2c228701058a6c3fb233684a"
+  },
+  "lib/forge-std": {
+    "tag": {
+      "name": "v1.14.0",
+      "rev": "1801b0541f4fda118a10798fd3486bb7051c5dd6"
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@aztec-aave-wrapper/target",
+  "version": "0.1.0",
+  "description": "Target chain (L1) Aave executor contracts",
+  "private": true,
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test",
+    "test:verbose": "forge test -vvv",
+    "test:gas": "forge test --gas-report",
+    "fmt": "forge fmt",
+    "fmt:check": "forge fmt --check",
+    "clean": "forge clean",
+    "deploy:sepolia": "forge script script/Deploy.s.sol --rpc-url sepolia --broadcast --verify",
+    "deploy:mainnet": "forge script script/Deploy.s.sol --rpc-url mainnet --broadcast --verify"
+  },
+  "devDependencies": {
+    "@aave/core-v3": "^1.19.0",
+    "@openzeppelin/contracts": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
