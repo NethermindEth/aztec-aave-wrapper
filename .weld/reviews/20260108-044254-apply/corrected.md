@@ -63,22 +63,22 @@ bun --version && cat package.json | grep -A 5 "workspaces"
 ### Step 2: Create L2 Package Structure (Noir)
 
 #### Goal
-Set up the L2 Noir contract workspace with proper nargo configuration.
+Set up the L2 Noir contract workspace with proper aztec configuration.
 
 #### Files
-- `l2/nargo.toml` - Nargo project configuration with aztec-nr dependencies
+- `l2/aztec.toml` - Nargo project configuration with aztec-nr dependencies
 - `l2/contracts/aave_wrapper/src/main.nr` - Entry point (empty initially)
-- `l2/contracts/aave_wrapper/nargo.toml` - Contract-specific configuration
+- `l2/contracts/aave_wrapper/aztec.toml` - Contract-specific configuration
 - `l2/tests/.gitkeep` - Placeholder for test directory
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo check
+cd l2/contracts/aave_wrapper && aztec check
 ```
 
 #### Failure modes
-- Nargo version mismatch: Ensure nargo version matches aztec-packages version
-- Missing aztec-nr dependency: Verify aztec-nr git reference in nargo.toml
+- Nargo version mismatch: Ensure aztec version matches aztec-packages version
+- Missing aztec-nr dependency: Verify aztec-nr git reference in aztec.toml
 
 ---
 
@@ -238,7 +238,7 @@ Implement the Aztec L2 contract that manages private position receipts and creat
 
 ### Phase Validation
 ```bash
-cd l2 && nargo test && nargo compile
+cd l2 && aztec test && aztec compile
 ```
 
 ---
@@ -264,7 +264,7 @@ struct PositionReceiptNote {
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo check
+cd l2/contracts/aave_wrapper && aztec check
 ```
 
 #### Failure modes
@@ -300,7 +300,7 @@ struct WithdrawIntent {
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo check
+cd l2/contracts/aave_wrapper && aztec check
 ```
 
 #### Failure modes
@@ -328,7 +328,7 @@ struct Storage {
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo check
+cd l2/contracts/aave_wrapper && aztec check
 ```
 
 #### Failure modes
@@ -363,7 +363,7 @@ Key logic:
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo test --test test_request_deposit
+cd l2/contracts/aave_wrapper && aztec test --test test_request_deposit
 ```
 
 #### Failure modes
@@ -394,7 +394,7 @@ Key logic:
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo test --test test_finalize_deposit
+cd l2/contracts/aave_wrapper && aztec test --test test_finalize_deposit
 ```
 
 #### Failure modes
@@ -425,7 +425,7 @@ Key logic:
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo test --test test_request_withdraw
+cd l2/contracts/aave_wrapper && aztec test --test test_request_withdraw
 ```
 
 #### Failure modes
@@ -455,7 +455,7 @@ Key logic:
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo test --test test_finalize_withdraw
+cd l2/contracts/aave_wrapper && aztec test --test test_finalize_withdraw
 ```
 
 #### Failure modes
@@ -484,7 +484,7 @@ Events:
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo test
+cd l2/contracts/aave_wrapper && aztec test
 ```
 
 #### Failure modes
@@ -505,7 +505,7 @@ Create full test coverage for all L2 contract functions.
 
 #### Validation
 ```bash
-cd l2/contracts/aave_wrapper && nargo test --show-output
+cd l2/contracts/aave_wrapper && aztec test --show-output
 ```
 
 #### Failure modes
