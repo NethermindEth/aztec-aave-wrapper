@@ -1,0 +1,30 @@
+{
+  "name": "@aztec-aave-wrapper/e2e",
+  "version": "0.0.1",
+  "description": "End-to-end tests for Aztec Aave Wrapper",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules/.cache"
+  },
+  "dependencies": {
+    "@aztec/aztec.js": "^0.65.0",
+    "@aztec/circuits.js": "^0.65.0",
+    "@aztec/accounts": "^0.65.0",
+    "ethers": "^6.13.0",
+    "viem": "^2.21.0",
+    "@aztec-aave-wrapper/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3",
+    "vitest": "^2.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
