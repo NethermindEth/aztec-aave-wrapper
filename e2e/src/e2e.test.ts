@@ -69,125 +69,97 @@ describe("Aztec Aave Wrapper E2E", () => {
   });
 
   describe("Deposit Flow", () => {
-    it("should complete full deposit cycle", async () => {
-      // Step 1: Create Aztec account
-      // This is done in beforeAll
+    /**
+     * Full deposit cycle test requires:
+     * 1. Aztec account creation
+     * 2. Token minting via token portal
+     * 3. request_deposit on L2
+     * 4. executeDeposit on L1 portal
+     * 5. Wormhole delivery to target
+     * 6. Aave supply verification
+     * 7. Wormhole callback confirmation
+     * 8. finalize_deposit on L2
+     * 9. PositionReceiptNote verification
+     */
+    it.todo("should complete full deposit cycle");
 
-      // Step 2: Mint private test tokens on L2
-      // TODO: Implement token minting via token portal
+    /**
+     * Test should create intent with past deadline and verify L1 portal rejects it.
+     * Requires L1 contract interaction.
+     */
+    it.todo("should reject deposit with expired deadline");
 
-      // Step 3: Call request_deposit on L2
-      // const intentId = await aaveWrapper.methods.request_deposit(
-      //   assetId,
-      //   TEST_CONFIG.depositAmount,
-      //   WORMHOLE_CHAIN_IDS.LOCAL_TARGET,
-      //   BigInt(Math.floor(Date.now() / 1000) + TEST_CONFIG.deadlineOffset)
-      // ).send().wait();
-
-      // Step 4: Execute portal on L1 (verify L2→L1 message consumed)
-      // TODO: Call executeDeposit on L1 portal
-
-      // Step 5: Simulate/trigger Wormhole delivery to target
-      // TODO: In local mode, manually trigger or use mock
-
-      // Step 6: Verify Aave supply on target
-      // TODO: Check aToken balance
-
-      // Step 7: Simulate/trigger confirmation back to L1
-      // TODO: Trigger Wormhole callback
-
-      // Step 8: Finalize on L2
-      // TODO: Call finalize_deposit on L2
-
-      // Step 9: Assert PositionReceiptNote exists with correct shares
-      // TODO: Query private notes
-
-      // Placeholder assertion
-      expect(true).toBe(true);
-    });
-
-    it("should reject deposit with expired deadline", async () => {
-      // TODO: Create intent with past deadline and verify rejection
-      expect(true).toBe(true);
-    });
-
-    it("should reject replay of consumed deposit intent", async () => {
-      // TODO: Try to execute same intentId twice
-      expect(true).toBe(true);
-    });
+    /**
+     * Test replay protection - covered in integration.test.ts for L2 contract.
+     * E2E version should verify L1 portal also rejects replays.
+     */
+    it.todo("should reject replay of consumed deposit intent");
   });
 
   describe("Withdraw Flow", () => {
-    it("should complete full withdrawal cycle", async () => {
-      // Prerequisites: Complete a deposit first (or use existing position)
+    /**
+     * Full withdrawal cycle test requires:
+     * 1. Existing position from completed deposit
+     * 2. request_withdraw on L2 with receipt
+     * 3. executeWithdraw on L1 portal
+     * 4. Wormhole delivery for Aave withdrawal
+     * 5. Token bridge back to L1
+     * 6. Portal L1→L2 message
+     * 7. finalize_withdraw on L2
+     * 8. Private balance verification
+     */
+    it.todo("should complete full withdrawal cycle");
 
-      // Step 1: Call request_withdraw on L2 with receipt
-      // TODO: Get receipt note hash and call request_withdraw
-
-      // Step 2: Execute portal on L1
-      // TODO: Call executeWithdraw on L1 portal
-
-      // Step 3: Trigger withdrawal on target (Aave withdraw)
-      // TODO: Wormhole delivery triggers Aave withdrawal
-
-      // Step 4: Trigger token bridge back to L1
-      // TODO: Tokens bridged with confirmation
-
-      // Step 5: Complete on L1 (tokens to token portal)
-      // TODO: Portal receives tokens and sends L1→L2 message
-
-      // Step 6: Finalize on L2
-      // TODO: Call finalize_withdraw on L2
-
-      // Step 7: Assert private balance restored
-      // TODO: Query private token balance
-
-      // Placeholder assertion
-      expect(true).toBe(true);
-    });
-
-    it("should reject withdrawal without valid receipt", async () => {
-      // TODO: Try to withdraw with invalid/non-existent receipt
-      expect(true).toBe(true);
-    });
+    /**
+     * Authorization test - covered more specifically in integration.test.ts.
+     * E2E version should test with real receipt notes.
+     */
+    it.todo("should reject withdrawal without valid receipt");
   });
 
   describe("Full Cycle", () => {
-    it("should complete deposit → withdraw cycle", async () => {
-      // Full flow as specified in spec.md § 10
-      // This test combines deposit and withdraw into one flow
+    /**
+     * Complete deposit → withdraw cycle as specified in spec.md § 10.
+     * Combines all steps from both deposit and withdrawal flows.
+     */
+    it.todo("should complete deposit → withdraw cycle");
 
-      // Placeholder assertion
-      expect(true).toBe(true);
-    });
-
-    it("should handle multiple concurrent deposits", async () => {
-      // Stress test with multiple intents in parallel
-
-      // Placeholder assertion
-      expect(true).toBe(true);
-    });
+    /**
+     * Stress test: multiple concurrent intents to verify:
+     * - Intent ID uniqueness
+     * - No cross-contamination between intents
+     * - Proper isolation of private notes
+     */
+    it.todo("should handle multiple concurrent deposits");
   });
 
   describe("Edge Cases", () => {
-    it("should reject message from unauthorized source", async () => {
-      // TODO: Send message from wrong address
-      expect(true).toBe(true);
-    });
+    /**
+     * L1 portal authorization test.
+     * Should verify that only messages from the registered L2 contract
+     * are accepted by the portal.
+     */
+    it.todo("should reject message from unauthorized source");
 
-    it("should handle Aave supply failure gracefully", async () => {
-      // TODO: Trigger failure condition on Aave (e.g., paused pool)
-      expect(true).toBe(true);
-    });
+    /**
+     * Failure handling test.
+     * Requires Aave pool manipulation (pause) or mock.
+     * Should verify graceful failure without losing funds.
+     */
+    it.todo("should handle Aave supply failure gracefully");
 
-    it("should enforce deadline on L1 execution", async () => {
-      // TODO: Let deadline pass before L1 execution
-      expect(true).toBe(true);
-    });
+    /**
+     * Deadline enforcement test.
+     * Requires time manipulation on L1 chain.
+     * Should verify portal rejects expired intents.
+     */
+    it.todo("should enforce deadline on L1 execution");
 
-    it("should prevent double finalization", async () => {
-      // TODO: Try to finalize same intent twice
-      expect(true).toBe(true);
-    });
+    /**
+     * Double finalization prevention.
+     * Covered in integration.test.ts for L2 contract.
+     * E2E version should verify full L1+L2 flow.
+     */
+    it.todo("should prevent double finalization");
   });
 });
