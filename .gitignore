@@ -1,0 +1,56 @@
+# =============================================================================
+# Aztec Aave Wrapper - Git Ignore
+# =============================================================================
+
+# Environment files (may contain secrets)
+.env
+.env.local
+.env.*.local
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+bun.lockb
+
+# Build outputs
+dist/
+out/
+cache/
+artifacts/
+
+# Foundry
+l1/cache/
+l1/out/
+target/cache/
+target/out/
+
+# Noir/Aztec
+l2/target/
+*.json.gz
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+lcov.info
+.nyc_output/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+.tmp/

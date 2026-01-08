@@ -1,0 +1,16 @@
+# Bun configuration for Aztec Aave Wrapper monorepo
+
+[install]
+# Use exact versions for reproducibility
+exact = true
+
+# Prefer offline packages when available
+prefer-offline = true
+
+[install.lockfile]
+# Save lockfile in project root
+save = true
+
+[run]
+# Silent mode for cleaner output in scripts
+silent = false
