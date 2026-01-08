@@ -243,7 +243,7 @@ cd l2 && aztec test && aztec compile
 
 ---
 
-### Step 1: Define PositionReceiptNote Structure
+### Step 1: Define PositionReceiptNote Structure **COMPLETE**
 
 #### Goal
 Create the private note structure representing user claims on Aave positions.
@@ -273,7 +273,7 @@ cd l2/contracts/aave_wrapper && aztec check
 
 ---
 
-### Step 2: Define Intent Message Structures
+### Step 2: Define Intent Message Structures **COMPLETE**
 
 #### Goal
 Create the message schema for cross-chain communication.
@@ -308,7 +308,7 @@ cd l2/contracts/aave_wrapper && aztec check
 
 ---
 
-### Step 3: Implement Storage and State Management
+### Step 3: Implement Storage and State Management **COMPLETE**
 
 #### Goal
 Set up contract storage for receipts and intent tracking.
@@ -337,7 +337,7 @@ cd l2/contracts/aave_wrapper && aztec check
 
 ---
 
-### Step 4: Implement request_deposit Function
+### Step 4: Implement request_deposit Function **COMPLETE**
 
 #### Goal
 Create the entry point for users to initiate private deposits.
@@ -372,7 +372,7 @@ cd l2/contracts/aave_wrapper && aztec test --test test_request_deposit
 
 ---
 
-### Step 5: Implement finalize_deposit Function
+### Step 5: Implement finalize_deposit Function **COMPLETE**
 
 #### Goal
 Allow users to claim their position receipt after deposit confirmation.
@@ -403,7 +403,7 @@ cd l2/contracts/aave_wrapper && aztec test --test test_finalize_deposit
 
 ---
 
-### Step 6: Implement request_withdraw Function
+### Step 6: Implement request_withdraw Function **COMPLETE**
 
 #### Goal
 Allow users to initiate withdrawal of their position.
@@ -434,7 +434,7 @@ cd l2/contracts/aave_wrapper && aztec test --test test_request_withdraw
 
 ---
 
-### Step 7: Implement finalize_withdraw Function
+### Step 7: Implement finalize_withdraw Function **COMPLETE**
 
 #### Goal
 Allow users to receive tokens back after withdrawal completes.
@@ -463,7 +463,7 @@ cd l2/contracts/aave_wrapper && aztec test --test test_finalize_withdraw
 
 ---
 
-### Step 8: Implement Helper Functions and Events
+### Step 8: Implement Helper Functions and Events **COMPLETE**
 
 #### Goal
 Add utility functions and event emissions for observability.
@@ -492,7 +492,7 @@ cd l2/contracts/aave_wrapper && aztec test
 
 ---
 
-### Step 9: Write Comprehensive L2 Unit Tests
+### Step 9: Write Comprehensive L2 Unit Tests **COMPLETE**
 
 #### Goal
 Create full test coverage for all L2 contract functions.
