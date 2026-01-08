@@ -40,7 +40,7 @@ PXE_PORT ?= 8080
 # PHONY Targets Declaration
 # ==============================================================================
 .PHONY: help check-tooling check-tool-docker check-tool-foundry check-tool-bun \
-        check-tool-nargo check-tool-aztec devnet-up devnet-down devnet-health \
+        check-tool-aztec check-tool-aztec devnet-up devnet-down devnet-health \
         devnet-logs build build-l1 build-l2 build-target test test-l1 test-l2 \
         test-target deploy-local e2e clean
 
@@ -132,11 +132,11 @@ check-tooling:
 		MISSING_TOOLS="$$MISSING_TOOLS bun" ; \
 	fi ; \
 	\
-	if command -v nargo >/dev/null 2>&1; then \
-		echo -e "$(GREEN)✓$(NC) nargo: $$(nargo --version)" ; \
+	if command -v aztec >/dev/null 2>&1; then \
+		echo -e "$(GREEN)✓$(NC) aztec: $$(aztec --version)" ; \
 	else \
-		echo -e "$(RED)✗$(NC) nargo: NOT FOUND" ; \
-		MISSING_TOOLS="$$MISSING_TOOLS nargo" ; \
+		echo -e "$(RED)✗$(NC) aztec: NOT FOUND" ; \
+		MISSING_TOOLS="$$MISSING_TOOLS aztec" ; \
 	fi ; \
 	\
 	echo "" ; \
@@ -167,7 +167,7 @@ check-tooling:
 		echo "  docker:  https://docs.docker.com/get-docker/" ; \
 		echo "  foundry: curl -L https://foundry.paradigm.xyz | bash && foundryup" ; \
 		echo "  bun:     curl -fsSL https://bun.sh/install | bash" ; \
-		echo "  nargo:   curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash && noirup" ; \
+		echo "  aztec:   curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash && noirup" ; \
 		echo "" ; \
 		exit 1 ; \
 	else \
@@ -253,7 +253,7 @@ build-l2:
 	@echo ""
 	@echo "Building L2 contracts..."
 	@echo "========================"
-	cd $(L2_DIR) && nargo compile
+	cd $(L2_DIR) && aztec compile
 	@echo ""
 
 ## build-target: Build Target chain Solidity contracts (Executor)
@@ -287,7 +287,7 @@ test-l2:
 	@echo ""
 	@echo "Running L2 contract tests..."
 	@echo "============================"
-	cd $(L2_DIR) && nargo test
+	cd $(L2_DIR) && aztec test
 	@echo ""
 
 ## test-target: Run Target chain contract tests
@@ -394,7 +394,7 @@ fmt:
 	@echo ""
 	cd $(L1_DIR) && forge fmt
 	cd $(TARGET_DIR) && forge fmt
-	cd $(L2_DIR) && nargo fmt
+	cd $(L2_DIR) && aztec fmt
 	@echo ""
 	@echo -e "$(GREEN)Formatting complete!$(NC)"
 	@echo ""

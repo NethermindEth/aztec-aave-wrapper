@@ -27,7 +27,7 @@ target/cache/
 target/out/
 
 # Noir/Aztec
-l2/target/
+aztec_contracts/target/
 *.json.gz
 
 # IDE
@@ -54,3 +54,8 @@ logs/
 tmp/
 temp/
 .tmp/
+
+
+e2e/node_modules
+
+!CLAUDE.md
