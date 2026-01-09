@@ -308,16 +308,22 @@ deploy-local: check-devnet-running
 	@echo "Deploying contracts to local devnet..."
 	@echo "======================================="
 	@echo ""
-	@echo "Step 1/3: Deploying L1 contracts..."
-	cd $(L1_DIR) && forge script script/Deploy.s.sol --rpc-url http://localhost:$(ANVIL_L1_PORT) --broadcast
-	@echo ""
-	@echo "Step 2/3: Deploying Target chain contracts..."
-	cd $(TARGET_DIR) && forge script script/Deploy.s.sol --rpc-url http://localhost:$(ANVIL_TARGET_PORT) --broadcast
-	@echo ""
-	@echo "Step 3/3: Deploying L2 contracts..."
-	@echo "(L2 deployment requires aztec-cli - implement based on your setup)"
+	bun run scripts/deploy-local.ts
 	@echo ""
 	@echo -e "$(GREEN)Local deployment complete!$(NC)"
+	@echo ""
+	@echo "Deployment addresses saved to .deployments.local.json"
+	@echo ""
+
+## deploy-mocks: Deploy only Wormhole mock contracts
+deploy-mocks: check-devnet-running
+	@echo ""
+	@echo "Deploying Wormhole mock contracts..."
+	@echo "====================================="
+	@echo ""
+	bun run scripts/deploy-mocks.ts
+	@echo ""
+	@echo -e "$(GREEN)Mock deployment complete!$(NC)"
 	@echo ""
 
 # Internal target to check if devnet is running
