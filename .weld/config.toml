@@ -20,10 +20,6 @@ exec = "claude"
 timeout = 1800
 max_output_tokens = 128000
 
-[claude.transcripts]
-exec = "claude-code-transcripts"
-visibility = "secret"
-
 [git]
 commit_trailer_key = "Claude-Transcript"
 include_run_trailer = true
@@ -58,3 +54,6 @@ provider = "codex"
 
 [task_models.fix_generation]
 provider = "claude"
+
+[transcripts]
+visibility = "secret"
