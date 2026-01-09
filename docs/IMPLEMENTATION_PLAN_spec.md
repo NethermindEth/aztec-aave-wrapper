@@ -137,7 +137,7 @@ struct DepositIntent {
 #### Validation
 ```bash
 cd l1 && forge test --match-test test_intentEncoding
-cd aztec_contracts && aztec test test_intent_serialization
+cd aztec_contracts && aztec test --match-test test_intent_serialization
 ```
 
 #### Failure modes
@@ -202,7 +202,7 @@ Current storage in main.nr does NOT include intentId → owner mapping.
 #### Validation
 ```bash
 cd aztec_contracts && aztec compile
-cd aztec_contracts && aztec test test_storage_mapping
+cd aztec_contracts && aztec test --match-test test_storage_mapping
 ```
 
 #### Failure modes
@@ -251,7 +251,7 @@ struct PositionReceiptNote {
 #### Validation
 ```bash
 cd aztec_contracts && aztec compile
-cd aztec_contracts && aztec test test_position_receipt_note
+cd aztec_contracts && aztec test --match-test test_position_receipt_note
 ```
 
 #### Failure modes
@@ -279,8 +279,8 @@ Current implementation does NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test test_request_deposit
-cd aztec_contracts && aztec test test_deadline_validation
+cd aztec_contracts && aztec test --match-test test_request_deposit
+cd aztec_contracts && aztec test --match-test test_deadline_validation
 ```
 
 #### Failure modes
@@ -304,7 +304,7 @@ Current implementation in main.nr does not appear to have compute_deposit_messag
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test test_message_encoding
+cd aztec_contracts && aztec test --match-test test_message_encoding
 # Cross-validate with L1 contract message consumption
 ```
 
@@ -333,7 +333,7 @@ Current finalize_deposit does NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test test_finalize_deposit
+cd aztec_contracts && aztec test --match-test test_finalize_deposit
 ```
 
 #### Failure modes
@@ -364,8 +364,8 @@ Current implementations do NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test test_withdraw
-cd aztec_contracts && aztec test test_full_withdrawal_only
+cd aztec_contracts && aztec test --match-test test_withdraw
+cd aztec_contracts && aztec test --match-test test_full_withdrawal_only
 ```
 
 #### Failure modes
@@ -396,7 +396,7 @@ Add claim_refund function to mint new receipt note when withdrawal request expir
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test test_refund
+cd aztec_contracts && aztec test --match-test test_refund
 ```
 
 #### Failure Modes
@@ -419,9 +419,9 @@ cd l1 && forge test -vv
 cd l1 && forge coverage
 ```
 
-### Step 1: Implement executeDeposit with Aztec outbox consumption and deadline validation
+### Step 1: Implement executeDeposit with Aztec outbox consumption and deadline validation **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic structure exists)
+**Status**: IMPLEMENTED
 
 #### Goal
 Implement executeDeposit function to consume L2→L1 messages, validate intents with min/max deadline bounds, per spec.md §4.1 Step 2.

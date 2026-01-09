@@ -3,6 +3,8 @@ pragma solidity ^0.8.33;
 
 import {IAztecOutbox} from "./interfaces/IAztecOutbox.sol";
 import {IWormholeTokenBridge} from "./interfaces/IWormholeTokenBridge.sol";
+import {DepositIntent, WithdrawIntent, IntentLib} from "./types/Intent.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title AztecAavePortalL1
@@ -119,7 +121,86 @@ contract AztecAavePortalL1 {
 
     // ============ External Functions ============
 
-    // TODO: Implement executeDeposit
+    /**
+     * @notice Execute a deposit intent by consuming L2->L1 message and bridging to target chain
+     * @param intent The deposit intent from L2
+     * @param l2BlockNumber The L2 block number where the message was created
+     * @param leafIndex The index of the message in the L2 block's message tree
+     * @param siblingPath Merkle proof path from leaf to root
+     * @dev This function can be called by anyone (relayer model)
+     *
+     * Flow:
+     * 1. Validate deadline is within acceptable bounds
+     * 2. Consume L2->L1 message from Aztec outbox with proof
+     * 3. Check for replay attacks
+     * 4. Bridge tokens to target chain via Wormhole with intent payload
+     *
+     * Privacy: Uses ownerHash instead of owner address to prevent identity linkage
+     */
+    function executeDeposit(
+        DepositIntent calldata intent,
+        uint256 l2BlockNumber,
+        uint256 leafIndex,
+        bytes32[] calldata siblingPath
+    ) external payable {
+        // Step 1: Check for replay attack first (cheapest check, prevents wasted computation)
+        if (consumedIntents[intent.intentId]) {
+            revert IntentAlreadyConsumed(intent.intentId);
+        }
+
+        // Step 2: Check deadline hasn't passed
+        if (block.timestamp >= intent.deadline) {
+            revert DeadlinePassed();
+        }
+
+        // Step 3: Validate deadline is within acceptable bounds
+        _validateDeadline(intent.deadline);
+
+        // Step 4: Compute message hash for outbox consumption
+        // Must match the L2 encoding exactly
+        bytes32 messageHash = IntentLib.hashDepositIntent(intent);
+
+        // Step 5: Consume the L2->L1 message from Aztec outbox
+        // This will revert if the message doesn't exist or proof is invalid
+        bool consumed = IAztecOutbox(aztecOutbox).consume(
+            messageHash,
+            l2BlockNumber,
+            leafIndex,
+            siblingPath
+        );
+        require(consumed, "Failed to consume outbox message");
+
+        // Step 6: Mark intent as consumed for replay protection
+        // CRITICAL: Must be set BEFORE external calls to prevent reentrancy
+        consumedIntents[intent.intentId] = true;
+
+        // Step 7: Approve Wormhole token bridge to spend tokens
+        // Tokens should already be on L1 via token portal withdrawal
+        bool approveSuccess = IERC20(intent.asset).approve(wormholeTokenBridge, intent.amount);
+        require(approveSuccess, "Token approval failed");
+
+        // Step 8: Bridge tokens + payload to target executor via Wormhole
+        // Using transferTokensWithPayload for atomic delivery
+        bytes memory payload = IntentLib.encodeDepositIntent(intent);
+
+        // Note: msg.value should cover Wormhole fees
+        IWormholeTokenBridge(wormholeTokenBridge).transferTokensWithPayload{value: msg.value}(
+            intent.asset,
+            intent.amount,
+            uint16(intent.targetChainId),
+            targetExecutor,
+            uint32(uint256(intent.intentId)), // Use intentId as nonce
+            payload
+        );
+
+        emit DepositInitiated(
+            intent.intentId,
+            intent.asset,
+            intent.amount,
+            uint16(intent.targetChainId)
+        );
+    }
+
     // TODO: Implement executeWithdraw
     // TODO: Implement receiveWormholeMessages
     // TODO: Implement completeTransferWithPayload
