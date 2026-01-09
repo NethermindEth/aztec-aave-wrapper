@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
+pragma solidity ^0.8.33;
 
 import {IAztecOutbox} from "./interfaces/IAztecOutbox.sol";
 import {IWormholeTokenBridge} from "./interfaces/IWormholeTokenBridge.sol";
@@ -42,6 +42,14 @@ contract AztecAavePortalL1 {
     /// @notice Address of executor contract on target chain
     bytes32 public immutable targetExecutor;
 
+    // ============ Deadline Configuration ============
+
+    /// @notice Minimum allowed deadline (5 minutes)
+    uint256 public constant MIN_DEADLINE = 5 minutes;
+
+    /// @notice Maximum allowed deadline (24 hours)
+    uint256 public constant MAX_DEADLINE = 24 hours;
+
     // ============ State ============
 
     /// @notice Tracks consumed intent IDs for replay protection
@@ -52,6 +60,7 @@ contract AztecAavePortalL1 {
     error IntentAlreadyConsumed(bytes32 intentId);
     error InvalidSource();
     error DeadlinePassed();
+    error InvalidDeadline(uint256 deadline);
 
     // ============ Events ============
 
@@ -88,6 +97,24 @@ contract AztecAavePortalL1 {
         l2ContractAddress = _l2ContractAddress;
         targetChainId = _targetChainId;
         targetExecutor = _targetExecutor;
+    }
+
+    // ============ Internal Functions ============
+
+    /**
+     * @notice Validate that a deadline is within acceptable bounds
+     * @param deadline The deadline timestamp to validate
+     * @dev Public for testing; will be made internal when used in executeDeposit/executeWithdraw
+     */
+    function _validateDeadline(uint256 deadline) public view {
+        uint256 timeUntilDeadline = deadline > block.timestamp ? deadline - block.timestamp : 0;
+
+        if (timeUntilDeadline < MIN_DEADLINE) {
+            revert InvalidDeadline(deadline);
+        }
+        if (timeUntilDeadline > MAX_DEADLINE) {
+            revert InvalidDeadline(deadline);
+        }
     }
 
     // ============ External Functions ============
