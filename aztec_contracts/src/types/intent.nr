@@ -7,7 +7,7 @@ use dep::aztec::protocol_types::traits::{Deserialize, Serialize};
 /// on the target chain (e.g., Arbitrum) through the TargetChainExecutor contract.
 ///
 /// Privacy: Uses hash(ownerL2) instead of plain owner address to preserve privacy.
-/// The L2 contract stores intentId → owner mapping privately for finalization.
+/// The L2 contract stores intentId -> owner mapping privately for finalization.
 ///
 /// Fields are ordered for efficient ABI encoding:
 /// - Field types (32 bytes each): intent_id, owner_hash, asset
@@ -66,7 +66,16 @@ impl DepositIntent {
         deadline: u64,
         salt: Field,
     ) -> Self {
-        Self { intent_id, owner_hash, asset, amount, original_decimals, target_chain_id, deadline, salt }
+        Self {
+            intent_id,
+            owner_hash,
+            asset,
+            amount,
+            original_decimals,
+            target_chain_id,
+            deadline,
+            salt,
+        }
     }
 }
 

@@ -23,7 +23,7 @@ NC := \033[0m
 
 # Project directories
 L1_DIR := l1
-L2_DIR := l2
+L2_DIR := aztec_contracts
 TARGET_DIR := target
 E2E_DIR := e2e
 
