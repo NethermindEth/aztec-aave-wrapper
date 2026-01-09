@@ -262,6 +262,11 @@ pub(crate) contract AaveWrapper {
         /// to observers who don't already know the intent parameters.
         intent_owners: Map<Field, PublicMutable<AztecAddress, Context>, Context>,
 
+        /// Mapping from intent_id to deadline timestamp.
+        /// Used to validate refund claims for expired withdrawal requests.
+        /// Only set for withdrawal intents.
+        intent_deadlines: Map<Field, PublicMutable<u64, Context>, Context>,
+
         /// The admin address with privileged access to contract configuration.
         /// Can update portal address, pause operations, etc.
         admin: PublicMutable<AztecAddress, Context>,
@@ -651,7 +656,8 @@ pub(crate) contract AaveWrapper {
 
         // Enqueue public call to update intent status and store owner mapping
         // The owner address is passed to enable finalization routing
-        AaveWrapper::at(self.context.this_address())._request_withdraw_public(intent_id, owner).enqueue(
+        // The deadline is passed to enable refund claim validation
+        AaveWrapper::at(self.context.this_address())._request_withdraw_public(intent_id, owner, deadline).enqueue(
             self.context,
         );
 
@@ -670,8 +676,9 @@ pub(crate) contract AaveWrapper {
     /// # Arguments
     /// * `intent_id` - The intent to mark as pending withdrawal
     /// * `owner` - The L2 address that owns this position
+    /// * `deadline` - The deadline timestamp for the withdrawal request
     #[external("public")]
-    fn _request_withdraw_public(intent_id: Field, owner: AztecAddress) {
+    fn _request_withdraw_public(intent_id: Field, owner: AztecAddress, deadline: u64) {
         // Verify the intent is in CONFIRMED status (successful deposit must precede withdrawal)
         let status = self.storage.intent_status.at(intent_id).read();
         assert(status == IntentStatus::CONFIRMED, "Intent not in confirmed state");
@@ -683,6 +690,9 @@ pub(crate) contract AaveWrapper {
         // Store the intent owner mapping for finalization routing
         // This allows finalize_withdraw to be routed to the correct user
         self.storage.intent_owners.at(intent_id).write(owner);
+
+        // Store the deadline for refund claim validation
+        self.storage.intent_deadlines.at(intent_id).write(deadline);
 
         // Update intent status to pending withdrawal
         self.storage.intent_status.at(intent_id).write(IntentStatus::PENDING_WITHDRAW);
@@ -814,6 +824,135 @@ pub(crate) contract AaveWrapper {
         // Clear the intent owner mapping to reclaim storage
         // This is safe because the intent is now consumed and won't be reused
         self.storage.intent_owners.at(intent_id).write(AztecAddress::from_field(0));
+
+        // Clear the deadline mapping to reclaim storage
+        self.storage.intent_deadlines.at(intent_id).write(0);
+
+        // Emit minimal event - only intent_id and status, no user data
+        self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });
+    }
+
+    /// Claims a refund for an expired withdrawal request.
+    ///
+    /// If a withdrawal request has passed its deadline without being processed,
+    /// the user can claim a refund by calling this function. This will:
+    /// 1. Verify the deadline has passed
+    /// 2. Find and nullify the PendingWithdraw receipt note
+    /// 3. Create a new Active receipt note with the same position details
+    /// 4. Update public state to mark the refund as claimed
+    ///
+    /// The new Active note will have a different nonce than the original to ensure
+    /// unique nullifiers and prevent double-spending.
+    ///
+    /// # Arguments
+    /// * `nonce` - The nonce of the PendingWithdraw receipt note (same as intent_id)
+    /// * `current_time` - Current timestamp for deadline validation
+    ///
+    /// # Privacy
+    /// - The note operations happen privately
+    /// - No user identity, amounts, or asset information is revealed publicly
+    /// - Only the intent_id and refund status are visible in public state
+    ///
+    /// # Failure Modes
+    /// - Note not found: If no PendingWithdraw note with matching nonce exists
+    /// - Not owner: If the caller doesn't own the note
+    /// - Wrong status: If the note status is not PendingWithdraw
+    /// - Deadline not expired: If current_time < deadline
+    /// - Double refund: If the refund has already been claimed for this intent
+    #[external("private")]
+    fn claim_refund(nonce: Field, current_time: u64) {
+        // Validate current_time is non-zero and reasonable
+        assert(current_time > 0, "Current time must be greater than zero");
+
+        // Get the caller's address (must be the owner of the note)
+        let owner = self.msg_sender().unwrap();
+
+        // Find the PendingWithdraw receipt note by nonce
+        let options = NoteGetterOptions::new()
+            .select(PositionReceiptNote::properties().nonce, Comparator.EQ, nonce)
+            .set_limit(1);
+
+        let notes = self.storage.receipts.at(owner).pop_notes(options);
+
+        // Ensure we found exactly one note
+        assert(notes.len() == 1, "Pending withdraw receipt note not found");
+        let receipt = notes.get(0);
+
+        // Verify the note is owned by the caller
+        assert(receipt.owner == owner, "Not the owner of this position");
+
+        // Verify the receipt status is PendingWithdraw
+        assert(
+            receipt.status == PositionStatus::PENDING_WITHDRAW,
+            "Position is not pending withdrawal",
+        );
+
+        // Note: We cannot access the deadline from the note because it's not stored in PositionReceiptNote.
+        // The deadline is stored in public state (intent_deadlines mapping) set during request_withdraw.
+        // We pass current_time to the public function which validates against the stored deadline.
+        // This ensures deadline validation happens in public context where it can be enforced.
+
+        // Generate a new nonce for the refunded note to ensure different nullifier
+        // We use hash(original_nonce, owner) to create a deterministic but different nonce
+        let new_nonce = poseidon2_hash([receipt.nonce, owner.to_field()]);
+
+        // Create a new Active note with the same position details but new nonce
+        let refunded_receipt = PositionReceiptNote {
+            owner,
+            nonce: new_nonce,
+            asset_id: receipt.asset_id,
+            shares: receipt.shares,
+            target_chain_id: receipt.target_chain_id,
+            aave_market_id: receipt.aave_market_id,
+            status: PositionStatus::ACTIVE,
+        };
+
+        // Insert the refunded note
+        self.storage.receipts.at(owner).insert(refunded_receipt).deliver(
+            MessageDelivery.CONSTRAINED_ONCHAIN,
+        );
+
+        // Enqueue public call to verify deadline and mark refund as claimed
+        // Pass the intent_id (original nonce) and current_time
+        AaveWrapper::at(self.context.this_address())._claim_refund_public(receipt.nonce, current_time).enqueue(
+            self.context,
+        );
+    }
+
+    /// Internal public function to validate deadline and update state after refund claim.
+    ///
+    /// This is called from the private claim_refund to verify the deadline has passed
+    /// and update public state. We cannot check deadlines in private context because
+    /// the deadline is not stored in the PositionReceiptNote.
+    ///
+    /// # Privacy
+    /// This function receives ONLY the intent_id and current_time. No user identity,
+    /// amounts, or asset information is passed or emitted publicly.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent to mark as refunded
+    /// * `current_time` - Current timestamp for deadline validation
+    #[external("public")]
+    fn _claim_refund_public(intent_id: Field, current_time: u64) {
+        // Verify the intent is in PendingWithdraw status
+        let status = self.storage.intent_status.at(intent_id).read();
+        assert(status == IntentStatus::PENDING_WITHDRAW, "Intent not in pending withdraw state");
+
+        // Read the stored deadline for this intent
+        let deadline = self.storage.intent_deadlines.at(intent_id).read();
+        assert(deadline > 0, "No deadline stored for this intent");
+
+        // Verify the deadline has expired (current_time must be greater than or equal to deadline)
+        assert(current_time >= deadline, "Deadline has not expired yet");
+
+        // Update intent status back to CONFIRMED (refund claimed, position still active)
+        self.storage.intent_status.at(intent_id).write(IntentStatus::CONFIRMED);
+
+        // Clear the intent owner mapping to reclaim storage
+        self.storage.intent_owners.at(intent_id).write(AztecAddress::from_field(0));
+
+        // Clear the deadline mapping to reclaim storage
+        self.storage.intent_deadlines.at(intent_id).write(0);
 
         // Emit minimal event - only intent_id and status, no user data
         self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });

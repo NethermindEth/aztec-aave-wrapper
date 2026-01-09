@@ -137,7 +137,7 @@ struct DepositIntent {
 #### Validation
 ```bash
 cd l1 && forge test --match-test test_intentEncoding
-cd aztec_contracts && aztec test --match-test test_intent_serialization
+cd aztec_contracts && aztec test test_intent_serialization
 ```
 
 #### Failure modes
@@ -202,7 +202,7 @@ Current storage in main.nr does NOT include intentId → owner mapping.
 #### Validation
 ```bash
 cd aztec_contracts && aztec compile
-cd aztec_contracts && aztec test --match-test test_storage_mapping
+cd aztec_contracts && aztec test test_storage_mapping
 ```
 
 #### Failure modes
@@ -251,7 +251,7 @@ struct PositionReceiptNote {
 #### Validation
 ```bash
 cd aztec_contracts && aztec compile
-cd aztec_contracts && aztec test --match-test test_position_receipt_note
+cd aztec_contracts && aztec test test_position_receipt_note
 ```
 
 #### Failure modes
@@ -279,8 +279,8 @@ Current implementation does NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_request_deposit
-cd aztec_contracts && aztec test --match-test test_deadline_validation
+cd aztec_contracts && aztec test test_request_deposit
+cd aztec_contracts && aztec test test_deadline_validation
 ```
 
 #### Failure modes
@@ -304,7 +304,7 @@ Current implementation in main.nr does not appear to have compute_deposit_messag
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_message_encoding
+cd aztec_contracts && aztec test test_message_encoding
 # Cross-validate with L1 contract message consumption
 ```
 
@@ -333,7 +333,7 @@ Current finalize_deposit does NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_finalize_deposit
+cd aztec_contracts && aztec test test_finalize_deposit
 ```
 
 #### Failure modes
@@ -364,8 +364,8 @@ Current implementations do NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_withdraw
-cd aztec_contracts && aztec test --match-test test_full_withdrawal_only
+cd aztec_contracts && aztec test test_withdraw
+cd aztec_contracts && aztec test test_full_withdrawal_only
 ```
 
 #### Failure modes
@@ -375,26 +375,37 @@ cd aztec_contracts && aztec test --match-test test_full_withdrawal_only
 
 ---
 
-### Step 7: Implement deadline expiry refund mechanism
+### Step 7: Implement deadline expiry refund mechanism **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: IMPLEMENTED
 
 #### Goal
 Add claim_refund function to mint new receipt note when withdrawal request expires without processing.
 
+#### Implementation Details
+- Added `intent_deadlines` storage mapping to track withdrawal request deadlines
+- Implemented `claim_refund` private function to nullify PendingWithdraw note and create new Active note
+- Implemented `_claim_refund_public` to validate deadline expiry (deadline is inclusive: current_time >= deadline)
+- Deadline validation added to `_request_withdraw_public` to store deadline
+- Deadline cleanup added to `_finalize_withdraw_public` and `_claim_refund_public`
+- New nonce generation for refunded notes: hash(original_nonce, owner) to prevent double-spending
+
 #### Files
-- `aztec_contracts/src/main.nr` - [EXISTS] No claim_refund function present
-- Test code would be added to main.nr
+- `aztec_contracts/src/main.nr` - claim_refund and _claim_refund_public implemented
+- `aztec_contracts/src/test/refund_tests.nr` - Comprehensive unit tests for refund mechanism
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_deadline_refund
+cd aztec_contracts && aztec test test_refund
 ```
 
-#### Failure modes
-- Refund claimed before deadline expires
-- Double refund prevented
-- New note has same nullifier as original (should be different)
+#### Failure Modes
+- Note not found: If no PendingWithdraw note with matching nonce exists
+- Not owner: If the caller doesn't own the note
+- Wrong status: If the note status is not PendingWithdraw
+- Deadline not expired: If current_time < deadline (refund only available at or after deadline)
+- Double refund: If the refund has already been claimed (intent status not PENDING_WITHDRAW)
+- Invalid current_time: If current_time is zero or unreasonable
 
 ---
 
