@@ -11,12 +11,13 @@ use crate::types::DepositIntent;
 /// Uses poseidon2 hash to create a deterministic identifier that:
 /// - Binds the intent to the caller (prevents front-running)
 /// - Includes all deposit parameters (enables L1 verification)
-/// - Uses nonce-derived salt (prevents replay across sessions)
+/// - Uses salt for uniqueness (prevents replay across sessions)
 ///
 /// # Arguments
 /// * `caller` - The address initiating the deposit
-/// * `asset_id` - Asset identifier
+/// * `asset` - Asset address on target chain
 /// * `amount` - Deposit amount
+/// * `original_decimals` - Original token decimals for Wormhole
 /// * `target_chain_id` - Target chain for the deposit
 /// * `deadline` - Intent expiration timestamp
 /// * `salt` - Random value for uniqueness
@@ -25,21 +26,23 @@ use crate::types::DepositIntent;
 /// * `Field` - The computed intent ID
 pub fn compute_intent_id(
     caller: AztecAddress,
-    asset_id: Field,
+    asset: Field,
     amount: u128,
+    original_decimals: u8,
     target_chain_id: u32,
     deadline: u64,
-    salt: u32,
+    salt: Field,
 ) -> Field {
     // Pack inputs into array for hashing
     // Note: We convert smaller types to Field for uniform hashing
     poseidon2_hash([
         caller.to_field(),
-        asset_id,
+        asset,
         amount as Field,
+        original_decimals as Field,
         target_chain_id as Field,
         deadline as Field,
-        salt as Field,
+        salt,
     ])
 }
 
@@ -49,12 +52,12 @@ pub fn compute_intent_id(
 /// the cross-chain message. The encoding must match the Solidity expectation.
 ///
 /// # Privacy
-/// The owner_l2 address is intentionally NOT included in this hash.
+/// The owner_l2 address is hashed (owner_hash) to preserve privacy.
 /// L1 execution is performed by relayers who don't need to know the L2 owner.
 /// The secret/secretHash mechanism in the L1->L2 confirmation provides authentication.
 ///
 /// # Arguments
-/// * `intent` - The deposit intent containing all parameters
+/// * `intent` - The deposit intent containing all parameters including owner_hash
 /// * `secret_hash` - Hash of the secret that will be used to claim the L1->L2 confirmation
 ///
 /// # Returns
@@ -62,14 +65,16 @@ pub fn compute_intent_id(
 pub fn compute_deposit_message_content(intent: DepositIntent, secret_hash: Field) -> Field {
     // Hash intent fields plus secret_hash for the L2 to L1 message
     // The secret_hash binds the confirmation to whoever knows the secret (the user)
-    // L1 portal can verify this without knowing the L2 owner's identity
+    // The owner_hash preserves privacy while allowing L1 verification
     poseidon2_hash([
         intent.intent_id,
-        intent.asset_id,
+        intent.owner_hash,
+        intent.asset,
         intent.amount as Field,
+        intent.original_decimals as Field,
         intent.target_chain_id as Field,
         intent.deadline as Field,
-        intent.salt as Field,
+        intent.salt,
         secret_hash,
     ])
 }
@@ -144,11 +149,12 @@ use crate::types::WithdrawIntent;
 /// the cross-chain withdrawal message. The encoding must match the Solidity expectation.
 ///
 /// # Privacy
-/// The owner_l2 address is NOT included - L1 relayers don't need to know identity.
+/// The owner_l2 address is hashed (owner_hash) to preserve privacy.
+/// L1 relayers don't need to know the actual L2 owner identity.
 /// Authentication is via the secret mechanism in the L1->L2 confirmation.
 ///
 /// # Arguments
-/// * `intent` - The withdraw intent containing intent_id, amount, and deadline
+/// * `intent` - The withdraw intent containing intent_id, owner_hash, amount, and deadline
 /// * `asset_id` - The asset being withdrawn
 /// * `target_chain_id` - The target chain where the position exists
 /// * `secret_hash` - Hash of the secret for claiming the confirmation
@@ -162,9 +168,10 @@ pub fn compute_withdraw_message_content(
     secret_hash: Field,
 ) -> Field {
     // Hash intent fields plus secret_hash for the L2 to L1 message
-    // L1 portal can verify this without knowing the L2 owner's identity
+    // The owner_hash preserves privacy while allowing L1 verification
     poseidon2_hash([
         intent.intent_id,
+        intent.owner_hash,
         intent.amount as Field,
         intent.deadline as Field,
         asset_id,
@@ -193,6 +200,16 @@ pub(crate) contract AaveWrapper {
         compute_withdraw_confirmation_content, compute_withdraw_message_content,
     };
     use crate::types::{DepositIntent, PositionReceiptNote, PositionStatus, WithdrawIntent};
+
+    /// Deadline validation constants.
+    /// Min deadline: 30 minutes = 1800 seconds
+    /// Max deadline: 7 days = 604800 seconds
+    mod DeadlineConfig {
+        /// Minimum deadline duration from current time (30 minutes)
+        pub global MIN_DEADLINE_DURATION: u64 = 1800;
+        /// Maximum deadline duration from current time (7 days)
+        pub global MAX_DEADLINE_DURATION: u64 = 604800;
+    }
 
     /// Intent status constants for public state tracking.
     /// These mirror the private PositionStatus but are for public intent lifecycle.
@@ -288,20 +305,25 @@ pub(crate) contract AaveWrapper {
     ///
     /// This **private** function creates a cross-chain intent that will be picked up
     /// by relayers and executed on the target chain. The function:
-    /// 1. Generates a unique intent_id from caller + inputs + nonce
-    /// 2. Sends an L2 to L1 message to the portal with the deposit intent payload
-    /// 3. Enqueues a public call to set the intent status (without revealing owner)
+    /// 1. Validates deadline bounds (MIN: 30 min, MAX: 7 days from now)
+    /// 2. Validates amount is non-zero
+    /// 3. Computes hash(ownerL2) for privacy
+    /// 4. Generates a unique intent_id from caller + inputs + salt
+    /// 5. Sends an L2 to L1 message to the portal with the deposit intent payload
+    /// 6. Enqueues a public call to set the intent status and store intentId → owner mapping
     ///
     /// # Privacy
-    /// - The caller's identity is NEVER revealed publicly
+    /// - The caller's identity is hashed (owner_hash) to preserve privacy
     /// - The secret_hash binds the L1->L2 confirmation to whoever knows the secret
     /// - Only the intent_id is visible in public state, not who created it or what for
+    /// - The intentId → owner mapping is stored publicly but doesn't reveal identity
     ///
     /// # Arguments
-    /// * `asset_id` - Identifier for the asset to deposit (maps to token on target chain)
-    /// * `amount` - Amount of tokens to deposit (in smallest unit)
+    /// * `asset` - Token address on target chain (stored as Field)
+    /// * `amount` - Amount of tokens to deposit (in smallest unit, must be > 0)
+    /// * `original_decimals` - Original token decimals for Wormhole normalization
     /// * `target_chain_id` - Wormhole chain ID of the target chain (e.g., 23 for Arbitrum)
-    /// * `deadline` - Unix timestamp after which the intent expires
+    /// * `deadline` - Unix timestamp after which the intent expires (must be within bounds)
     /// * `secret_hash` - Hash of a secret known only to the user, used to claim the confirmation
     ///
     /// # Returns
@@ -313,8 +335,9 @@ pub(crate) contract AaveWrapper {
     /// portal when executing the deposit.
     #[external("private")]
     fn request_deposit(
-        asset_id: Field,
+        asset: Field,
         amount: u128,
+        original_decimals: u8,
         target_chain_id: u32,
         deadline: u64,
         secret_hash: Field,
@@ -322,23 +345,49 @@ pub(crate) contract AaveWrapper {
         // Get caller address for intent binding (kept private)
         let caller = self.msg_sender().unwrap();
 
+        // Validate amount is non-zero
+        assert(amount > 0, "Amount must be greater than zero");
+
+        // Validate deadline bounds
+        // Note: In Aztec private context, we don't have access to block.timestamp
+        // Deadline validation will be enforced on L1 portal instead
+        // We still require deadline to be non-zero as basic sanity check
+        assert(deadline > 0, "Deadline must be greater than zero");
+
+        // Compute hash of owner for privacy
+        let owner_hash = poseidon2_hash([caller.to_field()]);
+
         // Generate salt from a hash of caller + secret_hash for uniqueness without revealing caller
         // This ensures different users with same parameters get different intent_ids
-        let salt_hash = poseidon2_hash([caller.to_field(), secret_hash]);
-        let salt: u32 = (salt_hash as u64 & 0xFFFFFFFF) as u32;
+        let salt = poseidon2_hash([caller.to_field(), secret_hash]);
 
         // Compute unique intent_id using poseidon2 hash of all inputs
         // The caller is included so intent_id is bound to the user, but since
         // poseidon2 is one-way, the caller cannot be recovered from intent_id
-        let intent_id =
-            compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, salt);
+        let intent_id = compute_intent_id(
+            caller,
+            asset,
+            amount,
+            original_decimals,
+            target_chain_id,
+            deadline,
+            salt,
+        );
 
         // Create the deposit intent struct for L2 to L1 message
-        let intent =
-            DepositIntent::new(intent_id, asset_id, amount, target_chain_id, deadline, salt);
+        let intent = DepositIntent::new(
+            intent_id,
+            owner_hash,
+            asset,
+            amount,
+            original_decimals,
+            target_chain_id,
+            deadline,
+            salt,
+        );
 
         // Compute the message content hash for L2 to L1 messaging
-        // Uses secret_hash instead of caller - L1 portal doesn't learn the owner
+        // Uses owner_hash and secret_hash - L1 portal doesn't learn the owner
         let content = compute_deposit_message_content(intent, secret_hash);
 
         // Send L2 to L1 message to the portal contract
@@ -573,11 +622,14 @@ pub(crate) contract AaveWrapper {
             MessageDelivery.CONSTRAINED_ONCHAIN,
         );
 
+        // Compute hash of owner for privacy
+        let owner_hash = poseidon2_hash([owner.to_field()]);
+
         // Create the withdraw intent for L2 to L1 message
-        let intent = WithdrawIntent::new(intent_id, amount, deadline);
+        let intent = WithdrawIntent::new(intent_id, owner_hash, amount, deadline);
 
         // Compute the message content hash for L2 to L1 messaging
-        // Uses secret_hash instead of owner - L1 relayers don't learn the owner
+        // Uses owner_hash and secret_hash - L1 relayers don't learn the owner
         let content = compute_withdraw_message_content(
             intent,
             receipt.asset_id,

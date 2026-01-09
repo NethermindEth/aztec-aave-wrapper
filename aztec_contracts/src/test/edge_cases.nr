@@ -24,7 +24,7 @@ use dep::aztec::protocol_types::{address::AztecAddress, traits::FromField};
 /// Test that zero values produce valid hashes for intent ID.
 #[test]
 unconstrained fn test_compute_intent_id_zero_values() {
-    let hash = compute_intent_id(AztecAddress::from_field(0), 0, 0, 0, 0, 0);
+    let hash = compute_intent_id(AztecAddress::from_field(0), 0, 0, 0, 0, 0, 0);
 
     // Should not panic and produce a non-zero hash
     // poseidon2 of zeros still produces a non-zero result
@@ -34,7 +34,7 @@ unconstrained fn test_compute_intent_id_zero_values() {
 /// Test that zero values produce valid hashes for deposit message.
 #[test]
 unconstrained fn test_compute_deposit_message_content_zero_values() {
-    let intent = DepositIntent::new(0, 0, 0, 0, 0, 0);
+    let intent = DepositIntent::new(0, 0, 0, 0, 0, 0, 0, 0);
     let secret_hash: Field = 0;
 
     let hash = compute_deposit_message_content(intent, secret_hash);
@@ -53,7 +53,7 @@ unconstrained fn test_compute_deposit_confirmation_content_zero_values() {
 /// Test that zero values produce valid hashes for withdraw message.
 #[test]
 unconstrained fn test_compute_withdraw_message_content_zero_values() {
-    let intent = WithdrawIntent::new(0, 0, 0);
+    let intent = WithdrawIntent::new(0, 0, 0, 0);
     let hash = compute_withdraw_message_content(intent, 0, 0, 0);
 
     assert(hash != 0, "Withdraw message hash of zeros should be non-zero");
@@ -90,7 +90,7 @@ unconstrained fn test_compute_deposit_confirmation_content_max_shares() {
 #[test]
 unconstrained fn test_compute_withdraw_message_content_max_amount() {
     let max_amount: u128 = 0xffffffffffffffffffffffffffffffff; // Max u128
-    let intent = WithdrawIntent::new(0x1234567890abcdef, max_amount, 1700000000);
+    let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, max_amount, 1700000000);
     let asset_id: Field = 1;
     let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
@@ -126,15 +126,17 @@ unconstrained fn test_compute_intent_id_max_values() {
     let caller = AztecAddress::from_field(0x1234567890abcdef1234567890abcdef12345678);
     let asset_id: Field = 0x9999999999999999999999999999999999999999;
     let max_amount: u128 = 0xffffffffffffffffffffffffffffffff; // Max u128
+    let max_decimals: u8 = 255; // Max u8
     let max_chain_id: u32 = 0xffffffff; // Max u32
     let max_deadline: u64 = 0xffffffffffffffff; // Max u64
-    let max_salt: u32 = 0xffffffff; // Max u32
+    let max_salt: Field = 0xffffffffffffffffffffffffffffffff; // Large Field value
 
     // Should not overflow or panic
     let hash = compute_intent_id(
         caller,
         asset_id,
         max_amount,
+        max_decimals,
         max_chain_id,
         max_deadline,
         max_salt,
@@ -147,7 +149,7 @@ unconstrained fn test_compute_intent_id_max_values() {
 #[test]
 unconstrained fn test_max_chain_id() {
     let secret_hash: Field = 0xdeadbeef;
-    let intent = DepositIntent::new(0x123, 1, 1000, 0xffffffff, 1700000000, 1);
+    let intent = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 0xffffffff, 1700000000, 1);
 
     let hash = compute_deposit_message_content(intent, secret_hash);
 
@@ -159,7 +161,7 @@ unconstrained fn test_max_chain_id() {
 unconstrained fn test_max_deadline() {
     let secret_hash: Field = 0xdeadbeef;
     let max_deadline: u64 = 0xffffffffffffffff;
-    let intent = DepositIntent::new(0x123, 1, 1000, 23, max_deadline, 1);
+    let intent = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, max_deadline, 1);
 
     let hash = compute_deposit_message_content(intent, secret_hash);
 
@@ -177,15 +179,16 @@ unconstrained fn test_max_deadline() {
 unconstrained fn test_intent_id_caller_binding() {
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
+    let original_decimals: u8 = 6;
     let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
-    let salt: u32 = 12345;
+    let salt: Field = 12345;
 
     let caller1 = AztecAddress::from_field(0x1111111111111111);
     let caller2 = AztecAddress::from_field(0x2222222222222222);
 
-    let hash1 = compute_intent_id(caller1, asset_id, amount, target_chain_id, deadline, salt);
-    let hash2 = compute_intent_id(caller2, asset_id, amount, target_chain_id, deadline, salt);
+    let hash1 = compute_intent_id(caller1, asset_id, amount, original_decimals, target_chain_id, deadline, salt);
+    let hash2 = compute_intent_id(caller2, asset_id, amount, original_decimals, target_chain_id, deadline, salt);
 
     // An attacker cannot use someone else's intent
     assert(hash1 != hash2, "Different callers must produce different intent IDs");
@@ -215,7 +218,7 @@ unconstrained fn test_deposit_confirmation_different_inputs() {
 /// without revealing the owner's identity.
 #[test]
 unconstrained fn test_withdraw_message_secret_binding() {
-    let intent = WithdrawIntent::new(0x1234567890abcdef, 1000000, 1700000000);
+    let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1700000000);
     let asset_id: Field = 1;
     let target_chain_id: u32 = 23;
 
@@ -236,8 +239,8 @@ unconstrained fn test_hash_collision_resistance_similar_inputs() {
     let secret_hash: Field = 0xdeadbeef;
 
     // Two intents that differ only by 1 in amount
-    let intent1 = DepositIntent::new(0x123, 1, 1000000, 23, 1700000000, 1);
-    let intent2 = DepositIntent::new(0x123, 1, 1000001, 23, 1700000000, 1);
+    let intent1 = DepositIntent::new(0x123, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 1);
+    let intent2 = DepositIntent::new(0x123, 0xabcd1234, 1, 1000001, 6, 23, 1700000000, 1);
 
     let hash1 = compute_deposit_message_content(intent1, secret_hash);
     let hash2 = compute_deposit_message_content(intent2, secret_hash);
@@ -245,8 +248,8 @@ unconstrained fn test_hash_collision_resistance_similar_inputs() {
     assert(hash1 != hash2, "Similar inputs must produce different hashes");
 
     // Two intents that differ only by 1 in deadline
-    let intent3 = DepositIntent::new(0x123, 1, 1000000, 23, 1700000000, 1);
-    let intent4 = DepositIntent::new(0x123, 1, 1000000, 23, 1700000001, 1);
+    let intent3 = DepositIntent::new(0x123, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 1);
+    let intent4 = DepositIntent::new(0x123, 0xabcd1234, 1, 1000000, 6, 23, 1700000001, 1);
 
     let hash3 = compute_deposit_message_content(intent3, secret_hash);
     let hash4 = compute_deposit_message_content(intent4, secret_hash);
@@ -301,9 +304,9 @@ unconstrained fn test_deposit_message_vs_confirmation_different() {
     let amount: u128 = 1000000;
     let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
-    let salt: u32 = 12345;
+    let salt: Field = 12345;
 
-    let intent = DepositIntent::new(intent_id, asset_id, amount, target_chain_id, deadline, salt);
+    let intent = DepositIntent::new(intent_id, 0xabcd1234, asset_id, amount, 6, target_chain_id, deadline, salt);
 
     let message_hash = compute_deposit_message_content(intent, secret_hash);
     let confirmation_hash =
@@ -327,7 +330,7 @@ unconstrained fn test_withdraw_message_vs_confirmation_different() {
     let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
 
-    let intent = WithdrawIntent::new(intent_id, amount, deadline);
+    let intent = WithdrawIntent::new(intent_id, 0xabcd1234, amount, deadline);
 
     let message_hash =
         compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
@@ -351,17 +354,19 @@ unconstrained fn test_withdraw_message_vs_confirmation_different() {
 unconstrained fn test_deposit_intent_all_max_values() {
     let intent = DepositIntent::new(
         0xffffffffffffffffffffffffffffff, // Large but valid intent_id
+        0xffffffffffffffffffffffffffffff, // Large but valid owner_hash
         0xffffffffffffffffffffffffffffff, // Large but valid asset_id
         0xffffffffffffffffffffffffffffffff, // Max u128
+        255, // Max u8
         0xffffffff, // Max u32
         0xffffffffffffffff, // Max u64
-        0xffffffff, // Max u32
+        0xffffffffffffffffffffffffffffff, // Large Field salt
     );
 
     assert(intent.amount == 0xffffffffffffffffffffffffffffffff, "Max amount should be stored");
+    assert(intent.original_decimals == 255, "Max original_decimals should be stored");
     assert(intent.target_chain_id == 0xffffffff, "Max chain_id should be stored");
     assert(intent.deadline == 0xffffffffffffffff, "Max deadline should be stored");
-    assert(intent.salt == 0xffffffff, "Max salt should be stored");
 }
 
 /// Test WithdrawIntent with all max values.
@@ -369,6 +374,7 @@ unconstrained fn test_deposit_intent_all_max_values() {
 unconstrained fn test_withdraw_intent_all_max_values() {
     let intent = WithdrawIntent::new(
         0xffffffffffffffffffffffffffffff, // Large but valid intent_id
+        0xffffffffffffffffffffffffffffff, // Large but valid owner_hash
         0xffffffffffffffffffffffffffffffff, // Max u128
         0xffffffffffffffff, // Max u64
     );
@@ -447,8 +453,8 @@ unconstrained fn test_intent_id_input_order_matters() {
 
     // Same values but caller/asset_id positions effectively swapped
     // (using asset_id as caller field value and vice versa)
-    let hash1 = compute_intent_id(addr1, 0x2222, 1000, 23, 1700000000, 1);
-    let hash2 = compute_intent_id(addr2, 0x1111, 1000, 23, 1700000000, 1);
+    let hash1 = compute_intent_id(addr1, 0x2222, 1000, 6, 23, 1700000000, 1);
+    let hash2 = compute_intent_id(addr2, 0x1111, 1000, 6, 23, 1700000000, 1);
 
     // These should be different because the inputs are in different positions
     assert(hash1 != hash2, "Input order should affect hash");
@@ -477,10 +483,10 @@ unconstrained fn test_replay_protection_minimal_difference() {
     let caller = AztecAddress::from_field(0xdeadbeef);
 
     // Original intent
-    let hash1 = compute_intent_id(caller, 1, 1000000, 23, 1700000000, 42);
+    let hash1 = compute_intent_id(caller, 1, 1000000, 6, 23, 1700000000, 42);
 
     // Attacker tries same intent with salt incremented by 1
-    let hash2 = compute_intent_id(caller, 1, 1000000, 23, 1700000000, 43);
+    let hash2 = compute_intent_id(caller, 1, 1000000, 6, 23, 1700000000, 43);
 
     assert(hash1 != hash2, "Different salt must prevent replay");
 }
@@ -494,10 +500,10 @@ unconstrained fn test_deadline_in_hash_regardless_of_expiry() {
     let caller = AztecAddress::from_field(0xdeadbeef);
 
     // Past deadline (Unix timestamp 0 = 1970)
-    let hash_past = compute_intent_id(caller, 1, 1000000, 23, 0, 1);
+    let hash_past = compute_intent_id(caller, 1, 1000000, 6, 23, 0, 1);
 
     // Future deadline
-    let hash_future = compute_intent_id(caller, 1, 1000000, 23, 9999999999, 1);
+    let hash_future = compute_intent_id(caller, 1, 1000000, 6, 23, 9999999999, 1);
 
     // Both should produce valid, different hashes
     assert(hash_past != 0, "Past deadline should produce valid hash");
@@ -515,10 +521,10 @@ unconstrained fn test_front_running_resistance() {
     let attacker = AztecAddress::from_field(0x55667788aabbccdd);
 
     // Victim's intent with their salt (derived from nonce)
-    let victim_intent_id = compute_intent_id(victim, 1, 1000000, 23, 1700000000, 42);
+    let victim_intent_id = compute_intent_id(victim, 1, 1000000, 6, 23, 1700000000, 42);
 
     // Attacker trying to front-run with same parameters but their address
-    let attacker_attempt = compute_intent_id(attacker, 1, 1000000, 23, 1700000000, 42);
+    let attacker_attempt = compute_intent_id(attacker, 1, 1000000, 6, 23, 1700000000, 42);
 
     // Attacker cannot create the same intent_id
     assert(victim_intent_id != attacker_attempt, "Attacker cannot replicate victim's intent ID");

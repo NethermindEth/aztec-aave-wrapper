@@ -31,11 +31,12 @@ unconstrained fn test_compute_intent_id_deterministic() {
     let amount: u128 = 1000000;
     let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
-    let salt: u32 = 12345;
+    let salt: Field = 12345;
 
     // Compute hash twice
-    let hash1 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, salt);
-    let hash2 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, salt);
+    let original_decimals: u8 = 6; // USDC decimals
+    let hash1 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, salt);
+    let hash2 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, salt);
 
     // Should produce identical hashes
     assert(hash1 == hash2, "Intent ID should be deterministic");
@@ -47,44 +48,50 @@ unconstrained fn test_compute_intent_id_different_inputs() {
     let caller = AztecAddress::from_field(0xdeadbeef);
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
+    let original_decimals: u8 = 6;
     let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
-    let salt: u32 = 12345;
+    let salt: Field = 12345;
 
-    let hash1 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, salt);
+    let hash1 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, salt);
 
     // Change caller
     let hash2 = compute_intent_id(
         AztecAddress::from_field(0xcafebabe),
         asset_id,
         amount,
+        original_decimals,
         target_chain_id,
         deadline,
         salt,
     );
 
     // Change asset_id
-    let hash3 = compute_intent_id(caller, 2, amount, target_chain_id, deadline, salt);
+    let hash3 = compute_intent_id(caller, 2, amount, original_decimals, target_chain_id, deadline, salt);
 
     // Change amount
-    let hash4 = compute_intent_id(caller, asset_id, 2000000, target_chain_id, deadline, salt);
+    let hash4 = compute_intent_id(caller, asset_id, 2000000, original_decimals, target_chain_id, deadline, salt);
+
+    // Change original_decimals
+    let hash5 = compute_intent_id(caller, asset_id, amount, 18, target_chain_id, deadline, salt);
 
     // Change salt
-    let hash5 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, 99999);
+    let hash6 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, 99999);
 
     // Change target_chain_id
-    let hash6 = compute_intent_id(caller, asset_id, amount, 42, deadline, salt);
+    let hash7 = compute_intent_id(caller, asset_id, amount, original_decimals, 42, deadline, salt);
 
     // Change deadline
-    let hash7 = compute_intent_id(caller, asset_id, amount, target_chain_id, 1800000000, salt);
+    let hash8 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, 1800000000, salt);
 
     // All hashes should be different
     assert(hash1 != hash2, "Different caller should produce different intent ID");
     assert(hash1 != hash3, "Different asset_id should produce different intent ID");
     assert(hash1 != hash4, "Different amount should produce different intent ID");
-    assert(hash1 != hash5, "Different salt should produce different intent ID");
-    assert(hash1 != hash6, "Different target_chain_id should produce different intent ID");
-    assert(hash1 != hash7, "Different deadline should produce different intent ID");
+    assert(hash1 != hash5, "Different original_decimals should produce different intent ID");
+    assert(hash1 != hash6, "Different salt should produce different intent ID");
+    assert(hash1 != hash7, "Different target_chain_id should produce different intent ID");
+    assert(hash1 != hash8, "Different deadline should produce different intent ID");
 }
 
 /// Test that salt provides uniqueness even with same user inputs.
@@ -96,13 +103,14 @@ unconstrained fn test_compute_intent_id_salt_uniqueness() {
     let caller = AztecAddress::from_field(0xdeadbeef);
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
+    let original_decimals: u8 = 6;
     let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
 
     // Same inputs, different salts
-    let hash1 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, 1);
-    let hash2 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, 2);
-    let hash3 = compute_intent_id(caller, asset_id, amount, target_chain_id, deadline, 3);
+    let hash1 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, 1);
+    let hash2 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, 2);
+    let hash3 = compute_intent_id(caller, asset_id, amount, original_decimals, target_chain_id, deadline, 3);
 
     // All should be different
     assert(hash1 != hash2, "Different salts should produce different intent IDs");
@@ -118,14 +126,16 @@ unconstrained fn test_compute_intent_id_realistic_usdc_deposit() {
     let caller = AztecAddress::from_field(0x123456789abcdef0123456789abcdef0);
     let usdc_asset_id: Field = 0x1; // USDC asset identifier
     let amount: u128 = 100_000_000; // 100 USDC (6 decimals)
+    let original_decimals: u8 = 6; // USDC has 6 decimals
     let arbitrum_chain_id: u32 = 23; // Wormhole Arbitrum chain ID
     let deadline: u64 = 1735689600; // Some future timestamp
-    let salt: u32 = 42;
+    let salt: Field = 42;
 
     let intent_id = compute_intent_id(
         caller,
         usdc_asset_id,
         amount,
+        original_decimals,
         arbitrum_chain_id,
         deadline,
         salt,
@@ -143,14 +153,16 @@ unconstrained fn test_compute_intent_id_realistic_weth_deposit() {
     let caller = AztecAddress::from_field(0xabcdef0123456789abcdef0123456789);
     let weth_asset_id: Field = 0x2; // WETH asset identifier
     let amount: u128 = 1_000_000_000_000_000_000; // 1 WETH (18 decimals)
+    let original_decimals: u8 = 18; // WETH has 18 decimals
     let optimism_chain_id: u32 = 24; // Wormhole Optimism chain ID
     let deadline: u64 = 1735689600;
-    let salt: u32 = 1;
+    let salt: Field = 1;
 
     let intent_id = compute_intent_id(
         caller,
         weth_asset_id,
         amount,
+        original_decimals,
         optimism_chain_id,
         deadline,
         salt,
@@ -175,8 +187,10 @@ unconstrained fn test_compute_intent_id_realistic_weth_deposit() {
 unconstrained fn test_compute_deposit_message_content_deterministic() {
     let intent = DepositIntent::new(
         0x1234567890abcdef, // intent_id
-        1, // asset_id
+        0xabcd1234, // owner_hash
+        1, // asset
         1000000, // amount
+        6, // original_decimals
         23, // target_chain_id
         1700000000, // deadline
         12345, // salt
@@ -197,8 +211,8 @@ unconstrained fn test_compute_deposit_message_content_deterministic() {
 unconstrained fn test_compute_deposit_message_content_different_intents() {
     let secret_hash: Field = 0xabcdef123456;
 
-    let intent1 = DepositIntent::new(0x1111111111111111, 1, 1000000, 23, 1700000000, 1);
-    let intent2 = DepositIntent::new(0x2222222222222222, 1, 1000000, 23, 1700000000, 1);
+    let intent1 = DepositIntent::new(0x1111111111111111, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 1);
+    let intent2 = DepositIntent::new(0x2222222222222222, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 1);
 
     let hash1 = compute_deposit_message_content(intent1, secret_hash);
     let hash2 = compute_deposit_message_content(intent2, secret_hash);
@@ -214,7 +228,7 @@ unconstrained fn test_compute_deposit_message_content_different_intents() {
 /// preserving privacy while still binding the message to a specific claimant.
 #[test]
 unconstrained fn test_compute_deposit_message_content_different_secrets() {
-    let intent = DepositIntent::new(0x1234567890abcdef, 1, 1000000, 23, 1700000000, 12345);
+    let intent = DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 12345);
 
     let secret_hash1: Field = 0xdeadbeef;
     let secret_hash2: Field = 0xcafebabe;
@@ -232,20 +246,20 @@ unconstrained fn test_compute_deposit_message_content_different_secrets() {
 unconstrained fn test_compute_deposit_message_content_includes_all_fields() {
     let secret_hash: Field = 0xdeadbeef;
 
-    let base_intent = DepositIntent::new(0x1234567890abcdef, 1, 1000000, 23, 1700000000, 12345);
+    let base_intent = DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 12345);
     let base_hash = compute_deposit_message_content(base_intent, secret_hash);
 
     // Change each field and verify hash changes
     let intent_diff_amount =
-        DepositIntent::new(0x1234567890abcdef, 1, 2000000, 23, 1700000000, 12345);
+        DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 1, 2000000, 6, 23, 1700000000, 12345);
     let intent_diff_asset =
-        DepositIntent::new(0x1234567890abcdef, 2, 1000000, 23, 1700000000, 12345);
+        DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 2, 1000000, 6, 23, 1700000000, 12345);
     let intent_diff_chain =
-        DepositIntent::new(0x1234567890abcdef, 1, 1000000, 42, 1700000000, 12345);
+        DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 1, 1000000, 6, 42, 1700000000, 12345);
     let intent_diff_deadline =
-        DepositIntent::new(0x1234567890abcdef, 1, 1000000, 23, 1800000000, 12345);
+        DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 1, 1000000, 6, 23, 1800000000, 12345);
     let intent_diff_salt =
-        DepositIntent::new(0x1234567890abcdef, 1, 1000000, 23, 1700000000, 99999);
+        DepositIntent::new(0x1234567890abcdef, 0xabcd1234, 1, 1000000, 6, 23, 1700000000, 99999);
 
     assert(
         base_hash != compute_deposit_message_content(intent_diff_amount, secret_hash),
@@ -378,16 +392,20 @@ unconstrained fn test_compute_deposit_confirmation_realistic_shares() {
 unconstrained fn test_deposit_intent_new() {
     let intent = DepositIntent::new(
         0x1234567890abcdef, // intent_id
+        0xabcd1234, // owner_hash
         0x5, // asset_id
         500_000_000, // amount (500 USDC)
+        6, // original_decimals
         23, // target_chain_id
         1735689600, // deadline
         42, // salt
     );
 
     assert(intent.intent_id == 0x1234567890abcdef, "intent_id mismatch");
-    assert(intent.asset_id == 0x5, "asset_id mismatch");
+    assert(intent.owner_hash == 0xabcd1234, "owner_hash mismatch");
+    assert(intent.asset == 0x5, "asset_id mismatch");
     assert(intent.amount == 500_000_000, "amount mismatch");
+    assert(intent.original_decimals == 6, "original_decimals mismatch");
     assert(intent.target_chain_id == 23, "target_chain_id mismatch");
     assert(intent.deadline == 1735689600, "deadline mismatch");
     assert(intent.salt == 42, "salt mismatch");
@@ -396,9 +414,9 @@ unconstrained fn test_deposit_intent_new() {
 /// Test DepositIntent equality comparison.
 #[test]
 unconstrained fn test_deposit_intent_equality() {
-    let intent1 = DepositIntent::new(0x123, 1, 1000, 23, 1700000000, 1);
-    let intent2 = DepositIntent::new(0x123, 1, 1000, 23, 1700000000, 1);
-    let intent3 = DepositIntent::new(0x456, 1, 1000, 23, 1700000000, 1);
+    let intent1 = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, 1700000000, 1);
+    let intent2 = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, 1700000000, 1);
+    let intent3 = DepositIntent::new(0x456, 0xabcd1234, 1, 1000, 6, 23, 1700000000, 1);
 
     assert(intent1 == intent2, "Identical intents should be equal");
     assert(intent1 != intent3, "Different intents should not be equal");
@@ -412,7 +430,7 @@ unconstrained fn test_deposit_intent_large_amount() {
     // 1 billion USDC (6 decimals)
     let large_amount: u128 = 1_000_000_000_000_000;
 
-    let intent = DepositIntent::new(0xdeadbeef, 1, large_amount, 23, 1700000000, 1);
+    let intent = DepositIntent::new(0xdeadbeef, 0xabcd1234, 1, large_amount, 6, 23, 1700000000, 1);
 
     assert(intent.amount == large_amount, "Large amount should be stored correctly");
 
@@ -428,7 +446,7 @@ unconstrained fn test_deposit_intent_minimum_amount() {
     // 1 wei/smallest unit
     let min_amount: u128 = 1;
 
-    let intent = DepositIntent::new(0xdeadbeef, 1, min_amount, 23, 1700000000, 1);
+    let intent = DepositIntent::new(0xdeadbeef, 0xabcd1234, 1, min_amount, 6, 23, 1700000000, 1);
 
     assert(intent.amount == min_amount, "Minimum amount should be stored correctly");
 
@@ -444,11 +462,11 @@ unconstrained fn test_deposit_intent_different_chains() {
     let secret_hash: Field = 0xdeadbeef;
 
     // Arbitrum (Wormhole chain ID 23)
-    let intent_arb = DepositIntent::new(0x123, 1, 1000, 23, 1700000000, 1);
+    let intent_arb = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, 1700000000, 1);
     // Optimism (Wormhole chain ID 24)
-    let intent_opt = DepositIntent::new(0x123, 1, 1000, 24, 1700000000, 1);
+    let intent_opt = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 24, 1700000000, 1);
     // Base (Wormhole chain ID 30)
-    let intent_base = DepositIntent::new(0x123, 1, 1000, 30, 1700000000, 1);
+    let intent_base = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 30, 1700000000, 1);
 
     let hash_arb = compute_deposit_message_content(intent_arb, secret_hash);
     let hash_opt = compute_deposit_message_content(intent_opt, secret_hash);
@@ -466,11 +484,11 @@ unconstrained fn test_deposit_intent_deadline_sensitivity() {
     let secret_hash: Field = 0xdeadbeef;
 
     // Near-term deadline (1 hour from "now")
-    let intent_short = DepositIntent::new(0x123, 1, 1000, 23, 1700003600, 1);
+    let intent_short = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, 1700003600, 1);
     // Medium deadline (1 day from "now")
-    let intent_medium = DepositIntent::new(0x123, 1, 1000, 23, 1700086400, 1);
+    let intent_medium = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, 1700086400, 1);
     // Long deadline (1 week from "now")
-    let intent_long = DepositIntent::new(0x123, 1, 1000, 23, 1700604800, 1);
+    let intent_long = DepositIntent::new(0x123, 0xabcd1234, 1, 1000, 6, 23, 1700604800, 1);
 
     let hash_short = compute_deposit_message_content(intent_short, secret_hash);
     let hash_medium = compute_deposit_message_content(intent_medium, secret_hash);

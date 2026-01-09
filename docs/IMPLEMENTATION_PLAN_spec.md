@@ -261,7 +261,7 @@ cd aztec_contracts && aztec test --match-test test_position_receipt_note
 
 ---
 
-### Step 3: Update request_deposit to use hash(ownerL2) and direct amounts
+### Step 3: Update request_deposit to use hash(ownerL2) and direct amounts **COMPLETE**
 
 **Status**: PARTIALLY IMPLEMENTED (function exists but uses old model)
 

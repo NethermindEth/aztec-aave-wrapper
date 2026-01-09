@@ -29,6 +29,7 @@ use dep::aztec::protocol_types::{address::AztecAddress, traits::FromField};
 unconstrained fn test_compute_withdraw_message_content_deterministic() {
     let intent = WithdrawIntent::new(
         0x1234567890abcdef, // intent_id
+        0xabcd1234, // owner_hash
         1000000, // amount
         1700000000, // deadline
     );
@@ -48,7 +49,7 @@ unconstrained fn test_compute_withdraw_message_content_deterministic() {
 /// for different inputs.
 #[test]
 unconstrained fn test_compute_withdraw_message_content_different_inputs() {
-    let intent = WithdrawIntent::new(0x1234567890abcdef, 1000000, 1700000000);
+    let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1700000000);
     let asset_id: Field = 1;
     let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
@@ -56,14 +57,14 @@ unconstrained fn test_compute_withdraw_message_content_different_inputs() {
     let hash1 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
 
     // Change intent_id
-    let intent2 = WithdrawIntent::new(0x9999999999999999, 1000000, 1700000000);
+    let intent2 = WithdrawIntent::new(0x9999999999999999, 0xabcd1234, 1000000, 1700000000);
     let hash2 = compute_withdraw_message_content(intent2, asset_id, target_chain_id, secret_hash);
 
     // Change secret_hash
     let hash3 = compute_withdraw_message_content(intent, asset_id, target_chain_id, 0xcafebabe);
 
     // Change amount
-    let intent4 = WithdrawIntent::new(0x1234567890abcdef, 2000000, 1700000000);
+    let intent4 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 2000000, 1700000000);
     let hash4 = compute_withdraw_message_content(intent4, asset_id, target_chain_id, secret_hash);
 
     // Change asset_id
@@ -73,7 +74,7 @@ unconstrained fn test_compute_withdraw_message_content_different_inputs() {
     let hash6 = compute_withdraw_message_content(intent, asset_id, 42, secret_hash);
 
     // Change deadline
-    let intent7 = WithdrawIntent::new(0x1234567890abcdef, 1000000, 1800000000);
+    let intent7 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1800000000);
     let hash7 = compute_withdraw_message_content(intent7, asset_id, target_chain_id, secret_hash);
 
     // All hashes should be different
@@ -94,7 +95,7 @@ unconstrained fn test_compute_withdraw_message_partial_withdrawal() {
     let total_shares: u128 = 1_000_000_000; // 1000 aUSDC
     let partial_amount: u128 = 500_000_000; // Withdraw half
 
-    let intent = WithdrawIntent::new(0x1234567890abcdef, partial_amount, 1700000000);
+    let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, partial_amount, 1700000000);
     let asset_id: Field = 1;
     let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
@@ -104,7 +105,7 @@ unconstrained fn test_compute_withdraw_message_partial_withdrawal() {
     assert(hash != 0, "Partial withdrawal should produce valid hash");
 
     // Full withdrawal with same parameters should produce different hash
-    let full_intent = WithdrawIntent::new(0x1234567890abcdef, total_shares, 1700000000);
+    let full_intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, total_shares, 1700000000);
     let full_hash =
         compute_withdraw_message_content(full_intent, asset_id, target_chain_id, secret_hash);
 
@@ -119,12 +120,12 @@ unconstrained fn test_compute_withdraw_message_deadline_sensitivity() {
     let secret_hash: Field = 0xdeadbeef;
 
     // Urgent withdrawal (short deadline)
-    let intent_urgent = WithdrawIntent::new(0x123, 1000000, 1700003600); // 1 hour
+    let intent_urgent = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700003600); // 1 hour
     let hash_urgent =
         compute_withdraw_message_content(intent_urgent, asset_id, target_chain_id, secret_hash);
 
     // Patient withdrawal (long deadline)
-    let intent_patient = WithdrawIntent::new(0x123, 1000000, 1700604800); // 1 week
+    let intent_patient = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700604800); // 1 week
     let hash_patient =
         compute_withdraw_message_content(intent_patient, asset_id, target_chain_id, secret_hash);
 
@@ -249,11 +250,13 @@ unconstrained fn test_compute_withdraw_confirmation_with_interest() {
 unconstrained fn test_withdraw_intent_new() {
     let intent = WithdrawIntent::new(
         0x1234567890abcdef, // intent_id
+        0xabcd1234, // owner_hash
         500_000_000, // amount (500 aToken shares)
         1735689600, // deadline
     );
 
     assert(intent.intent_id == 0x1234567890abcdef, "intent_id mismatch");
+    assert(intent.owner_hash == 0xabcd1234, "owner_hash mismatch");
     assert(intent.amount == 500_000_000, "amount mismatch");
     assert(intent.deadline == 1735689600, "deadline mismatch");
 }
@@ -261,10 +264,10 @@ unconstrained fn test_withdraw_intent_new() {
 /// Test WithdrawIntent equality comparison.
 #[test]
 unconstrained fn test_withdraw_intent_equality() {
-    let intent1 = WithdrawIntent::new(0x123, 1000, 1700000000);
-    let intent2 = WithdrawIntent::new(0x123, 1000, 1700000000);
-    let intent3 = WithdrawIntent::new(0x456, 1000, 1700000000);
-    let intent4 = WithdrawIntent::new(0x123, 2000, 1700000000);
+    let intent1 = WithdrawIntent::new(0x123, 0xabcd1234, 1000, 1700000000);
+    let intent2 = WithdrawIntent::new(0x123, 0xabcd1234, 1000, 1700000000);
+    let intent3 = WithdrawIntent::new(0x456, 0xabcd1234, 1000, 1700000000);
+    let intent4 = WithdrawIntent::new(0x123, 0xabcd1234, 2000, 1700000000);
 
     assert(intent1 == intent2, "Identical intents should be equal");
     assert(intent1 != intent3, "Different intent_id should not be equal");
@@ -278,6 +281,7 @@ unconstrained fn test_withdraw_intent_full_withdrawal() {
 
     let intent = WithdrawIntent::new(
         0xdeadbeef,
+        0xabcd1234,
         total_shares, // Full withdrawal
         1700000000,
     );
@@ -298,7 +302,7 @@ unconstrained fn test_withdraw_intent_full_withdrawal() {
 unconstrained fn test_withdraw_intent_minimum_withdrawal() {
     let min_amount: u128 = 1; // 1 wei
 
-    let intent = WithdrawIntent::new(0xdeadbeef, min_amount, 1700000000);
+    let intent = WithdrawIntent::new(0xdeadbeef, 0xabcd1234, min_amount, 1700000000);
 
     assert(intent.amount == min_amount, "Minimum amount should be stored correctly");
 
@@ -428,7 +432,7 @@ unconstrained fn test_position_receipt_note_equality() {
 #[test]
 unconstrained fn test_withdraw_from_different_chains() {
     let asset_id: Field = 1;
-    let intent = WithdrawIntent::new(0x123, 1000000, 1700000000);
+    let intent = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700000000);
     let secret_hash: Field = 0xdeadbeef;
 
     // Arbitrum (Wormhole chain ID 23)
@@ -448,7 +452,7 @@ unconstrained fn test_withdraw_from_different_chains() {
 #[test]
 unconstrained fn test_withdraw_different_assets() {
     let target_chain_id: u32 = 23;
-    let intent = WithdrawIntent::new(0x123, 1000000, 1700000000);
+    let intent = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700000000);
     let secret_hash: Field = 0xdeadbeef;
 
     // USDC withdrawal
@@ -473,7 +477,7 @@ unconstrained fn test_withdraw_intent_id_matches_deposit() {
     let original_deposit_intent_id: Field = 0xabcdef1234567890;
 
     // Withdrawal should use the same intent_id
-    let withdraw_intent = WithdrawIntent::new(original_deposit_intent_id, 1000000, 1700000000);
+    let withdraw_intent = WithdrawIntent::new(original_deposit_intent_id, 0xabcd1234, 1000000, 1700000000);
 
     assert(
         withdraw_intent.intent_id == original_deposit_intent_id,
