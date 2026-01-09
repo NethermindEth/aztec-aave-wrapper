@@ -25,6 +25,8 @@ pub struct PositionReceiptNote {
     pub shares: u128,
     /// Wormhole chain ID of the target chain where funds are deposited
     pub target_chain_id: u32,
+    /// Optional Aave market identifier (set to 0 if not used)
+    pub aave_market_id: Field,
     /// Current status of the position (0=PendingDeposit, 1=Active, 2=PendingWithdraw)
     pub status: u8,
 }

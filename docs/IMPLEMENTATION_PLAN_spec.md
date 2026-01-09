@@ -212,7 +212,7 @@ cd aztec_contracts && aztec test --match-test test_storage_mapping
 
 ---
 
-### Step 2: Update PositionReceiptNote to remove secret/denomination
+### Step 2: Update PositionReceiptNote to remove secret/denomination **COMPLETE**
 
 **Status**: NOT IMPLEMENTED (current note structure differs)
 

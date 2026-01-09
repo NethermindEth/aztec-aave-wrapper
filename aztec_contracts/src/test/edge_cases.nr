@@ -392,6 +392,7 @@ unconstrained fn test_position_receipt_note_zero_shares() {
         asset_id: 1,
         shares: 0, // Fully withdrawn
         target_chain_id: 23,
+        aave_market_id: 0,
         status: PositionStatus::ACTIVE, // Or could be PENDING_WITHDRAW
     };
 
@@ -409,6 +410,7 @@ unconstrained fn test_position_receipt_note_max_shares() {
         asset_id: 1,
         shares: max_shares,
         target_chain_id: 23,
+        aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
 
@@ -424,6 +426,7 @@ unconstrained fn test_position_receipt_note_max_chain_id() {
         asset_id: 1,
         shares: 1000000,
         target_chain_id: 0xffffffff,
+        aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
 

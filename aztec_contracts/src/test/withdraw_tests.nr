@@ -347,7 +347,7 @@ unconstrained fn test_position_receipt_note_active_position() {
     let target_chain_id: u32 = 23;
     let status: u8 = PositionStatus::ACTIVE;
 
-    let receipt = PositionReceiptNote { owner, nonce, asset_id, shares, target_chain_id, status };
+    let receipt = PositionReceiptNote { owner, nonce, asset_id, shares, target_chain_id, aave_market_id: 0, status };
 
     assert(receipt.owner == owner, "Owner mismatch");
     assert(receipt.nonce == nonce, "Nonce mismatch");
@@ -373,6 +373,7 @@ unconstrained fn test_position_receipt_note_pending_withdraw() {
         asset_id,
         shares: remaining_shares,
         target_chain_id,
+        aave_market_id: 0,
         status,
     };
 
@@ -391,6 +392,7 @@ unconstrained fn test_position_receipt_note_equality() {
         asset_id: 1,
         shares: 1000,
         target_chain_id: 23,
+        aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
 
@@ -400,6 +402,7 @@ unconstrained fn test_position_receipt_note_equality() {
         asset_id: 1,
         shares: 1000,
         target_chain_id: 23,
+        aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
 
@@ -409,6 +412,7 @@ unconstrained fn test_position_receipt_note_equality() {
         asset_id: 1,
         shares: 1000,
         target_chain_id: 23,
+        aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
 

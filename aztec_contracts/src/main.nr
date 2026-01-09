@@ -444,6 +444,7 @@ pub(crate) contract AaveWrapper {
             asset_id,
             shares,
             target_chain_id,
+            aave_market_id: 0,
             status: PositionStatus::ACTIVE,
         };
 
@@ -563,6 +564,7 @@ pub(crate) contract AaveWrapper {
             asset_id: receipt.asset_id,
             shares: remaining_shares,
             target_chain_id: receipt.target_chain_id,
+            aave_market_id: receipt.aave_market_id,
             status: PositionStatus::PENDING_WITHDRAW,
         };
 
@@ -707,6 +709,7 @@ pub(crate) contract AaveWrapper {
                 asset_id: receipt.asset_id,
                 shares: receipt.shares,
                 target_chain_id: receipt.target_chain_id,
+                aave_market_id: receipt.aave_market_id,
                 status: PositionStatus::ACTIVE,
             };
             self.storage.receipts.at(owner).insert(remaining_receipt).deliver(
