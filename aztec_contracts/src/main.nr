@@ -238,6 +238,13 @@ pub(crate) contract AaveWrapper {
         /// Provides replay protection for intents.
         consumed_intents: Map<Field, PublicMutable<bool, Context>, Context>,
 
+        /// Mapping from intent_id to the owner's L2 address.
+        /// Used to route finalization messages to the correct user.
+        /// This mapping is stored in public state to enable finalization routing,
+        /// but the intent_id is a one-way hash so it doesn't reveal user identity
+        /// to observers who don't already know the intent parameters.
+        intent_owners: Map<Field, PublicMutable<AztecAddress, Context>, Context>,
+
         /// The admin address with privileged access to contract configuration.
         /// Can update portal address, pause operations, etc.
         admin: PublicMutable<AztecAddress, Context>,
@@ -338,9 +345,9 @@ pub(crate) contract AaveWrapper {
         let portal = self.storage.portal_address.read();
         self.context.message_portal(portal, content);
 
-        // Enqueue public call to update intent status
-        // Only the intent_id is passed - no user-identifying information
-        AaveWrapper::at(self.context.this_address())._set_intent_pending_deposit(intent_id).enqueue(
+        // Enqueue public call to update intent status and store owner mapping
+        // The owner address is passed to enable finalization routing
+        AaveWrapper::at(self.context.this_address())._set_intent_pending_deposit(intent_id, caller).enqueue(
             self.context,
         );
 
@@ -350,13 +357,22 @@ pub(crate) contract AaveWrapper {
     /// Internal public function to set intent status to pending deposit.
     ///
     /// # Privacy
-    /// This function receives ONLY the intent_id, not any user-identifying data.
+    /// This function receives the intent_id and owner address.
+    /// The owner mapping enables finalization routing but doesn't reveal identity
+    /// to observers since the intent_id is a one-way hash.
     /// The public state update and event reveal only that an intent exists.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The unique intent identifier
+    /// * `owner` - The L2 address that created this intent
     #[external("public")]
-    fn _set_intent_pending_deposit(intent_id: Field) {
+    fn _set_intent_pending_deposit(intent_id: Field, owner: AztecAddress) {
         // Verify this intent hasn't been used before (replay protection)
         let already_consumed = self.storage.consumed_intents.at(intent_id).read();
         assert(!already_consumed, "Intent ID already consumed");
+
+        // Store the intent owner mapping for finalization routing
+        self.storage.intent_owners.at(intent_id).write(owner);
 
         // Set intent status to pending deposit
         self.storage.intent_status.at(intent_id).write(IntentStatus::PENDING_DEPOSIT);

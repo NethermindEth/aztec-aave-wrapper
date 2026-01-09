@@ -186,7 +186,7 @@ cd aztec_contracts && aztec test
 cd aztec_contracts && aztec compile
 ```
 
-### Step 1: Add intentId → owner mapping storage in L2 contract
+### Step 1: Add intentId → owner mapping storage in L2 contract **COMPLETE**
 
 **Status**: NOT IMPLEMENTED
 
