@@ -89,7 +89,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
   let userBWallet: InstanceType<typeof AccountWallet>;
 
   // Contract instance (deployed per test suite)
-  let aaveWrapper: InstanceType<typeof Contract>;
+  let aaveWrapper: import("@aztec/aztec.js").Contract;
   let contractAddress: InstanceType<typeof AztecAddress>;
 
   // Portal address (mock for tests)
