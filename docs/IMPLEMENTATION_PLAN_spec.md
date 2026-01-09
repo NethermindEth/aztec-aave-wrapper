@@ -290,9 +290,9 @@ cd aztec_contracts && aztec test --match-test test_deadline_validation
 
 ---
 
-### Step 4: Update L2→L1 message encoding with hash(ownerL2)
+### Step 4: Update L2→L1 message encoding with hash(ownerL2) **COMPLETE**
 
-**Status**: NOT IMPLEMENTED (current message format unknown)
+**Status**: IMPLEMENTED
 
 #### Goal
 Modify compute_deposit_message_content to encode DepositIntent with hash(ownerL2) instead of plain owner, matching spec.md §3.2 format.
@@ -315,9 +315,9 @@ cd aztec_contracts && aztec test --match-test test_message_encoding
 
 ---
 
-### Step 5: Implement finalize_deposit with owner resolution
+### Step 5: Implement finalize_deposit with owner resolution **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic structure exists)
+**Status**: IMPLEMENTED
 
 #### Goal
 Complete finalize_deposit function to consume L1→L2 confirmation messages, resolve owner from mapping, and mint PositionReceiptNote.

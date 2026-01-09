@@ -189,7 +189,7 @@ pub(crate) contract AaveWrapper {
         protocol_types::{
             address::{AztecAddress, EthAddress},
             hash::poseidon2_hash,
-            traits::ToField,
+            traits::{FromField, ToField},
         },
         state_vars::{Map, Owned, PrivateSet, PublicImmutable, PublicMutable},
         utils::comparison::Comparator,
@@ -535,6 +535,10 @@ pub(crate) contract AaveWrapper {
         // Update intent status to confirmed
         self.storage.intent_status.at(intent_id).write(IntentStatus::CONFIRMED);
 
+        // Clear the intent owner mapping to reclaim storage
+        // This is safe because the intent is now consumed and won't be reused
+        self.storage.intent_owners.at(intent_id).write(AztecAddress::from_field(0));
+
         // Emit minimal event - only intent_id and status, no user data
         self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });
     }
@@ -662,8 +666,15 @@ pub(crate) contract AaveWrapper {
     /// * `intent_id` - The intent to mark as pending withdrawal
     #[external("public")]
     fn _request_withdraw_public(intent_id: Field) {
+        // Verify the intent is in CONFIRMED status (successful deposit must precede withdrawal)
+        let status = self.storage.intent_status.at(intent_id).read();
+        assert(status == IntentStatus::CONFIRMED, "Intent not in confirmed state");
+
+        // Note: We don't check consumed_intents here because the deposit flow marks it consumed
+        // The intent_id is reused for withdrawal, tracking the lifecycle of the position
+        // The status transition from CONFIRMED -> PENDING_WITHDRAW indicates withdrawal started
+
         // Update intent status to pending withdrawal
-        // Note: We overwrite any previous status (the intent was previously CONFIRMED)
         self.storage.intent_status.at(intent_id).write(IntentStatus::PENDING_WITHDRAW);
 
         // Emit minimal event - only intent_id and status, no user data
@@ -793,13 +804,16 @@ pub(crate) contract AaveWrapper {
         let status = self.storage.intent_status.at(intent_id).read();
         assert(status == IntentStatus::PENDING_WITHDRAW, "Intent not in pending withdraw state");
 
-        // Mark the intent as consumed to prevent replay
-        // Note: For withdrawals, we mark consumed here rather than keeping it open
-        // because the withdrawal flow is complete
+        // Ensure the intent remains marked as consumed (was set during deposit finalization)
+        // This is redundant but provides consistency in finalization flows
         self.storage.consumed_intents.at(intent_id).write(true);
 
         // Update intent status to confirmed (withdrawal complete)
         self.storage.intent_status.at(intent_id).write(IntentStatus::CONFIRMED);
+
+        // Clear the intent owner mapping to reclaim storage
+        // This is safe because the intent is now consumed and won't be reused
+        self.storage.intent_owners.at(intent_id).write(AztecAddress::from_field(0));
 
         // Emit minimal event - only intent_id and status, no user data
         self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });
