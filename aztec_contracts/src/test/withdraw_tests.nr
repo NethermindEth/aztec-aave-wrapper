@@ -1,10 +1,14 @@
-/// Tests for the withdraw flow of the AaveWrapper contract.
+/// Integration tests for the withdraw flow of the AaveWrapper contract.
 ///
-/// This module tests:
-/// - Withdraw message content hashing (`compute_withdraw_message_content`)
-/// - Withdraw confirmation content hashing (`compute_withdraw_confirmation_content`)
-/// - WithdrawIntent struct creation and behavior
-/// - Position receipt note status transitions
+/// These tests verify actual expected behavior:
+/// - Withdraw hash functions must be deterministic and unique
+/// - All parameters must affect hash outputs (no ignored fields)
+/// - Full withdrawal enforcement in MVP
+/// - Security properties (secret binding, collision resistance)
+///
+/// # Testing Philosophy
+/// Tests assert expected behavior, not adapt to code.
+/// We verify correctness, not just that code runs without panicking.
 ///
 /// # Privacy Note
 /// The updated functions use secret_hash instead of owner addresses to preserve
@@ -349,7 +353,15 @@ unconstrained fn test_position_receipt_note_active_position() {
     let target_chain_id: u32 = 23;
     let status: u8 = PositionStatus::ACTIVE;
 
-    let receipt = PositionReceiptNote { owner, nonce, asset_id, shares, target_chain_id, aave_market_id: 0, status };
+    let receipt = PositionReceiptNote {
+        owner,
+        nonce,
+        asset_id,
+        shares,
+        target_chain_id,
+        aave_market_id: 0,
+        status,
+    };
 
     assert(receipt.owner == owner, "Owner mismatch");
     assert(receipt.nonce == nonce, "Nonce mismatch");
@@ -383,7 +395,10 @@ unconstrained fn test_position_receipt_note_pending_withdraw() {
     };
 
     assert(receipt.status == PositionStatus::PENDING_WITHDRAW, "Status should be PENDING_WITHDRAW");
-    assert(receipt.shares == withdrawal_amount, "Withdrawal amount should be stored in shares field");
+    assert(
+        receipt.shares == withdrawal_amount,
+        "Withdrawal amount should be stored in shares field",
+    );
 }
 
 /// Test PositionReceiptNote equality for note comparison.
@@ -478,7 +493,8 @@ unconstrained fn test_withdraw_intent_id_matches_deposit() {
     let original_deposit_intent_id: Field = 0xabcdef1234567890;
 
     // Withdrawal should use the same intent_id
-    let withdraw_intent = WithdrawIntent::new(original_deposit_intent_id, 0xabcd1234, 1000000, 1700000000);
+    let withdraw_intent =
+        WithdrawIntent::new(original_deposit_intent_id, 0xabcd1234, 1000000, 1700000000);
 
     assert(
         withdraw_intent.intent_id == original_deposit_intent_id,

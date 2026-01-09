@@ -315,13 +315,13 @@ pub(crate) contract AaveWrapper {
     /// 3. Computes hash(ownerL2) for privacy
     /// 4. Generates a unique intent_id from caller + inputs + salt
     /// 5. Sends an L2 to L1 message to the portal with the deposit intent payload
-    /// 6. Enqueues a public call to set the intent status and store intentId → owner mapping
+    /// 6. Enqueues a public call to set the intent status and store intentId -> owner mapping
     ///
     /// # Privacy
     /// - The caller's identity is hashed (owner_hash) to preserve privacy
     /// - The secret_hash binds the L1->L2 confirmation to whoever knows the secret
     /// - Only the intent_id is visible in public state, not who created it or what for
-    /// - The intentId → owner mapping is stored publicly but doesn't reveal identity
+    /// - The intentId -> owner mapping is stored publicly but doesn't reveal identity
     ///
     /// # Arguments
     /// * `asset` - Token address on target chain (stored as Field)
@@ -401,9 +401,9 @@ pub(crate) contract AaveWrapper {
 
         // Enqueue public call to update intent status and store owner mapping
         // The owner address is passed to enable finalization routing
-        AaveWrapper::at(self.context.this_address())._set_intent_pending_deposit(intent_id, caller).enqueue(
-            self.context,
-        );
+        AaveWrapper::at(self.context.this_address())
+            ._set_intent_pending_deposit(intent_id, caller)
+            .enqueue(self.context);
 
         intent_id
     }
@@ -556,7 +556,7 @@ pub(crate) contract AaveWrapper {
     /// 3. Enforcing full withdrawal only (amount must equal receipt.shares)
     /// 4. Nullifying the Active note and creating a new note with PendingWithdraw status
     /// 5. Creating an L2-to-L1 message with the WithdrawIntent (using hash(ownerL2))
-    /// 6. Enqueuing a public call to update status and store intentId → owner mapping
+    /// 6. Enqueuing a public call to update status and store intentId -> owner mapping
     ///
     /// # MVP Constraint
     /// Only full withdrawals are supported. Partial withdrawals will be rejected.
@@ -575,7 +575,7 @@ pub(crate) contract AaveWrapper {
     /// - Uses hash(ownerL2) in cross-chain messages to preserve privacy
     /// - No user identity, amounts, or asset information is revealed publicly
     /// - The public state update reveals only that an intent status changed
-    /// - The intentId → owner mapping enables finalization routing
+    /// - The intentId -> owner mapping enables finalization routing
     ///
     /// # Failure Modes
     /// - Note not found: If no note with matching nonce exists in the user's set
@@ -612,7 +612,10 @@ pub(crate) contract AaveWrapper {
         assert(receipt.status == PositionStatus::ACTIVE, "Position is not active");
 
         // MVP: Enforce full withdrawal only (no partial withdrawals)
-        assert(amount == receipt.shares, "Must withdraw full position (partial withdrawals not supported)");
+        assert(
+            amount == receipt.shares,
+            "Must withdraw full position (partial withdrawals not supported)",
+        );
 
         // The intent_id for withdrawal is the note's nonce (same as the original deposit intent_id)
         let intent_id = receipt.nonce;
@@ -657,9 +660,9 @@ pub(crate) contract AaveWrapper {
         // Enqueue public call to update intent status and store owner mapping
         // The owner address is passed to enable finalization routing
         // The deadline is passed to enable refund claim validation
-        AaveWrapper::at(self.context.this_address())._request_withdraw_public(intent_id, owner, deadline).enqueue(
-            self.context,
-        );
+        AaveWrapper::at(self.context.this_address())
+            ._request_withdraw_public(intent_id, owner, deadline)
+            .enqueue(self.context);
 
         intent_id
     }
@@ -914,9 +917,9 @@ pub(crate) contract AaveWrapper {
 
         // Enqueue public call to verify deadline and mark refund as claimed
         // Pass the intent_id (original nonce) and current_time
-        AaveWrapper::at(self.context.this_address())._claim_refund_public(receipt.nonce, current_time).enqueue(
-            self.context,
-        );
+        AaveWrapper::at(self.context.this_address())
+            ._claim_refund_public(receipt.nonce, current_time)
+            .enqueue(self.context);
     }
 
     /// Internal public function to validate deadline and update state after refund claim.

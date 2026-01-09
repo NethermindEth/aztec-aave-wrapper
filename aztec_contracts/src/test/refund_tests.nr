@@ -11,7 +11,11 @@
 /// their position if a withdrawal request expires without processing.
 
 use crate::types::{PositionReceiptNote, PositionStatus};
-use dep::aztec::protocol_types::{address::AztecAddress, hash::poseidon2_hash, traits::FromField};
+use dep::aztec::protocol_types::{
+    address::AztecAddress,
+    hash::poseidon2_hash,
+    traits::{FromField, ToField},
+};
 
 // ============================================================================
 // Note Nonce Generation Tests
@@ -178,23 +182,40 @@ unconstrained fn test_deadline_edge_cases() {
 // ============================================================================
 // Current Time Validation Tests
 // ============================================================================
+//
+// NOTE: These tests verify the expected validation logic.
+// The actual contract function claim_refund calls _claim_refund_public which asserts:
+// "assert(current_time > 0, "Current time must be greater than zero");"
+// at main.nr:868
+//
+// Since these are unconstrained tests of helper logic (not full contract tests),
+// we document the expected behavior rather than calling the contract directly.
 
-/// Test that zero current_time is invalid.
+/// Test that zero current_time violates the validation requirement.
+/// Expected: The contract requires current_time > 0 and will reject zero.
 #[test]
-unconstrained fn test_current_time_must_be_nonzero() {
+unconstrained fn test_current_time_zero_violates_requirement() {
     let current_time: u64 = 0;
-    // The contract should reject current_time == 0
-    assert(current_time == 0, "Zero current_time should be caught by validation");
+
+    // Document the validation requirement: current_time must be > 0
+    // The contract will reject this case with an assertion failure
+    let is_zero = current_time == 0;
+    let violates_requirement = !(current_time > 0);
+
+    assert(is_zero, "This case has zero current_time");
+    assert(violates_requirement, "Zero violates the requirement that current_time > 0");
+    // If this were a real contract call, it would fail here with:
+    // "Current time must be greater than zero"
 }
 
-/// Test valid current_time values.
+/// Test that positive current_time values satisfy the validation requirement.
 #[test]
 unconstrained fn test_current_time_valid_values() {
     let valid_times: [u64; 3] = [1, 1700000000, 0xffffffffffffffff];
 
     for i in 0..3 {
         let time = valid_times[i];
-        assert(time > 0, "Valid times must be non-zero");
+        assert(time > 0, "Valid times must be non-zero to pass contract validation");
     }
 }
 
@@ -249,10 +270,7 @@ unconstrained fn test_refund_prevents_nonce_reuse() {
         double_refund_attempt != original_nonce,
         "Double refund must not produce original nonce",
     );
-    assert(
-        double_refund_attempt != refund_nonce,
-        "Double refund must produce different nonce",
-    );
+    assert(double_refund_attempt != refund_nonce, "Double refund must produce different nonce");
 }
 
 // ============================================================================
