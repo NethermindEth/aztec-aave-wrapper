@@ -344,7 +344,7 @@ cd aztec_contracts && aztec test --match-test test_finalize_deposit
 
 ---
 
-### Step 6: Implement withdraw functions with status tracking
+### Step 6: Implement withdraw functions with status tracking **COMPLETE**
 
 **Status**: PARTIALLY IMPLEMENTED (basic structure exists)
 

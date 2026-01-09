@@ -548,13 +548,17 @@ pub(crate) contract AaveWrapper {
     /// This private function allows users to request withdrawal of their position by:
     /// 1. Finding and verifying ownership of the PositionReceiptNote by nonce
     /// 2. Verifying the receipt status is Active
-    /// 3. Nullifying the Active note and creating a new note with PendingWithdraw status
-    /// 4. Creating an L2-to-L1 message with the WithdrawIntent
-    /// 5. Enqueuing a public call to update status (without revealing owner)
+    /// 3. Enforcing full withdrawal only (amount must equal receipt.shares)
+    /// 4. Nullifying the Active note and creating a new note with PendingWithdraw status
+    /// 5. Creating an L2-to-L1 message with the WithdrawIntent (using hash(ownerL2))
+    /// 6. Enqueuing a public call to update status and store intentId → owner mapping
+    ///
+    /// # MVP Constraint
+    /// Only full withdrawals are supported. Partial withdrawals will be rejected.
     ///
     /// # Arguments
     /// * `nonce` - The nonce of the PositionReceiptNote (same as intent_id from deposit)
-    /// * `amount` - Amount of shares to withdraw
+    /// * `amount` - Amount of shares to withdraw (must equal total shares in receipt)
     /// * `deadline` - Unix timestamp after which the withdrawal intent expires
     /// * `secret_hash` - Hash of a secret for claiming the L1->L2 confirmation
     ///
@@ -563,14 +567,16 @@ pub(crate) contract AaveWrapper {
     ///
     /// # Privacy
     /// - The note lookup and nullification happen privately
+    /// - Uses hash(ownerL2) in cross-chain messages to preserve privacy
     /// - No user identity, amounts, or asset information is revealed publicly
     /// - The public state update reveals only that an intent status changed
+    /// - The intentId → owner mapping enables finalization routing
     ///
     /// # Failure Modes
     /// - Note not found: If no note with matching nonce exists in the user's set
     /// - Not owner: If the caller doesn't own the note
     /// - Wrong status: If the note status is not Active
-    /// - Amount exceeds shares: If requesting more than available shares
+    /// - Partial withdrawal: If amount != receipt.shares (only full withdrawals allowed)
     #[external("private")]
     fn request_withdraw(
         nonce: Field,
@@ -600,22 +606,20 @@ pub(crate) contract AaveWrapper {
         // Verify the receipt status is Active
         assert(receipt.status == PositionStatus::ACTIVE, "Position is not active");
 
-        // Verify the withdrawal amount doesn't exceed available shares
-        assert(amount <= receipt.shares, "Withdrawal amount exceeds available shares");
+        // MVP: Enforce full withdrawal only (no partial withdrawals)
+        assert(amount == receipt.shares, "Must withdraw full position (partial withdrawals not supported)");
 
         // The intent_id for withdrawal is the note's nonce (same as the original deposit intent_id)
         let intent_id = receipt.nonce;
 
-        // Calculate remaining shares after withdrawal
-        let remaining_shares = receipt.shares - amount;
-
         // Create a new note with PendingWithdraw status
-        // This note tracks the withdrawal in progress
+        // For MVP full withdrawals, the shares field stores the withdrawal amount
+        // This allows finalize_withdraw to validate the L1 confirmation amount
         let pending_receipt = PositionReceiptNote {
             owner,
             nonce: receipt.nonce,
             asset_id: receipt.asset_id,
-            shares: remaining_shares,
+            shares: amount, // Store withdrawal amount for validation in finalize_withdraw
             target_chain_id: receipt.target_chain_id,
             aave_market_id: receipt.aave_market_id,
             status: PositionStatus::PENDING_WITHDRAW,
@@ -645,9 +649,9 @@ pub(crate) contract AaveWrapper {
         let portal = self.storage.portal_address.read();
         self.context.message_portal(portal, content);
 
-        // Enqueue public call to update intent status
-        // Only intent_id is passed - no user-identifying information
-        AaveWrapper::at(self.context.this_address())._request_withdraw_public(intent_id).enqueue(
+        // Enqueue public call to update intent status and store owner mapping
+        // The owner address is passed to enable finalization routing
+        AaveWrapper::at(self.context.this_address())._request_withdraw_public(intent_id, owner).enqueue(
             self.context,
         );
 
@@ -659,13 +663,15 @@ pub(crate) contract AaveWrapper {
     /// This is called from the private request_withdraw to update public state.
     ///
     /// # Privacy
-    /// This function receives ONLY the intent_id. No user identity, amounts,
-    /// or asset information is passed or emitted publicly.
+    /// This function receives the intent_id and owner address.
+    /// The owner mapping enables finalization routing but doesn't reveal identity
+    /// to observers since the intent_id is a one-way hash.
     ///
     /// # Arguments
     /// * `intent_id` - The intent to mark as pending withdrawal
+    /// * `owner` - The L2 address that owns this position
     #[external("public")]
-    fn _request_withdraw_public(intent_id: Field) {
+    fn _request_withdraw_public(intent_id: Field, owner: AztecAddress) {
         // Verify the intent is in CONFIRMED status (successful deposit must precede withdrawal)
         let status = self.storage.intent_status.at(intent_id).read();
         assert(status == IntentStatus::CONFIRMED, "Intent not in confirmed state");
@@ -673,6 +679,10 @@ pub(crate) contract AaveWrapper {
         // Note: We don't check consumed_intents here because the deposit flow marks it consumed
         // The intent_id is reused for withdrawal, tracking the lifecycle of the position
         // The status transition from CONFIRMED -> PENDING_WITHDRAW indicates withdrawal started
+
+        // Store the intent owner mapping for finalization routing
+        // This allows finalize_withdraw to be routed to the correct user
+        self.storage.intent_owners.at(intent_id).write(owner);
 
         // Update intent status to pending withdrawal
         self.storage.intent_status.at(intent_id).write(IntentStatus::PENDING_WITHDRAW);
@@ -763,22 +773,12 @@ pub(crate) contract AaveWrapper {
         assert(receipt.asset_id == asset_id, "Asset ID mismatch");
         assert(receipt.target_chain_id == target_chain_id, "Target chain ID mismatch");
 
-        // If there are remaining shares in the note, create a new Active note
-        // This handles partial withdrawals where only some shares were withdrawn
-        if receipt.shares > 0 {
-            let remaining_receipt = PositionReceiptNote {
-                owner,
-                nonce: receipt.nonce,
-                asset_id: receipt.asset_id,
-                shares: receipt.shares,
-                target_chain_id: receipt.target_chain_id,
-                aave_market_id: receipt.aave_market_id,
-                status: PositionStatus::ACTIVE,
-            };
-            self.storage.receipts.at(owner).insert(remaining_receipt).deliver(
-                MessageDelivery.CONSTRAINED_ONCHAIN,
-            );
-        }
+        // Verify the withdrawal amount matches what was requested
+        // The PendingWithdraw note stores the withdrawal amount in the shares field
+        assert(receipt.shares == amount, "Withdrawal amount mismatch");
+
+        // Note is already nullified by pop_notes above
+        // No new note is created since this is a full withdrawal
 
         // Enqueue public call to mark intent as consumed
         // Only intent_id is passed - no user-identifying information

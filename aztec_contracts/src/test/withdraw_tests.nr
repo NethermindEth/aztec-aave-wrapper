@@ -87,29 +87,27 @@ unconstrained fn test_compute_withdraw_message_content_different_inputs() {
     assert(hash2 != hash3, "Hashes should be unique for each input combination");
 }
 
-/// Test withdraw message for partial withdrawal.
+/// Test withdraw message with different withdrawal amounts.
 ///
-/// Users can withdraw a portion of their shares, keeping the rest active.
+/// Note: MVP only supports full withdrawals, but the hash computation
+/// should still produce different hashes for different amounts.
 #[test]
-unconstrained fn test_compute_withdraw_message_partial_withdrawal() {
-    let total_shares: u128 = 1_000_000_000; // 1000 aUSDC
-    let partial_amount: u128 = 500_000_000; // Withdraw half
+unconstrained fn test_compute_withdraw_message_different_amounts() {
+    let amount_1: u128 = 500_000_000; // 500 aUSDC
+    let amount_2: u128 = 1_000_000_000; // 1000 aUSDC
 
-    let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, partial_amount, 1700000000);
+    let intent_1 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, amount_1, 1700000000);
+    let intent_2 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, amount_2, 1700000000);
     let asset_id: Field = 1;
     let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
 
-    let hash = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
+    let hash_1 = compute_withdraw_message_content(intent_1, asset_id, target_chain_id, secret_hash);
+    let hash_2 = compute_withdraw_message_content(intent_2, asset_id, target_chain_id, secret_hash);
 
-    assert(hash != 0, "Partial withdrawal should produce valid hash");
-
-    // Full withdrawal with same parameters should produce different hash
-    let full_intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, total_shares, 1700000000);
-    let full_hash =
-        compute_withdraw_message_content(full_intent, asset_id, target_chain_id, secret_hash);
-
-    assert(hash != full_hash, "Partial and full withdrawal should produce different hashes");
+    assert(hash_1 != 0, "First withdrawal should produce valid hash");
+    assert(hash_2 != 0, "Second withdrawal should produce valid hash");
+    assert(hash_1 != hash_2, "Different amounts should produce different hashes");
 }
 
 /// Test withdraw message includes deadline for time-bound execution.
@@ -362,12 +360,15 @@ unconstrained fn test_position_receipt_note_active_position() {
 }
 
 /// Test PositionReceiptNote for pending withdrawal state.
+///
+/// Note: In MVP, the PendingWithdraw note stores the withdrawal amount
+/// in the shares field for validation during finalization.
 #[test]
 unconstrained fn test_position_receipt_note_pending_withdraw() {
     let owner = AztecAddress::from_field(0xdeadbeef);
     let nonce: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
-    let remaining_shares: u128 = 50_000_000; // Half shares remaining after partial withdraw request
+    let withdrawal_amount: u128 = 100_000_000; // Full withdrawal amount stored in shares
     let target_chain_id: u32 = 23;
     let status: u8 = PositionStatus::PENDING_WITHDRAW;
 
@@ -375,14 +376,14 @@ unconstrained fn test_position_receipt_note_pending_withdraw() {
         owner,
         nonce,
         asset_id,
-        shares: remaining_shares,
+        shares: withdrawal_amount,
         target_chain_id,
         aave_market_id: 0,
         status,
     };
 
     assert(receipt.status == PositionStatus::PENDING_WITHDRAW, "Status should be PENDING_WITHDRAW");
-    assert(receipt.shares == remaining_shares, "Remaining shares should be stored");
+    assert(receipt.shares == withdrawal_amount, "Withdrawal amount should be stored in shares field");
 }
 
 /// Test PositionReceiptNote equality for note comparison.
