@@ -137,3 +137,41 @@ library IntentLib {
             abi.decode(payload, (bytes32, bytes32, uint128, uint64));
     }
 }
+
+/// @notice Payload for token bridge transfer on withdrawal completion
+/// @dev Sent from Target Executor → L1 Portal via Wormhole Token Bridge
+/// Contains information needed to route tokens to the correct L2 recipient
+struct WithdrawTokenPayload {
+    /// @notice The intent ID this token transfer corresponds to
+    bytes32 intentId;
+    /// @notice Hash of the L2 owner address (for routing to token portal)
+    bytes32 ownerHash;
+    /// @notice Secret hash for L2 token claiming via token portal
+    /// @dev The user must provide the matching secret on L2 to claim tokens
+    bytes32 secretHash;
+    /// @notice Asset address on L1 (the token being bridged back)
+    address asset;
+}
+
+/// @title WithdrawTokenPayloadLib
+/// @notice Helper functions for encoding/decoding withdrawal token payloads
+library WithdrawTokenPayloadLib {
+    /// @notice Encode a WithdrawTokenPayload for Wormhole token bridge
+    /// @param payload The payload to encode
+    /// @return Encoded bytes suitable for transferTokensWithPayload
+    function encode(
+        WithdrawTokenPayload memory payload
+    ) internal pure returns (bytes memory) {
+        return abi.encode(payload.intentId, payload.ownerHash, payload.secretHash, payload.asset);
+    }
+
+    /// @notice Decode a WithdrawTokenPayload from Wormhole token bridge
+    /// @param data The encoded payload
+    /// @return payload The decoded withdrawal token payload
+    function decode(
+        bytes memory data
+    ) internal pure returns (WithdrawTokenPayload memory payload) {
+        (payload.intentId, payload.ownerHash, payload.secretHash, payload.asset) =
+            abi.decode(data, (bytes32, bytes32, bytes32, address));
+    }
+}

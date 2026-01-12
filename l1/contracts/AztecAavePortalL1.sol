@@ -5,7 +5,14 @@ import { IAztecOutbox } from "./interfaces/IAztecOutbox.sol";
 import { IAztecInbox } from "./interfaces/IAztecInbox.sol";
 import { IWormholeTokenBridge } from "./interfaces/IWormholeTokenBridge.sol";
 import { IWormholeRelayer } from "./interfaces/IWormholeRelayer.sol";
-import { DepositIntent, WithdrawIntent, IntentLib } from "./types/Intent.sol";
+import {
+    DepositIntent,
+    WithdrawIntent,
+    IntentLib,
+    WithdrawTokenPayload,
+    WithdrawTokenPayloadLib
+} from "./types/Intent.sol";
+import { ITokenPortal } from "./interfaces/ITokenPortal.sol";
 import {
     DepositConfirmation,
     WithdrawConfirmation,
@@ -74,6 +81,9 @@ contract AztecAavePortalL1 {
     /// @notice Tracks processed Wormhole delivery hashes for replay protection
     mapping(bytes32 => bool) public processedDeliveries;
 
+    /// @notice Tracks processed VAA hashes for token bridge replay protection
+    mapping(bytes32 => bool) public processedVAAs;
+
     // ============ Errors ============
 
     error IntentAlreadyConsumed(bytes32 intentId);
@@ -86,6 +96,10 @@ contract AztecAavePortalL1 {
     error DeliveryAlreadyProcessed(bytes32 deliveryHash);
     error ConfirmationFailed(bytes32 intentId);
     error L2MessageSendFailed();
+    error VAAlreadyProcessed(bytes32 vaaHash);
+    error TokenPortalDepositFailed();
+    error InvalidPayloadAsset(address expected, address received);
+    error TokenTransferFailed();
 
     // ============ Events ============
 
@@ -100,6 +114,12 @@ contract AztecAavePortalL1 {
     event WithdrawConfirmed(bytes32 indexed intentId, uint256 amount, ConfirmationStatus status);
 
     event L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf);
+
+    event WithdrawalTokensReceived(
+        bytes32 indexed intentId, address indexed asset, uint256 amount, bytes32 secretHash
+    );
+
+    event TokensDepositedToL2(bytes32 indexed intentId, bytes32 messageKey, uint256 messageIndex);
 
     // ============ Constructor ============
 
@@ -484,5 +504,84 @@ contract AztecAavePortalL1 {
                 asset
             )
         );
+    }
+
+    // ============ Token Bridge Completion Functions ============
+
+    /**
+     * @notice Complete a withdrawal token transfer from the target chain
+     * @dev This function receives tokens bridged back from the target executor
+     *      via Wormhole Token Bridge and deposits them to the Aztec token portal
+     *
+     * Flow:
+     * 1. Call Wormhole Token Bridge completeTransferWithPayload to receive tokens
+     * 2. Decode the payload to get withdrawal details (intentId, secretHash, etc.)
+     * 3. Approve and deposit tokens to Aztec token portal for L2 delivery
+     *
+     * Security considerations:
+     * - VAA verification is handled by the Wormhole Token Bridge contract
+     * - We track VAA hashes to prevent replay attacks at our layer (defense in depth)
+     * - Tokens are deposited privately using secretHash for L2 claiming
+     *
+     * IMPORTANT: This contract MUST NOT hold residual tokens between transactions.
+     * The balance check assumes all tokens belong to the current transfer.
+     * If tokens are accidentally sent to this contract, they may be swept up
+     * by the next withdrawal completion.
+     *
+     * @param encodedVm The encoded Wormhole VAA from the target chain
+     * @return intentId The intent ID this transfer corresponds to
+     * @return amount The amount of tokens received and deposited
+     */
+    function completeWithdrawalTransfer(
+        bytes memory encodedVm
+    ) external returns (bytes32 intentId, uint256 amount) {
+        // Step 1: Compute VAA hash for replay protection
+        bytes32 vaaHash = keccak256(encodedVm);
+
+        // Step 2: Check for replay attacks (defense in depth - Wormhole also tracks this)
+        if (processedVAAs[vaaHash]) {
+            revert VAAlreadyProcessed(vaaHash);
+        }
+
+        // Step 3: Mark VAA as processed BEFORE external calls (reentrancy protection)
+        // This follows checks-effects-interactions pattern
+        processedVAAs[vaaHash] = true;
+
+        // Step 4: Complete the token transfer via Wormhole Token Bridge
+        // This verifies the VAA, releases tokens to this contract, and returns the payload
+        bytes memory payload =
+            IWormholeTokenBridge(wormholeTokenBridge).completeTransferWithPayload(encodedVm);
+
+        // Step 5: Decode the withdrawal token payload
+        WithdrawTokenPayload memory withdrawPayload = WithdrawTokenPayloadLib.decode(payload);
+        intentId = withdrawPayload.intentId;
+        address asset = withdrawPayload.asset;
+
+        // Step 6: Get the token balance received
+        // IMPORTANT: This assumes the contract holds no residual tokens.
+        // The Wormhole Token Bridge atomically mints/releases the transfer amount.
+        // All received tokens are immediately deposited to the token portal.
+        amount = IERC20(asset).balanceOf(address(this));
+
+        // Step 7: Verify we received tokens
+        require(amount > 0, "No tokens received from bridge");
+
+        emit WithdrawalTokensReceived(intentId, asset, amount, withdrawPayload.secretHash);
+
+        // Step 8: Reset approval to 0 first, then approve the token portal to spend tokens
+        // This handles tokens like USDT that require approval to be 0 before setting a new value
+        IERC20(asset).approve(tokenPortal, 0);
+        bool approveSuccess = IERC20(asset).approve(tokenPortal, amount);
+        if (!approveSuccess) {
+            revert TokenTransferFailed();
+        }
+
+        // Step 9: Deposit tokens to Aztec L2 via the token portal
+        // Using depositToAztecPrivate for privacy-preserving deposits
+        // The user will need to provide the matching secret on L2 to claim
+        (bytes32 messageKey, uint256 messageIndex) =
+            ITokenPortal(tokenPortal).depositToAztecPrivate(amount, withdrawPayload.secretHash);
+
+        emit TokensDepositedToL2(intentId, messageKey, messageIndex);
     }
 }

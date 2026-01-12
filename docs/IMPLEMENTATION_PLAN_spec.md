@@ -525,15 +525,16 @@ cd l1 && forge test --match-test test_receiveConfirmation -vvv
 
 ---
 
-### Step 5: Implement completeTransferWithPayload for withdrawal completions
+### Step 5: Implement completeTransferWithPayload for withdrawal completions **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Add function to receive bridged tokens back from target executor on withdrawals (spec.md §4.2 Step 4).
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, function not present
+- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] completeWithdrawalTransfer implemented
+- `l1/test/Portal.completeWithdrawal.t.sol` - [EXISTS] Comprehensive tests added
 
 #### Validation
 ```bash
