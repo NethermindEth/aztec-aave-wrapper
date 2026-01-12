@@ -80,7 +80,7 @@ make install         # bun install + forge install for l1/target
 Docker Compose runs three services:
 - `anvil-l1`: Ethereum L1 (port 8545)
 - `anvil-target`: Target chain (port 8546)
-- `aztec-sandbox`: Aztec PXE (port 8080)
+- `aztec-sandbox`: Aztec PXE (port 8081)
 
 **Important**: L1 anvil must NOT have `--block-time` set - Aztec sandbox controls L1 timing.
 

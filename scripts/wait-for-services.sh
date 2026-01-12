@@ -27,7 +27,7 @@ NC='\033[0m' # No Color
 # Service configuration
 ANVIL_L1_PORT=${ANVIL_L1_PORT:-8545}
 ANVIL_TARGET_PORT=${ANVIL_TARGET_PORT:-8546}
-PXE_PORT=${PXE_PORT:-8080}
+PXE_PORT=${PXE_PORT:-8081}
 
 # =============================================================================
 # Helper Functions
@@ -103,8 +103,8 @@ check_pxe() {
     local response
     response=$(curl -s "http://localhost:${PXE_PORT}/status" 2>/dev/null || echo "")
 
-    # PXE returns JSON with status info when healthy
-    if [ -n "$response" ] && echo "$response" | grep -q -E '(version|nodInfo|"ok")'; then
+    # PXE returns "OK" or JSON with status info when healthy
+    if [ -n "$response" ] && echo "$response" | grep -q -i -E '(version|nodInfo|ok)'; then
         return 0
     fi
 

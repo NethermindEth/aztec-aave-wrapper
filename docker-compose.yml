@@ -2,7 +2,7 @@
 # This configuration runs:
 # - anvil-l1: Ethereum L1 simulation (port 8545)
 # - anvil-target: Target chain simulation (port 8546)
-# - aztec-sandbox: Full Aztec sandbox with PXE (port 8080)
+# - aztec-sandbox: Full Aztec sandbox with PXE (port 8081)
 
 services:
   # ============================================================================
@@ -90,7 +90,7 @@ services:
     container_name: aztec-aave-sandbox
     ports:
       # PXE HTTP endpoint
-      - "${PXE_PORT:-8080}:8080"
+      - "${PXE_PORT:-8081}:8080"
     environment:
       # L1 RPC URLs - point to our L1 anvil instance
       # The Aztec CLI uses ETHEREUM_HOSTS for the L1 RPC URL(s)
@@ -105,10 +105,9 @@ services:
       DEBUG: ${AZTEC_DEBUG:-aztec:*}
       # PXE configuration
       PXE_PROVER_ENABLED: ${PXE_PROVER_ENABLED:-false}
-    # Override entrypoint to pass sandbox arguments correctly
-    # The original entrypoint is: /bin/bash -c "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js"
-    # We need to append "start --sandbox" to the node command
-    entrypoint: ["/bin/bash", "-c", "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js start --sandbox"]
+    # Override entrypoint to start local network
+    # In newer Aztec versions, use "start --local-network" instead of "start --sandbox"
+    entrypoint: ["/bin/bash", "-c", "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js start --local-network"]
     depends_on:
       anvil-l1:
         condition: service_healthy
