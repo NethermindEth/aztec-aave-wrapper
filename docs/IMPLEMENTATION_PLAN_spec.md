@@ -853,13 +853,13 @@ cd e2e && bun run test --match "full withdrawal flow"
 
 ### Step 4: Test deadline expiry refund mechanism **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic deadline tests exist in mock mode)
+**Status**: COMPLETE
 
 #### Goal
 Test deadline expiry and refund claim flow.
 
 #### Files
-- `e2e/src/e2e.test.ts` - [EXISTS] Deadline expiry tests added (mock mode limitations apply)
+- `e2e/src/e2e.test.ts` - [EXISTS] Deadline expiry and claim_refund tests added
 
 #### Validation
 ```bash
