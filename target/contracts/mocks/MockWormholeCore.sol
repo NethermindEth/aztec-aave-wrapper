@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {IWormhole} from "../interfaces/IWormhole.sol";
+import { IWormhole } from "../interfaces/IWormhole.sol";
 
 /**
  * @title MockWormholeCore
@@ -57,7 +57,7 @@ contract MockWormholeCore is IWormhole {
         // Initialize with a mock guardian set
         address[] memory guardians = new address[](1);
         guardians[0] = address(this); // Mock guardian
-        currentGuardianSet = GuardianSet({keys: guardians, expirationTime: type(uint32).max});
+        currentGuardianSet = GuardianSet({ keys: guardians, expirationTime: type(uint32).max });
     }
 
     // ============ IWormhole Implementation ============
@@ -242,7 +242,7 @@ contract MockWormholeCore is IWormhole {
      */
     function updateGuardianSet(address[] memory newGuardians) external {
         guardianSetIndex++;
-        currentGuardianSet = GuardianSet({keys: newGuardians, expirationTime: type(uint32).max});
+        currentGuardianSet = GuardianSet({ keys: newGuardians, expirationTime: type(uint32).max });
     }
 
     /**

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Script, console2} from "forge-std/Script.sol";
-import {AaveExecutorTarget} from "../contracts/AaveExecutorTarget.sol";
+import { Script, console2 } from "forge-std/Script.sol";
+import { AaveExecutorTarget } from "../contracts/AaveExecutorTarget.sol";
 
 /**
  * @title DeployScript
@@ -52,8 +52,7 @@ contract DeployScript is Script {
 
         vm.startBroadcast();
 
-        AaveExecutorTarget executor =
-            new AaveExecutorTarget(aavePool, wormholeCore, l1PortalAddress, sourceChainId);
+        AaveExecutorTarget executor = new AaveExecutorTarget(aavePool, wormholeCore, l1PortalAddress, sourceChainId);
 
         vm.stopBroadcast();
 
@@ -68,9 +67,8 @@ contract DeployScript is Script {
 
         vm.startBroadcast();
 
-        AaveExecutorTarget executor = new AaveExecutorTarget(
-            AAVE_POOL_SEPOLIA, WORMHOLE_CORE_SEPOLIA, l1PortalAddress, CHAIN_ID_ETHEREUM
-        );
+        AaveExecutorTarget executor =
+            new AaveExecutorTarget(AAVE_POOL_SEPOLIA, WORMHOLE_CORE_SEPOLIA, l1PortalAddress, CHAIN_ID_ETHEREUM);
 
         vm.stopBroadcast();
 
@@ -86,9 +84,8 @@ contract DeployScript is Script {
 
         vm.startBroadcast();
 
-        AaveExecutorTarget executor = new AaveExecutorTarget(
-            AAVE_POOL_MAINNET, WORMHOLE_CORE_MAINNET, l1PortalAddress, CHAIN_ID_ETHEREUM
-        );
+        AaveExecutorTarget executor =
+            new AaveExecutorTarget(AAVE_POOL_MAINNET, WORMHOLE_CORE_MAINNET, l1PortalAddress, CHAIN_ID_ETHEREUM);
 
         vm.stopBroadcast();
 

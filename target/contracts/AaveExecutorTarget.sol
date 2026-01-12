@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {ILendingPool} from "./interfaces/ILendingPool.sol";
-import {IWormhole} from "./interfaces/IWormhole.sol";
-import {WormholeParser} from "./libraries/WormholeParser.sol";
-import {DepositIntent, WithdrawIntent, IntentLib} from "./types/Intent.sol";
-import {FailedOperation, OperationType} from "./types/FailedOperation.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ILendingPool } from "./interfaces/ILendingPool.sol";
+import { IWormhole } from "./interfaces/IWormhole.sol";
+import { WormholeParser } from "./libraries/WormholeParser.sol";
+import { DepositIntent, WithdrawIntent, IntentLib } from "./types/Intent.sol";
+import { FailedOperation, OperationType } from "./types/FailedOperation.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 /**
  * @title AaveExecutorTarget
@@ -79,9 +79,7 @@ contract AaveExecutorTarget {
     );
 
     /// @notice Emitted when a withdraw operation is executed
-    event WithdrawExecuted(
-        bytes32 indexed intentId, bytes32 indexed ownerHash, address indexed asset, uint256 amount
-    );
+    event WithdrawExecuted(bytes32 indexed intentId, bytes32 indexed ownerHash, address indexed asset, uint256 amount);
 
     /// @notice Emitted when an operation is added to the retry queue
     event OperationQueued(
@@ -492,7 +490,12 @@ contract AaveExecutorTarget {
 
         // Emit event to indicate retry failed but operation is still queued
         emit OperationQueued(
-            queueIndex, failedOp.intentId, failedOp.operationType, failedOp.asset, failedOp.amount, failedOp.originalCaller
+            queueIndex,
+            failedOp.intentId,
+            failedOp.operationType,
+            failedOp.asset,
+            failedOp.amount,
+            failedOp.originalCaller
         );
     }
 
@@ -620,7 +623,7 @@ contract AaveExecutorTarget {
             , // interestRateStrategyAddress
             , // accruedToTreasury
             , // unbacked
-            // isolationModeTotalDebt
+                // isolationModeTotalDebt
         ) = aavePool.getReserveData(asset);
     }
 
@@ -649,7 +652,7 @@ contract AaveExecutorTarget {
             , // interestRateStrategyAddress
             , // accruedToTreasury
             , // unbacked
-            // isolationModeTotalDebt
+                // isolationModeTotalDebt
         ) = aavePool.getReserveData(asset);
 
         if (aTokenAddress == address(0)) {

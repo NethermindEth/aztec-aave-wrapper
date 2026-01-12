@@ -164,7 +164,10 @@ unconstrained fn test_intent_id_caller_binding() {
         salt,
     );
 
-    assert(hash1 != hash2, "SECURITY: Different callers must produce different intent IDs to prevent front-running");
+    assert(
+        hash1 != hash2,
+        "SECURITY: Different callers must produce different intent IDs to prevent front-running",
+    );
 }
 
 // ============================================================================
@@ -185,7 +188,10 @@ unconstrained fn test_withdraw_message_secret_binding() {
     let hash1 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash1);
     let hash2 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash2);
 
-    assert(hash1 != hash2, "SECURITY: Different secrets must produce different withdraw hashes to prevent unauthorized claims");
+    assert(
+        hash1 != hash2,
+        "SECURITY: Different secrets must produce different withdraw hashes to prevent unauthorized claims",
+    );
 }
 
 // ============================================================================
@@ -205,7 +211,10 @@ unconstrained fn test_hash_collision_resistance_similar_inputs() {
     let hash1 = compute_deposit_message_content(intent1, secret_hash);
     let hash2 = compute_deposit_message_content(intent2, secret_hash);
 
-    assert(hash1 != hash2, "SECURITY: Collision resistance - similar inputs must produce different hashes");
+    assert(
+        hash1 != hash2,
+        "SECURITY: Collision resistance - similar inputs must produce different hashes",
+    );
 }
 
 // ============================================================================
@@ -240,7 +249,10 @@ unconstrained fn test_deadline_cryptographically_bound() {
     // Future deadline
     let hash_future = compute_intent_id(caller, 1, 1000000, 6, 23, 9999999999, 1);
 
-    assert(hash_past != hash_future, "SECURITY: Deadline must be cryptographically bound to prevent replay");
+    assert(
+        hash_past != hash_future,
+        "SECURITY: Deadline must be cryptographically bound to prevent replay",
+    );
 }
 
 /// Test front-running resistance.
@@ -254,7 +266,10 @@ unconstrained fn test_front_running_resistance() {
     let victim_intent_id = compute_intent_id(victim, 1, 1000000, 6, 23, 1700000000, 42);
     let attacker_attempt = compute_intent_id(attacker, 1, 1000000, 6, 23, 1700000000, 42);
 
-    assert(victim_intent_id != attacker_attempt, "SECURITY: Attacker cannot replicate victim's intent ID");
+    assert(
+        victim_intent_id != attacker_attempt,
+        "SECURITY: Attacker cannot replicate victim's intent ID",
+    );
 }
 
 // ============================================================================
@@ -284,22 +299,17 @@ unconstrained fn test_withdraw_vs_deposit_confirmation_design_issue() {
     let amount: u128 = 1000000;
     let target_chain_id: u32 = 23;
 
-    let deposit_hash = compute_deposit_confirmation_content(
-        intent_id,
-        asset_id,
-        amount,
-        target_chain_id,
-    );
+    let deposit_hash =
+        compute_deposit_confirmation_content(intent_id, asset_id, amount, target_chain_id);
 
-    let withdraw_hash = compute_withdraw_confirmation_content(
-        intent_id,
-        asset_id,
-        amount,
-        target_chain_id,
-    );
+    let withdraw_hash =
+        compute_withdraw_confirmation_content(intent_id, asset_id, amount, target_chain_id);
 
     // CURRENT BEHAVIOR: Hashes are identical (this is the design issue)
-    assert(deposit_hash == withdraw_hash, "DESIGN ISSUE: Deposit and withdraw confirmations produce identical hashes - consider including operation type in hash");
+    assert(
+        deposit_hash == withdraw_hash,
+        "DESIGN ISSUE: Deposit and withdraw confirmations produce identical hashes - consider including operation type in hash",
+    );
 
     // EXPECTED BEHAVIOR (after fix):
     // assert(deposit_hash != withdraw_hash, "Different operations should produce different hashes");
@@ -379,7 +389,10 @@ unconstrained fn test_deposit_intent_all_max_values() {
         0xffffffffffffffffffffffffffffff,
     );
 
-    assert(intent.amount == 0xffffffffffffffffffffffffffffffff, "Max amount must be stored correctly");
+    assert(
+        intent.amount == 0xffffffffffffffffffffffffffffffff,
+        "Max amount must be stored correctly",
+    );
     assert(intent.original_decimals == 255, "Max decimals must be stored correctly");
     assert(intent.target_chain_id == 0xffffffff, "Max chain_id must be stored correctly");
     assert(intent.deadline == 0xffffffffffffffff, "Max deadline must be stored correctly");
@@ -395,7 +408,10 @@ unconstrained fn test_withdraw_intent_all_max_values() {
         0xffffffffffffffff,
     );
 
-    assert(intent.amount == 0xffffffffffffffffffffffffffffffff, "Max amount must be stored correctly");
+    assert(
+        intent.amount == 0xffffffffffffffffffffffffffffffff,
+        "Max amount must be stored correctly",
+    );
     assert(intent.deadline == 0xffffffffffffffff, "Max deadline must be stored correctly");
 }
 
@@ -451,5 +467,8 @@ unconstrained fn test_intent_id_input_order_matters() {
     let hash1 = compute_intent_id(addr1, 0x2222, 1000, 6, 23, 1700000000, 1);
     let hash2 = compute_intent_id(addr2, 0x1111, 1000, 6, 23, 1700000000, 1);
 
-    assert(hash1 != hash2, "SECURITY: Input order must affect hash to prevent argument confusion attacks");
+    assert(
+        hash1 != hash2,
+        "SECURITY: Input order must affect hash to prevent argument confusion attacks",
+    );
 }

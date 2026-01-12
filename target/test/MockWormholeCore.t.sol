@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {Test, console2} from "forge-std/Test.sol";
-import {MockWormholeCore} from "../contracts/mocks/MockWormholeCore.sol";
-import {IWormhole} from "../contracts/interfaces/IWormhole.sol";
+import { Test, console2 } from "forge-std/Test.sol";
+import { MockWormholeCore } from "../contracts/mocks/MockWormholeCore.sol";
+import { IWormhole } from "../contracts/interfaces/IWormhole.sol";
 
 /**
  * @title MockWormholeCoreTest

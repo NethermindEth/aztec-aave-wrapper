@@ -615,9 +615,9 @@ cd target && forge test --match-test test_replayProtection -vvv
 
 ---
 
-### Step 2: Add retry queue state structures
+### Step 2: Add retry queue state structures **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Implement on-chain unlimited retry queue for failed operations with original caller tracking.
@@ -642,9 +642,9 @@ cd target && forge test --match-test test_queueStructures -vv
 
 ---
 
-### Step 3: Implement consumeAndExecuteDeposit with denormalization and retry queue
+### Step 3: Implement consumeAndExecuteDeposit with denormalization and retry queue **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (stub exists)
+**Status**: COMPLETE
 
 #### Goal
 Implement deposit execution: receive tokens from Wormhole, denormalize using original decimals, supply to Aave, track per-intent shares, send confirmation back (spec.md §4.1 Step 3-4). On failure, add to retry queue.
@@ -676,9 +676,9 @@ cd target && forge test --match-test test_denormalization -vvv
 
 ---
 
-### Step 4: Implement retryFailedOperation
+### Step 4: Implement retryFailedOperation **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Allow original caller to retry failed operations from the queue.
@@ -700,9 +700,9 @@ cd target && forge test --match-test test_retry_onlyOriginalCaller -vvv
 
 ---
 
-### Step 5: Implement consumeAndExecuteWithdraw with anonymous pool
+### Step 5: Implement consumeAndExecuteWithdraw with anonymous pool **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Implement withdrawal: receive message, withdraw from Aave using per-intent shares, bridge tokens back to L1 (spec.md §4.2 Step 3). Anonymous pool model.
@@ -724,9 +724,9 @@ cd target && forge test --match-test test_withdraw_insufficientShares -vvv
 
 ---
 
-### Step 6: Add position query functions
+### Step 6: Add position query functions **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Implement position queries that show per-intent shares and current value per spec.md §3.1.
@@ -759,9 +759,9 @@ make deploy-local
 make e2e
 ```
 
-### Step 1: Setup E2E test infrastructure with separate test suites
+### Step 1: Setup E2E test infrastructure with separate test suites **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic e2e structure exists)
+**Status**: COMPLETE
 
 #### Goal
 Create test harness with deployed contracts, funded accounts, and helper utilities. Configure separate unit (mock) and integration (Wormhole testnet) suites.
@@ -794,9 +794,9 @@ cd e2e && bun run test:setup
 
 ---
 
-### Step 2: Test full deposit flow with privacy verification
+### Step 2: Test full deposit flow with privacy verification **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic deposit test exists)
+**Status**: COMPLETE
 
 #### Goal
 Test complete deposit: L2 request → L1 bridge → Target Aave supply → L1 confirm → L2 finalize (spec.md §4.1). Verify privacy: different relayer executes.
@@ -823,9 +823,9 @@ cd e2e && bun run test --match "full deposit flow"
 
 ---
 
-### Step 3: Test full withdrawal flow
+### Step 3: Test full withdrawal flow **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic withdrawal test exists)
+**Status**: COMPLETE
 
 #### Goal
 Test complete withdrawal: L2 request → L1 message → Target Aave withdraw → Bridge back → L2 finalize (spec.md §4.2).

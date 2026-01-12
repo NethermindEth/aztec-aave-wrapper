@@ -113,8 +113,5 @@ interface IWormhole {
      * @return valid Whether signatures are valid
      * @return reason Reason for invalidity
      */
-    function parseVM(bytes memory encodedVM)
-        external
-        pure
-        returns (VM memory vm, bool valid, string memory reason);
+    function parseVM(bytes memory encodedVM) external pure returns (VM memory vm, bool valid, string memory reason);
 }
