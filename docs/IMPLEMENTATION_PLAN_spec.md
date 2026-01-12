@@ -654,7 +654,7 @@ Implement deposit execution: receive tokens from Wormhole, denormalize using ori
 
 #### Files
 - `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with consumeAndExecuteDeposit fully implemented
-- `target/test/Executor.deposit.t.sol` - Tests for deposit functionality
+- `target/test/Executor.t.sol` - [EXISTS] Tests for deposit functionality
 
 Implementation includes:
 - VAA parsing and verification via Wormhole core contract
@@ -690,7 +690,7 @@ Allow original caller to retry failed operations from the queue.
 
 #### Files
 - `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with retryFailedOperation fully implemented
-- `target/test/Executor.retry.t.sol` - [EXISTS] Comprehensive tests for retry functionality
+- `target/test/Executor.t.sol` - [EXISTS] Tests for retry functionality (in main test file)
 
 Implementation includes:
 - Queue index validation (reverts with QueueIndexNotActive if no active operation)
@@ -736,16 +736,22 @@ cd target && forge test --match-test test_withdraw_insufficientShares -vvv
 
 ---
 
-### Step 6: Add position query functions
+### Step 6: Add position query functions **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: IMPLEMENTED
 
 #### Goal
 Implement position queries that show per-intent shares and current value per spec.md §3.1.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, query functions not present
-- `target/contracts/interfaces/IAToken.sol` - [DOES NOT EXIST] Import Aave aToken interface
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with position query functions implemented
+- Uses ILendingPool interface for aToken address lookup and normalized income
+
+Implementation includes:
+- getPositionValue(intentId, asset): Returns shares and current value including yield
+- getATokenAddress(asset): Returns the aToken address for an asset from Aave reserve data
+- getTotalPositionValue(asset): Returns total shares and value held by the contract
+- Internal RAY math functions (_rayMul, _rayDiv) for Aave yield calculations
 
 #### Validation
 ```bash

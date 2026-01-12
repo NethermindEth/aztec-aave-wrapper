@@ -448,6 +448,184 @@ contract ExecutorTest is Test {
         assertEq(uint8(OperationType.Withdraw), 1);
     }
 
+    // ============ Position Value Tests ============
+
+    function test_positionValue_noDeposit() public view {
+        // Query position value for non-existent intent
+        bytes32 fakeIntentId = keccak256("fake.intent");
+        (uint256 shares, uint256 currentValue) = executor.getPositionValue(fakeIntentId, address(token));
+
+        assertEq(shares, 0);
+        assertEq(currentValue, 0);
+    }
+
+    function test_positionValue_afterDeposit() public {
+        // Execute a deposit
+        DepositIntent memory intent = _createDepositIntent();
+        bytes memory payload = IntentLib.encodeDepositIntent(intent);
+        bytes memory vaa = wormhole.encodeMockVAA(SOURCE_CHAIN_ID, l1PortalAddress, 1, payload);
+        executor.consumeAndExecuteDeposit(vaa);
+
+        // Query position value
+        (uint256 shares, uint256 currentValue) = executor.getPositionValue(intent.intentId, intent.asset);
+
+        // With default normalizedIncome = 1e27 (RAY), shares == currentValue
+        assertEq(shares, intent.amount);
+        assertEq(currentValue, intent.amount);
+    }
+
+    function test_positionValue_withYield() public {
+        // Execute a deposit
+        DepositIntent memory intent = _createDepositIntent();
+        bytes memory payload = IntentLib.encodeDepositIntent(intent);
+        bytes memory vaa = wormhole.encodeMockVAA(SOURCE_CHAIN_ID, l1PortalAddress, 1, payload);
+        executor.consumeAndExecuteDeposit(vaa);
+
+        // Simulate yield accrual: set normalized income to 1.05 (5% yield)
+        // 1.05 * RAY = 1.05 * 1e27 = 1.05e27
+        uint256 RAY = 1e27;
+        uint256 newNormalizedIncome = (105 * RAY) / 100; // 1.05e27
+        aavePool.setNormalizedIncome(intent.asset, newNormalizedIncome);
+
+        // Query position value
+        (uint256 shares, uint256 currentValue) = executor.getPositionValue(intent.intentId, intent.asset);
+
+        // Shares should remain the same (principal)
+        assertEq(shares, intent.amount);
+
+        // Current value should be higher due to yield
+        // currentValue = shares * 1.05 = 1000e6 * 1.05 = 1050e6
+        uint256 expectedValue = (intent.amount * 105) / 100;
+        assertEq(currentValue, expectedValue);
+    }
+
+    function test_positionValue_multipleIntents() public {
+        // Execute first deposit
+        DepositIntent memory intent1 = _createDepositIntent();
+        intent1.intentId = keccak256("intent.1");
+        intent1.amount = 1000e6;
+        bytes memory payload1 = IntentLib.encodeDepositIntent(intent1);
+        bytes memory vaa1 = wormhole.encodeMockVAA(SOURCE_CHAIN_ID, l1PortalAddress, 1, payload1);
+        executor.consumeAndExecuteDeposit(vaa1);
+
+        // Execute second deposit
+        DepositIntent memory intent2 = _createDepositIntent();
+        intent2.intentId = keccak256("intent.2");
+        intent2.amount = 2000e6;
+        bytes memory payload2 = IntentLib.encodeDepositIntent(intent2);
+        bytes memory vaa2 = wormhole.encodeMockVAA(SOURCE_CHAIN_ID, l1PortalAddress, 2, payload2);
+        executor.consumeAndExecuteDeposit(vaa2);
+
+        // Query position values for both intents
+        (uint256 shares1, uint256 value1) = executor.getPositionValue(intent1.intentId, intent1.asset);
+        (uint256 shares2, uint256 value2) = executor.getPositionValue(intent2.intentId, intent2.asset);
+
+        // Each intent should have correct shares and values
+        assertEq(shares1, intent1.amount);
+        assertEq(value1, intent1.amount);
+        assertEq(shares2, intent2.amount);
+        assertEq(value2, intent2.amount);
+
+        // Intents should be tracked separately (not aggregated)
+        assertTrue(shares1 != shares2);
+    }
+
+    function test_positionValue_yieldOverflow() public {
+        // Test with large values to check for overflow protection
+        uint256 largeAmount = 1e18; // 1e18 tokens (e.g., 1 billion USDC if 6 decimals)
+        token.mint(address(executor), largeAmount);
+
+        DepositIntent memory intent = _createDepositIntent();
+        intent.amount = uint128(largeAmount);
+        bytes memory payload = IntentLib.encodeDepositIntent(intent);
+        bytes memory vaa = wormhole.encodeMockVAA(SOURCE_CHAIN_ID, l1PortalAddress, 1, payload);
+        executor.consumeAndExecuteDeposit(vaa);
+
+        // Set large normalized income (e.g., 2x yield over time)
+        uint256 RAY = 1e27;
+        uint256 largeIncome = 2 * RAY; // 2e27
+        aavePool.setNormalizedIncome(intent.asset, largeIncome);
+
+        // Should not overflow
+        (uint256 shares, uint256 currentValue) = executor.getPositionValue(intent.intentId, intent.asset);
+
+        assertEq(shares, largeAmount);
+        assertEq(currentValue, 2 * largeAmount);
+    }
+
+    function test_positionValue_getATokenAddress() public {
+        // Set mock aToken address
+        address mockAToken = makeAddr("mockAToken");
+        aavePool.setATokenAddress(address(token), mockAToken);
+
+        // Query aToken address
+        address aTokenAddress = executor.getATokenAddress(address(token));
+
+        assertEq(aTokenAddress, mockAToken);
+    }
+
+    function test_positionValue_getATokenAddressNotSet() public view {
+        // Query aToken address for uninitialized reserve
+        address aTokenAddress = executor.getATokenAddress(address(token));
+
+        assertEq(aTokenAddress, address(0));
+    }
+
+    function test_positionValue_getTotalPositionValue() public {
+        // Set mock aToken address - we need an actual ERC20 for balanceOf
+        MockERC20 mockAToken = new MockERC20("Aave USDC", "aUSDC", 6);
+        aavePool.setATokenAddress(address(token), address(mockAToken));
+
+        // Execute a deposit to establish shares
+        DepositIntent memory intent = _createDepositIntent();
+        intent.amount = 1000e6;
+        bytes memory payload = IntentLib.encodeDepositIntent(intent);
+        bytes memory vaa = wormhole.encodeMockVAA(SOURCE_CHAIN_ID, l1PortalAddress, 1, payload);
+        executor.consumeAndExecuteDeposit(vaa);
+
+        // Mint aTokens to executor to simulate Aave position
+        // In reality, aTokens would be minted by Aave pool
+        mockAToken.mint(address(executor), 1000e6);
+
+        // Query total position value
+        (uint256 totalShares, uint256 totalValue) = executor.getTotalPositionValue(address(token));
+
+        // With default normalizedIncome = 1e27 (RAY), shares == value
+        assertEq(totalValue, 1000e6);
+        assertEq(totalShares, 1000e6);
+    }
+
+    function test_positionValue_getTotalPositionValueWithYield() public {
+        // Set mock aToken address
+        MockERC20 mockAToken = new MockERC20("Aave USDC", "aUSDC", 6);
+        aavePool.setATokenAddress(address(token), address(mockAToken));
+
+        // Mint aTokens to executor
+        mockAToken.mint(address(executor), 1050e6); // 1050 USDC worth (includes yield)
+
+        // Set normalized income to 1.05 (5% yield)
+        uint256 RAY = 1e27;
+        uint256 newNormalizedIncome = (105 * RAY) / 100;
+        aavePool.setNormalizedIncome(address(token), newNormalizedIncome);
+
+        // Query total position value
+        (uint256 totalShares, uint256 totalValue) = executor.getTotalPositionValue(address(token));
+
+        // totalValue is the aToken balance (1050e6)
+        assertEq(totalValue, 1050e6);
+
+        // totalShares = totalValue / normalizedIncome = 1050e6 / 1.05 = 1000e6
+        assertEq(totalShares, 1000e6);
+    }
+
+    function test_positionValue_getTotalPositionValueNoAToken() public view {
+        // Query total position value for asset with no aToken configured
+        (uint256 totalShares, uint256 totalValue) = executor.getTotalPositionValue(address(token));
+
+        assertEq(totalShares, 0);
+        assertEq(totalValue, 0);
+    }
+
     // ============ Helper Functions ============
 
     function _createDepositIntent() internal view returns (DepositIntent memory) {

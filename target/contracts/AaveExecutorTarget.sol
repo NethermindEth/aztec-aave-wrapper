@@ -559,4 +559,148 @@ contract AaveExecutorTarget {
     function isQueueIndexActive(uint256 queueIndex) external view returns (bool) {
         return failedOperations[queueIndex].intentId != bytes32(0);
     }
+
+    /**
+     * @notice Get the current value of a position for an intent
+     * @dev Calculates the current value including any accrued yield from Aave
+     *      For MVP: shares = principal, but current value may differ due to Aave yield
+     *
+     * The calculation is:
+     *   currentValue = (intentShares * normalizedIncome) / RAY
+     *
+     * where normalizedIncome is the reserve's liquidity index that grows over time
+     * as interest accrues.
+     *
+     * @param intentId The intent ID to query
+     * @param asset The underlying asset address
+     * @return shares The number of shares held for this intent (principal deposited)
+     * @return currentValue The current value of the position including yield
+     */
+    function getPositionValue(bytes32 intentId, address asset)
+        external
+        view
+        returns (uint256 shares, uint256 currentValue)
+    {
+        shares = intentShares[intentId];
+
+        if (shares == 0) {
+            return (0, 0);
+        }
+
+        // Get the normalized income (liquidity index) from Aave pool
+        // This represents 1 + accumulated interest rate, in RAY format (1e27)
+        uint256 normalizedIncome = aavePool.getReserveNormalizedIncome(asset);
+
+        // Calculate current value: shares * normalizedIncome / RAY
+        // RAY = 1e27, represents 1.0 in Aave's math
+        // At deposit time, normalizedIncome was captured implicitly (shares = amount)
+        // Current value grows as normalizedIncome increases
+        currentValue = _rayMul(shares, normalizedIncome);
+    }
+
+    /**
+     * @notice Get the aToken address for a given asset
+     * @dev Retrieves the aToken address from Aave pool's reserve data
+     * @param asset The underlying asset address
+     * @return aTokenAddress The aToken address for the asset
+     */
+    function getATokenAddress(address asset) external view returns (address aTokenAddress) {
+        (
+            , // configuration
+            , // liquidityIndex
+            , // currentLiquidityRate
+            , // variableBorrowIndex
+            , // currentVariableBorrowRate
+            , // currentStableBorrowRate
+            , // lastUpdateTimestamp
+            , // id
+            aTokenAddress,
+            , // stableDebtTokenAddress
+            , // variableDebtTokenAddress
+            , // interestRateStrategyAddress
+            , // accruedToTreasury
+            , // unbacked
+            // isolationModeTotalDebt
+        ) = aavePool.getReserveData(asset);
+    }
+
+    /**
+     * @notice Get the total aToken balance held by this contract for an asset
+     * @dev This is the aggregate of all positions across all intents
+     *      Useful for reconciliation and monitoring
+     * @param asset The underlying asset address
+     * @return totalShares The total shares (scaled balance) held
+     * @return totalValue The total current value including yield
+     */
+    function getTotalPositionValue(address asset) external view returns (uint256 totalShares, uint256 totalValue) {
+        // Get aToken address from reserve data
+        (
+            , // configuration
+            , // liquidityIndex
+            , // currentLiquidityRate
+            , // variableBorrowIndex
+            , // currentVariableBorrowRate
+            , // currentStableBorrowRate
+            , // lastUpdateTimestamp
+            , // id
+            address aTokenAddress,
+            , // stableDebtTokenAddress
+            , // variableDebtTokenAddress
+            , // interestRateStrategyAddress
+            , // accruedToTreasury
+            , // unbacked
+            // isolationModeTotalDebt
+        ) = aavePool.getReserveData(asset);
+
+        if (aTokenAddress == address(0)) {
+            return (0, 0);
+        }
+
+        // Get scaled balance (shares) - requires calling the aToken directly
+        // The IERC20 balanceOf on aToken returns current value including yield
+        totalValue = IERC20(aTokenAddress).balanceOf(address(this));
+
+        // Calculate shares from current value using normalized income
+        uint256 normalizedIncome = aavePool.getReserveNormalizedIncome(asset);
+        if (normalizedIncome > 0) {
+            totalShares = _rayDiv(totalValue, normalizedIncome);
+        }
+    }
+
+    // ============ Internal Math Functions ============
+
+    /// @dev RAY = 1e27, used in Aave's fixed-point math
+    uint256 internal constant RAY = 1e27;
+
+    /// @dev Half RAY for rounding
+    uint256 internal constant HALF_RAY = RAY / 2;
+
+    /**
+     * @notice Multiplies two values in RAY precision, rounding half up
+     * @param a First value
+     * @param b Second value in RAY
+     * @return Result of a * b / RAY
+     */
+    function _rayMul(uint256 a, uint256 b) internal pure returns (uint256) {
+        if (a == 0 || b == 0) {
+            return 0;
+        }
+        return (a * b + HALF_RAY) / RAY;
+    }
+
+    /**
+     * @notice Divides two values in RAY precision, rounding half up
+     * @param a Numerator
+     * @param b Denominator in RAY
+     * @return Result of a * RAY / b
+     */
+    function _rayDiv(uint256 a, uint256 b) internal pure returns (uint256) {
+        // Return 0 if numerator is 0 (valid case)
+        if (a == 0) {
+            return 0;
+        }
+        // Division by zero should revert (indicates an error in caller logic)
+        require(b != 0, "Division by zero");
+        return (a * RAY + b / 2) / b;
+    }
 }

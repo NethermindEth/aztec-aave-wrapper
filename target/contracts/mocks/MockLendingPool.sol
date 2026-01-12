@@ -19,6 +19,12 @@ contract MockLendingPool is ILendingPool {
     /// @notice Whether to fail withdraw calls (for testing)
     bool public failWithdraw;
 
+    /// @notice Mock aToken addresses per asset
+    mapping(address => address) public aTokenAddresses;
+
+    /// @notice Mock normalized income per asset (RAY = 1e27)
+    mapping(address => uint256) public normalizedIncomes;
+
     event Supply(address indexed asset, uint256 amount, address indexed onBehalfOf, uint16 referralCode);
     event Withdraw(address indexed asset, uint256 amount, address indexed to);
 
@@ -60,13 +66,15 @@ contract MockLendingPool is ILendingPool {
         return (0, 0, 0, 0, 0, type(uint256).max);
     }
 
-    function getReserveNormalizedIncome(address) external pure override returns (uint256) {
-        return 1e27; // RAY = 1
+    function getReserveNormalizedIncome(address asset) external view override returns (uint256) {
+        uint256 income = normalizedIncomes[asset];
+        // Default to RAY (1e27) if not set, which represents 1.0 (no yield)
+        return income == 0 ? 1e27 : income;
     }
 
-    function getReserveData(address)
+    function getReserveData(address asset)
         external
-        pure
+        view
         override
         returns (
             uint256,
@@ -86,7 +94,9 @@ contract MockLendingPool is ILendingPool {
             uint128
         )
     {
-        return (0, 0, 0, 0, 0, 0, 0, 0, address(0), address(0), address(0), address(0), 0, 0, 0);
+        // Return mock aToken address if configured
+        address aToken = aTokenAddresses[asset];
+        return (0, 0, 0, 0, 0, 0, 0, 0, aToken, address(0), address(0), address(0), 0, 0, 0);
     }
 
     // Test helpers
@@ -100,5 +110,13 @@ contract MockLendingPool is ILendingPool {
 
     function getDeposit(address user, address asset) external view returns (uint256) {
         return deposits[user][asset];
+    }
+
+    function setATokenAddress(address asset, address aToken) external {
+        aTokenAddresses[asset] = aToken;
+    }
+
+    function setNormalizedIncome(address asset, uint256 income) external {
+        normalizedIncomes[asset] = income;
     }
 }
