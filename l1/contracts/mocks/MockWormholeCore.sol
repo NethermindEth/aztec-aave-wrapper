@@ -37,7 +37,9 @@ contract MockWormholeCore {
 
     // ============ Constructor ============
 
-    constructor(uint16 chainId_) {
+    constructor(
+        uint16 chainId_
+    ) {
         _chainId = chainId_;
         guardianSetIndex = 0;
     }
@@ -47,11 +49,11 @@ contract MockWormholeCore {
     /**
      * @notice Publish a message to be attested by guardians
      */
-    function publishMessage(uint32 nonce, bytes memory payload, uint8 consistencyLevel)
-        external
-        payable
-        returns (uint64)
-    {
+    function publishMessage(
+        uint32 nonce,
+        bytes memory payload,
+        uint8 consistencyLevel
+    ) external payable returns (uint64) {
         require(msg.value >= MESSAGE_FEE, "Insufficient fee");
 
         uint64 currentSequence = sequence++;

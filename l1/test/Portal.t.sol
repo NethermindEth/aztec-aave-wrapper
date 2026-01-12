@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {Test, console2} from "forge-std/Test.sol";
-import {AztecAavePortalL1} from "../contracts/AztecAavePortalL1.sol";
-import {DepositIntent, WithdrawIntent, IntentLib} from "../contracts/types/Intent.sol";
+import { Test, console2 } from "forge-std/Test.sol";
+import { AztecAavePortalL1 } from "../contracts/AztecAavePortalL1.sol";
+import { DepositIntent, WithdrawIntent, IntentLib } from "../contracts/types/Intent.sol";
 
 /**
  * @title PortalTest
@@ -57,10 +57,10 @@ contract PortalTest is Test {
             intentId: bytes32(uint256(0x1234567890abcdef)),
             ownerHash: bytes32(uint256(0xfedcba0987654321)),
             asset: address(0x1234567890123456789012345678901234567890),
-            amount: 1000000,
+            amount: 1_000_000,
             originalDecimals: 18,
             targetChainId: 23,
-            deadline: 1700000000,
+            deadline: 1_700_000_000,
             salt: bytes32(uint256(0xabcdef1234567890))
         });
 
@@ -86,8 +86,8 @@ contract PortalTest is Test {
         WithdrawIntent memory intent = WithdrawIntent({
             intentId: bytes32(uint256(0x1234567890abcdef)),
             ownerHash: bytes32(uint256(0xfedcba0987654321)),
-            amount: 1000000,
-            deadline: 1700000000
+            amount: 1_000_000,
+            deadline: 1_700_000_000
         });
 
         // Encode the intent
@@ -112,7 +112,7 @@ contract PortalTest is Test {
             amount: 1000,
             originalDecimals: 18,
             targetChainId: 23,
-            deadline: 1700000000,
+            deadline: 1_700_000_000,
             salt: bytes32(uint256(42))
         });
 
@@ -149,28 +149,36 @@ contract PortalTest is Test {
     function test_validateDeadline_TooSoon() public {
         // Test with deadline less than minimum (4 minutes)
         uint256 tooSoonDeadline = block.timestamp + 4 minutes;
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, tooSoonDeadline));
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, tooSoonDeadline)
+        );
         portal._validateDeadline(tooSoonDeadline);
     }
 
     function test_validateDeadline_OneSecondBeforeMin() public {
         // Test with deadline exactly 1 second before minimum (edge case)
         uint256 almostMinDeadline = block.timestamp + portal.MIN_DEADLINE() - 1;
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, almostMinDeadline));
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, almostMinDeadline)
+        );
         portal._validateDeadline(almostMinDeadline);
     }
 
     function test_validateDeadline_OneSecondAfterMax() public {
         // Test with deadline exactly 1 second after maximum (edge case)
         uint256 justOverMaxDeadline = block.timestamp + portal.MAX_DEADLINE() + 1;
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, justOverMaxDeadline));
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, justOverMaxDeadline)
+        );
         portal._validateDeadline(justOverMaxDeadline);
     }
 
     function test_validateDeadline_TooFar() public {
         // Test with deadline greater than maximum (25 hours)
         uint256 tooFarDeadline = block.timestamp + 25 hours;
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, tooFarDeadline));
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, tooFarDeadline)
+        );
         portal._validateDeadline(tooFarDeadline);
     }
 
@@ -179,14 +187,18 @@ contract PortalTest is Test {
         // Warp to a future time first to avoid underflow
         vm.warp(1000 days);
         uint256 pastDeadline = block.timestamp - 1 hours;
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, pastDeadline));
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, pastDeadline)
+        );
         portal._validateDeadline(pastDeadline);
     }
 
     function test_validateDeadline_AtCurrentTime() public {
         // Test with deadline at current time (0 time until deadline)
         uint256 currentDeadline = block.timestamp;
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, currentDeadline));
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, currentDeadline)
+        );
         portal._validateDeadline(currentDeadline);
     }
 

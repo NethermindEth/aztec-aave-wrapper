@@ -37,9 +37,9 @@ interface IWormholeTokenBridge {
      * @param encodedVm The signed VAA (Verified Action Approval)
      * @return payload The payload that was included with the transfer
      */
-    function completeTransferWithPayload(bytes memory encodedVm)
-        external
-        returns (bytes memory payload);
+    function completeTransferWithPayload(
+        bytes memory encodedVm
+    ) external returns (bytes memory payload);
 
     /**
      * @notice Get the normalized amount after decimal adjustment
@@ -62,5 +62,7 @@ interface IWormholeTokenBridge {
      * @param hash Hash of the VAA
      * @return True if the VAA has been redeemed
      */
-    function isTransferCompleted(bytes32 hash) external view returns (bool);
+    function isTransferCompleted(
+        bytes32 hash
+    ) external view returns (bool);
 }

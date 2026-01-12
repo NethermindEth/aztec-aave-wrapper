@@ -500,16 +500,17 @@ cd l1 && forge test --match-test test_executeWithdraw -vvv
 
 ---
 
-### Step 4: Implement receiveWormholeMessages for confirmations
+### Step 4: Implement receiveWormholeMessages for confirmations **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Add function to receive Wormhole VAA messages from target executor with deposit confirmations (spec.md §4.1 Step 5).
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, no receive function present
-- `l1/contracts/types/Confirmation.sol` - [DOES NOT EXIST] Need to define confirmation structs
+- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] receiveWormholeMessages implemented
+- `l1/contracts/types/Confirmation.sol` - [EXISTS] Confirmation structs and library added
+- `l1/test/Portal.receiveConfirmation.t.sol` - [EXISTS] Comprehensive tests added
 
 #### Validation
 ```bash

@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {IAztecOutbox} from "./interfaces/IAztecOutbox.sol";
-import {IWormholeTokenBridge} from "./interfaces/IWormholeTokenBridge.sol";
-import {IWormholeRelayer} from "./interfaces/IWormholeRelayer.sol";
-import {DepositIntent, WithdrawIntent, IntentLib} from "./types/Intent.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IAztecOutbox } from "./interfaces/IAztecOutbox.sol";
+import { IAztecInbox } from "./interfaces/IAztecInbox.sol";
+import { IWormholeTokenBridge } from "./interfaces/IWormholeTokenBridge.sol";
+import { IWormholeRelayer } from "./interfaces/IWormholeRelayer.sol";
+import { DepositIntent, WithdrawIntent, IntentLib } from "./types/Intent.sol";
+import {
+    DepositConfirmation,
+    WithdrawConfirmation,
+    ConfirmationStatus,
+    ConfirmationLib
+} from "./types/Confirmation.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title AztecAavePortalL1
@@ -64,27 +71,35 @@ contract AztecAavePortalL1 {
     /// @notice Tracks consumed intent IDs for replay protection
     mapping(bytes32 => bool) public consumedIntents;
 
+    /// @notice Tracks processed Wormhole delivery hashes for replay protection
+    mapping(bytes32 => bool) public processedDeliveries;
+
     // ============ Errors ============
 
     error IntentAlreadyConsumed(bytes32 intentId);
     error InvalidSource();
     error DeadlinePassed();
     error InvalidDeadline(uint256 deadline);
+    error UnauthorizedRelayer(address caller);
+    error InvalidSourceChain(uint16 sourceChain);
+    error InvalidSourceAddress(bytes32 sourceAddress);
+    error DeliveryAlreadyProcessed(bytes32 deliveryHash);
+    error ConfirmationFailed(bytes32 intentId);
+    error L2MessageSendFailed();
 
     // ============ Events ============
 
     event DepositInitiated(
-        bytes32 indexed intentId,
-        address indexed asset,
-        uint256 amount,
-        uint16 targetChainId
+        bytes32 indexed intentId, address indexed asset, uint256 amount, uint16 targetChainId
     );
 
     event WithdrawInitiated(bytes32 indexed intentId, uint256 amount);
 
-    event DepositConfirmed(bytes32 indexed intentId, uint256 shares);
+    event DepositConfirmed(bytes32 indexed intentId, uint256 shares, ConfirmationStatus status);
 
-    event WithdrawCompleted(bytes32 indexed intentId, uint256 amount);
+    event WithdrawConfirmed(bytes32 indexed intentId, uint256 amount, ConfirmationStatus status);
+
+    event L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf);
 
     // ============ Constructor ============
 
@@ -115,7 +130,9 @@ contract AztecAavePortalL1 {
      * @param deadline The deadline timestamp to validate
      * @dev Public for testing; will be made internal when used in executeDeposit/executeWithdraw
      */
-    function _validateDeadline(uint256 deadline) public view {
+    function _validateDeadline(
+        uint256 deadline
+    ) public view {
         uint256 timeUntilDeadline = deadline > block.timestamp ? deadline - block.timestamp : 0;
 
         if (timeUntilDeadline < MIN_DEADLINE) {
@@ -169,12 +186,8 @@ contract AztecAavePortalL1 {
 
         // Step 5: Consume the L2->L1 message from Aztec outbox
         // This will revert if the message doesn't exist or proof is invalid
-        bool consumed = IAztecOutbox(aztecOutbox).consume(
-            messageHash,
-            l2BlockNumber,
-            leafIndex,
-            siblingPath
-        );
+        bool consumed =
+            IAztecOutbox(aztecOutbox).consume(messageHash, l2BlockNumber, leafIndex, siblingPath);
         require(consumed, "Failed to consume outbox message");
 
         // Step 6: Mark intent as consumed for replay protection
@@ -191,7 +204,7 @@ contract AztecAavePortalL1 {
         bytes memory payload = IntentLib.encodeDepositIntent(intent);
 
         // Note: msg.value should cover Wormhole fees
-        IWormholeTokenBridge(wormholeTokenBridge).transferTokensWithPayload{value: msg.value}(
+        IWormholeTokenBridge(wormholeTokenBridge).transferTokensWithPayload{ value: msg.value }(
             intent.asset,
             intent.amount,
             uint16(intent.targetChainId),
@@ -201,10 +214,7 @@ contract AztecAavePortalL1 {
         );
 
         emit DepositInitiated(
-            intent.intentId,
-            intent.asset,
-            intent.amount,
-            uint16(intent.targetChainId)
+            intent.intentId, intent.asset, intent.amount, uint16(intent.targetChainId)
         );
     }
 
@@ -253,12 +263,8 @@ contract AztecAavePortalL1 {
 
         // Step 5: Consume the L2->L1 message from Aztec outbox
         // This will revert if the message doesn't exist or proof is invalid
-        bool consumed = IAztecOutbox(aztecOutbox).consume(
-            messageHash,
-            l2BlockNumber,
-            leafIndex,
-            siblingPath
-        );
+        bool consumed =
+            IAztecOutbox(aztecOutbox).consume(messageHash, l2BlockNumber, leafIndex, siblingPath);
         require(consumed, "Failed to consume outbox message");
 
         // Step 6: Mark intent as consumed for replay protection
@@ -272,7 +278,7 @@ contract AztecAavePortalL1 {
         // Note: msg.value should cover Wormhole relayer fees
         // We use sendPayloadToEvm since we're only sending a message (no tokens)
         // The target executor will withdraw from Aave and bridge tokens back
-        IWormholeRelayer(wormholeRelayer).sendPayloadToEvm{value: msg.value}(
+        IWormholeRelayer(wormholeRelayer).sendPayloadToEvm{ value: msg.value }(
             targetChainId,
             _bytes32ToAddress(targetExecutor),
             payload,
@@ -290,10 +296,193 @@ contract AztecAavePortalL1 {
      * @param _bytes32 The bytes32 value to convert
      * @return The address
      */
-    function _bytes32ToAddress(bytes32 _bytes32) internal pure returns (address) {
+    function _bytes32ToAddress(
+        bytes32 _bytes32
+    ) internal pure returns (address) {
         return address(uint160(uint256(_bytes32)));
     }
 
-    // TODO: Implement receiveWormholeMessages
-    // TODO: Implement completeTransferWithPayload
+    // ============ Wormhole Receiver Functions ============
+
+    /**
+     * @notice Receive Wormhole messages from the target executor
+     * @dev This function is called by the Wormhole Relayer when delivering messages
+     *
+     * Security considerations:
+     * - MUST verify caller is the registered Wormhole Relayer (impersonation attack prevention)
+     * - MUST verify source chain matches expected target chain
+     * - MUST verify source address is the registered target executor
+     * - MUST track deliveryHash to prevent replay attacks
+     *
+     * @param payload The message payload containing confirmation data
+     * @param additionalVaas Additional VAAs (unused in this implementation)
+     * @param sourceAddress The sender address on the source chain (bytes32 format)
+     * @param sourceChain The Wormhole chain ID of the source chain
+     * @param deliveryHash Unique hash for this delivery (for replay protection)
+     */
+    function receiveWormholeMessages(
+        bytes memory payload,
+        bytes[] memory additionalVaas,
+        bytes32 sourceAddress,
+        uint16 sourceChain,
+        bytes32 deliveryHash
+    ) external payable {
+        // Silence unused variable warning
+        additionalVaas;
+
+        // Step 1: Verify caller is the registered Wormhole Relayer
+        // CRITICAL: This prevents arbitrary callers from submitting fake confirmations
+        if (msg.sender != wormholeRelayer) {
+            revert UnauthorizedRelayer(msg.sender);
+        }
+
+        // Step 2: Verify source chain is the expected target chain
+        // CRITICAL: Prevents cross-chain replay attacks from other chains
+        if (sourceChain != targetChainId) {
+            revert InvalidSourceChain(sourceChain);
+        }
+
+        // Step 3: Verify source address is the registered target executor
+        // CRITICAL: Prevents messages from unauthorized contracts
+        if (sourceAddress != targetExecutor) {
+            revert InvalidSourceAddress(sourceAddress);
+        }
+
+        // Step 4: Check for replay attacks using deliveryHash
+        // CRITICAL: Each delivery must only be processed once
+        if (processedDeliveries[deliveryHash]) {
+            revert DeliveryAlreadyProcessed(deliveryHash);
+        }
+
+        // Step 5: Mark delivery as processed BEFORE external calls (reentrancy protection)
+        processedDeliveries[deliveryHash] = true;
+
+        // Step 6: Decode the confirmation type and process accordingly
+        uint8 actionType = ConfirmationLib.getActionType(payload);
+
+        if (actionType == 0) {
+            // Deposit confirmation
+            _processDepositConfirmation(payload);
+        } else if (actionType == 1) {
+            // Withdraw confirmation
+            _processWithdrawConfirmation(payload);
+        } else {
+            revert("Unknown confirmation type");
+        }
+    }
+
+    /**
+     * @notice Process a deposit confirmation from target executor
+     * @dev Decodes confirmation and sends L1→L2 message for finalization
+     * @param payload The encoded DepositConfirmation
+     */
+    function _processDepositConfirmation(
+        bytes memory payload
+    ) internal {
+        DepositConfirmation memory confirmation = ConfirmationLib.decodeDepositConfirmation(payload);
+
+        // Compute L1→L2 message content for finalize_deposit
+        // The L2 contract will consume this to mint the position receipt
+        bytes32 messageContent = _computeDepositFinalizationMessage(
+            confirmation.intentId,
+            confirmation.ownerHash,
+            confirmation.status,
+            confirmation.shares,
+            confirmation.asset
+        );
+
+        // Send L1→L2 message to Aztec inbox
+        bytes32 messageLeaf =
+            IAztecInbox(aztecInbox).sendL2Message(l2ContractAddress, messageContent);
+
+        emit DepositConfirmed(confirmation.intentId, confirmation.shares, confirmation.status);
+        emit L2MessageSent(confirmation.intentId, messageLeaf);
+    }
+
+    /**
+     * @notice Process a withdraw confirmation from target executor
+     * @dev Decodes confirmation and sends L1→L2 message for finalization
+     *      Note: For withdrawals with tokens, tokens are handled separately via token bridge
+     * @param payload The encoded WithdrawConfirmation
+     */
+    function _processWithdrawConfirmation(
+        bytes memory payload
+    ) internal {
+        WithdrawConfirmation memory confirmation =
+            ConfirmationLib.decodeWithdrawConfirmation(payload);
+
+        // Compute L1→L2 message content for finalize_withdraw
+        bytes32 messageContent = _computeWithdrawFinalizationMessage(
+            confirmation.intentId,
+            confirmation.ownerHash,
+            confirmation.status,
+            confirmation.amount,
+            confirmation.asset
+        );
+
+        // Send L1→L2 message to Aztec inbox
+        bytes32 messageLeaf =
+            IAztecInbox(aztecInbox).sendL2Message(l2ContractAddress, messageContent);
+
+        emit WithdrawConfirmed(confirmation.intentId, confirmation.amount, confirmation.status);
+        emit L2MessageSent(confirmation.intentId, messageLeaf);
+    }
+
+    /**
+     * @notice Compute the message content for deposit finalization on L2
+     * @dev This hash must match what the L2 contract expects in finalize_deposit
+     * @param intentId The intent ID
+     * @param ownerHash The hashed owner address
+     * @param status The confirmation status
+     * @param shares The number of shares received
+     * @param asset The asset address
+     * @return The message content hash
+     */
+    function _computeDepositFinalizationMessage(
+        bytes32 intentId,
+        bytes32 ownerHash,
+        ConfirmationStatus status,
+        uint128 shares,
+        address asset
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                uint8(0), // Action type: deposit finalization
+                intentId,
+                ownerHash,
+                uint8(status),
+                shares,
+                asset
+            )
+        );
+    }
+
+    /**
+     * @notice Compute the message content for withdraw finalization on L2
+     * @dev This hash must match what the L2 contract expects in finalize_withdraw
+     * @param intentId The intent ID
+     * @param ownerHash The hashed owner address
+     * @param status The confirmation status
+     * @param amount The amount withdrawn
+     * @param asset The asset address
+     * @return The message content hash
+     */
+    function _computeWithdrawFinalizationMessage(
+        bytes32 intentId,
+        bytes32 ownerHash,
+        ConfirmationStatus status,
+        uint128 amount,
+        address asset
+    ) internal pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                uint8(1), // Action type: withdraw finalization
+                intentId,
+                ownerHash,
+                uint8(status),
+                amount,
+                asset
+            )
+        );
+    }
 }

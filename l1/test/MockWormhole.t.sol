@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {Test, console2} from "forge-std/Test.sol";
-import {MockWormholeTokenBridge} from "../contracts/mocks/MockWormholeTokenBridge.sol";
-import {MockWormholeRelayer} from "../contracts/mocks/MockWormholeRelayer.sol";
-import {MockWormholeCore} from "../contracts/mocks/MockWormholeCore.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { Test, console2 } from "forge-std/Test.sol";
+import { MockWormholeTokenBridge } from "../contracts/mocks/MockWormholeTokenBridge.sol";
+import { MockWormholeRelayer } from "../contracts/mocks/MockWormholeRelayer.sol";
+import { MockWormholeCore } from "../contracts/mocks/MockWormholeCore.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title MockERC20
@@ -45,7 +45,8 @@ contract MockWormholeTest is Test {
     address public user2 = makeAddr("user2");
 
     uint16 public constant TARGET_CHAIN_ID = 23; // Arbitrum
-    bytes32 public constant RECIPIENT = bytes32(uint256(uint160(0x1234567890123456789012345678901234567890)));
+    bytes32 public constant RECIPIENT =
+        bytes32(uint256(uint160(0x1234567890123456789012345678901234567890)));
 
     function setUp() public {
         // Deploy mock contracts
@@ -59,7 +60,7 @@ contract MockWormholeTest is Test {
         wbtc = new MockERC20("Wrapped Bitcoin", "WBTC", 8);
 
         // Mint tokens to test users
-        usdc.mint(user1, 1000000 * 10 ** 6); // 1M USDC
+        usdc.mint(user1, 1_000_000 * 10 ** 6); // 1M USDC
         weth.mint(user1, 1000 * 10 ** 18); // 1000 WETH
         wbtc.mint(user1, 100 * 10 ** 8); // 100 WBTC
     }
@@ -109,7 +110,7 @@ contract MockWormholeTest is Test {
 
         assertEq(sequence, 0);
         assertEq(usdc.balanceOf(address(tokenBridge)), amount);
-        assertEq(usdc.balanceOf(user1), 1000000 * 10 ** 6 - amount);
+        assertEq(usdc.balanceOf(user1), 1_000_000 * 10 ** 6 - amount);
     }
 
     function test_TokenBridge_CompleteTransfer() public {
@@ -225,7 +226,7 @@ contract MockWormholeTest is Test {
     }
 
     function test_Relayer_QuoteDeliveryPrice() public view {
-        (uint256 price, uint256 refund) = relayer.quoteEVMDeliveryPrice(TARGET_CHAIN_ID, 0, 200000);
+        (uint256 price, uint256 refund) = relayer.quoteEVMDeliveryPrice(TARGET_CHAIN_ID, 0, 200_000);
 
         assertEq(price, 0.1 ether);
         assertEq(refund, 0);
@@ -235,13 +236,14 @@ contract MockWormholeTest is Test {
         bytes memory payload = abi.encode("test message");
         address targetAddress = makeAddr("targetContract");
 
-        uint64 sequence = relayer.sendPayloadToEvm{value: 0.1 ether}(
-            TARGET_CHAIN_ID, targetAddress, payload, 0, 200000
+        uint64 sequence = relayer.sendPayloadToEvm{ value: 0.1 ether }(
+            TARGET_CHAIN_ID, targetAddress, payload, 0, 200_000
         );
 
         assertEq(sequence, 0);
 
-        (uint16 targetChain, address target, bytes memory storedPayload,,) = relayer.getPendingMessage(sequence);
+        (uint16 targetChain, address target, bytes memory storedPayload,,) =
+            relayer.getPendingMessage(sequence);
 
         assertEq(targetChain, TARGET_CHAIN_ID);
         assertEq(target, targetAddress);
@@ -253,19 +255,21 @@ contract MockWormholeTest is Test {
         address targetAddress = makeAddr("target");
 
         vm.expectRevert("Insufficient delivery fee");
-        relayer.sendPayloadToEvm{value: 0.05 ether}(TARGET_CHAIN_ID, targetAddress, payload, 0, 200000);
+        relayer.sendPayloadToEvm{ value: 0.05 ether }(
+            TARGET_CHAIN_ID, targetAddress, payload, 0, 200_000
+        );
     }
 
     function test_Relayer_SendPayloadWithRefund() public {
         bytes memory payload = abi.encode("test message");
         address targetAddress = makeAddr("targetContract");
 
-        uint64 sequence = relayer.sendPayloadToEvm{value: 0.1 ether}(
+        uint64 sequence = relayer.sendPayloadToEvm{ value: 0.1 ether }(
             TARGET_CHAIN_ID,
             targetAddress,
             payload,
             0,
-            200000,
+            200_000,
             2, // refund chain
             user1 // refund address
         );
@@ -277,8 +281,12 @@ contract MockWormholeTest is Test {
         bytes memory payload = abi.encode("test");
         address target = makeAddr("target");
 
-        uint64 seq1 = relayer.sendPayloadToEvm{value: 0.1 ether}(TARGET_CHAIN_ID, target, payload, 0, 200000);
-        uint64 seq2 = relayer.sendPayloadToEvm{value: 0.1 ether}(TARGET_CHAIN_ID, target, payload, 0, 200000);
+        uint64 seq1 = relayer.sendPayloadToEvm{ value: 0.1 ether }(
+            TARGET_CHAIN_ID, target, payload, 0, 200_000
+        );
+        uint64 seq2 = relayer.sendPayloadToEvm{ value: 0.1 ether }(
+            TARGET_CHAIN_ID, target, payload, 0, 200_000
+        );
 
         assertEq(seq1, 0);
         assertEq(seq2, 1);

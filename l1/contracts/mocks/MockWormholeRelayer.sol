@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {IWormholeRelayer} from "../interfaces/IWormholeRelayer.sol";
+import { IWormholeRelayer } from "../interfaces/IWormholeRelayer.sol";
 
 /**
  * @title MockWormholeRelayer
@@ -63,7 +63,9 @@ contract MockWormholeRelayer is IWormholeRelayer {
 
     // ============ Constructor ============
 
-    constructor(address _wormholeCore) {
+    constructor(
+        address _wormholeCore
+    ) {
         wormholeCore = _wormholeCore;
     }
 
@@ -97,7 +99,9 @@ contract MockWormholeRelayer is IWormholeRelayer {
             exists: true
         });
 
-        emit MessageSent(currentSequence, targetChain, targetAddress, payload, receiverValue, gasLimit);
+        emit MessageSent(
+            currentSequence, targetChain, targetAddress, payload, receiverValue, gasLimit
+        );
 
         return currentSequence;
     }
@@ -129,7 +133,9 @@ contract MockWormholeRelayer is IWormholeRelayer {
             exists: true
         });
 
-        emit MessageSent(currentSequence, targetChain, targetAddress, payload, receiverValue, gasLimit);
+        emit MessageSent(
+            currentSequence, targetChain, targetAddress, payload, receiverValue, gasLimit
+        );
 
         return currentSequence;
     }
@@ -137,7 +143,11 @@ contract MockWormholeRelayer is IWormholeRelayer {
     /**
      * @notice Quote the cost of sending a message
      */
-    function quoteEVMDeliveryPrice(uint16, uint256, uint256)
+    function quoteEVMDeliveryPrice(
+        uint16,
+        uint256,
+        uint256
+    )
         external
         pure
         override
@@ -156,14 +166,21 @@ contract MockWormholeRelayer is IWormholeRelayer {
     /**
      * @notice Check if delivery was attempted for a given hash
      */
-    function deliveryAttempted(bytes32 deliveryHash) external view override returns (bool) {
+    function deliveryAttempted(
+        bytes32 deliveryHash
+    ) external view override returns (bool) {
         return deliveryAttempts[deliveryHash];
     }
 
     /**
      * @notice Deliver messages (not implemented in mock - use manualDeliver)
      */
-    function deliver(bytes[] memory, bytes memory, address payable, bytes memory) external payable override {
+    function deliver(
+        bytes[] memory,
+        bytes memory,
+        address payable,
+        bytes memory
+    ) external payable override {
         revert("Use manualDeliver() for testing");
     }
 
@@ -174,12 +191,15 @@ contract MockWormholeRelayer is IWormholeRelayer {
      * @dev In production, Wormhole relayers do this automatically
      * @param seq Sequence number of the message to deliver
      */
-    function manualDeliver(uint64 seq) external {
+    function manualDeliver(
+        uint64 seq
+    ) external {
         PendingMessage memory message = pendingMessages[seq];
         require(message.exists, "Message does not exist");
 
         // Create delivery hash
-        bytes32 deliveryHash = keccak256(abi.encodePacked(seq, message.targetChain, message.targetAddress));
+        bytes32 deliveryHash =
+            keccak256(abi.encodePacked(seq, message.targetChain, message.targetAddress));
 
         require(!deliveryAttempts[deliveryHash], "Already delivered");
 
@@ -188,7 +208,10 @@ contract MockWormholeRelayer is IWormholeRelayer {
 
         // Call the target contract's receiveWormholeMessages function
         // The target should implement this interface
-        (bool success,) = message.targetAddress.call{value: message.receiverValue, gas: message.gasLimit}(
+        (bool success,) = message.targetAddress.call{
+            value: message.receiverValue,
+            gas: message.gasLimit
+        }(
             abi.encodeWithSignature(
                 "receiveWormholeMessages(bytes,bytes[],bytes32,uint16,bytes32)",
                 message.payload,
@@ -214,7 +237,9 @@ contract MockWormholeRelayer is IWormholeRelayer {
     /**
      * @notice Get pending message details
      */
-    function getPendingMessage(uint64 seq)
+    function getPendingMessage(
+        uint64 seq
+    )
         external
         view
         returns (
@@ -227,6 +252,12 @@ contract MockWormholeRelayer is IWormholeRelayer {
     {
         PendingMessage memory message = pendingMessages[seq];
         require(message.exists, "Message does not exist");
-        return (message.targetChain, message.targetAddress, message.payload, message.receiverValue, message.gasLimit);
+        return (
+            message.targetChain,
+            message.targetAddress,
+            message.payload,
+            message.receiverValue,
+            message.gasLimit
+        );
     }
 }

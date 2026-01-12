@@ -56,10 +56,11 @@ interface IWormholeRelayer {
      * @param gasLimit Gas limit for execution on target chain
      * @return nativePriceQuote Cost in native token (wei)
      */
-    function quoteEVMDeliveryPrice(uint16 targetChain, uint256 receiverValue, uint256 gasLimit)
-        external
-        view
-        returns (uint256 nativePriceQuote, uint256 targetChainRefundPerGasUnused);
+    function quoteEVMDeliveryPrice(
+        uint16 targetChain,
+        uint256 receiverValue,
+        uint256 gasLimit
+    ) external view returns (uint256 nativePriceQuote, uint256 targetChainRefundPerGasUnused);
 
     /**
      * @notice Get the registered Wormhole core contract address
@@ -72,7 +73,9 @@ interface IWormholeRelayer {
      * @param deliveryHash Hash of the delivery
      * @return deliveryInfo Encoded delivery information
      */
-    function deliveryAttempted(bytes32 deliveryHash) external view returns (bool);
+    function deliveryAttempted(
+        bytes32 deliveryHash
+    ) external view returns (bool);
 
     /**
      * @notice Deliver a message to the target contract

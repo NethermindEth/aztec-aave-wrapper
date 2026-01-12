@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {IWormholeTokenBridge} from "../interfaces/IWormholeTokenBridge.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IWormholeTokenBridge } from "../interfaces/IWormholeTokenBridge.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /**
  * @title MockWormholeTokenBridge
@@ -94,11 +94,9 @@ contract MockWormholeTokenBridge is IWormholeTokenBridge {
      * @dev In mock mode, we extract sequence from encodedVm and release tokens
      * @param encodedVm The encoded VAA (in our mock, this is just the sequence number encoded)
      */
-    function completeTransferWithPayload(bytes memory encodedVm)
-        external
-        override
-        returns (bytes memory payload)
-    {
+    function completeTransferWithPayload(
+        bytes memory encodedVm
+    ) external override returns (bytes memory payload) {
         // For simplicity, encodedVm is just the sequence number (uint64) encoded
         require(encodedVm.length == 32, "Invalid VAA format");
 
@@ -126,7 +124,10 @@ contract MockWormholeTokenBridge is IWormholeTokenBridge {
      * @notice Normalize amount to 8 decimals (Wormhole standard)
      * @dev This matches real Wormhole behavior for cross-chain transfers
      */
-    function normalizeAmount(uint256 amount, uint8 decimals) external pure override returns (uint256) {
+    function normalizeAmount(
+        uint256 amount,
+        uint8 decimals
+    ) external pure override returns (uint256) {
         if (decimals > 8) {
             // Truncate precision for tokens with > 8 decimals
             return amount / (10 ** (decimals - 8));
@@ -139,7 +140,10 @@ contract MockWormholeTokenBridge is IWormholeTokenBridge {
     /**
      * @notice Denormalize amount from 8 decimals to target decimals
      */
-    function denormalizeAmount(uint256 amount, uint8 decimals) external pure override returns (uint256) {
+    function denormalizeAmount(
+        uint256 amount,
+        uint8 decimals
+    ) external pure override returns (uint256) {
         if (decimals > 8) {
             // Scale up from 8 decimals
             return amount * (10 ** (decimals - 8));
@@ -152,7 +156,9 @@ contract MockWormholeTokenBridge is IWormholeTokenBridge {
     /**
      * @notice Check if a VAA has been redeemed
      */
-    function isTransferCompleted(bytes32 hash) external view override returns (bool) {
+    function isTransferCompleted(
+        bytes32 hash
+    ) external view override returns (bool) {
         return completedTransfers[hash];
     }
 
@@ -162,7 +168,9 @@ contract MockWormholeTokenBridge is IWormholeTokenBridge {
      * @notice Generate a mock VAA for a given sequence
      * @dev In production, VAAs are signed by guardians. For testing, we just return the sequence.
      */
-    function generateMockVAA(uint64 seq) external pure returns (bytes memory) {
+    function generateMockVAA(
+        uint64 seq
+    ) external pure returns (bytes memory) {
         return abi.encodePacked(bytes32(uint256(seq)));
     }
 
@@ -176,13 +184,27 @@ contract MockWormholeTokenBridge is IWormholeTokenBridge {
     /**
      * @notice Get pending transfer details
      */
-    function getPendingTransfer(uint64 seq)
+    function getPendingTransfer(
+        uint64 seq
+    )
         external
         view
-        returns (address token, uint256 amount, bytes32 recipient, bytes memory payload, uint16 targetChain)
+        returns (
+            address token,
+            uint256 amount,
+            bytes32 recipient,
+            bytes memory payload,
+            uint16 targetChain
+        )
     {
         PendingTransfer memory transfer = pendingTransfers[seq];
         require(transfer.exists, "Transfer does not exist");
-        return (transfer.token, transfer.amount, transfer.recipient, transfer.payload, transfer.targetChain);
+        return (
+            transfer.token,
+            transfer.amount,
+            transfer.recipient,
+            transfer.payload,
+            transfer.targetChain
+        );
     }
 }

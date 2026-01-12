@@ -31,12 +31,16 @@ interface IAztecOutbox {
      * @param _message The message content hash
      * @return True if the message has been consumed
      */
-    function hasMessageBeenConsumed(bytes32 _message) external view returns (bool);
+    function hasMessageBeenConsumed(
+        bytes32 _message
+    ) external view returns (bool);
 
     /**
      * @notice Get the root of the message tree for a given L2 block
      * @param _l2BlockNumber The L2 block number
      * @return The message tree root
      */
-    function getRootForBlock(uint256 _l2BlockNumber) external view returns (bytes32);
+    function getRootForBlock(
+        uint256 _l2BlockNumber
+    ) external view returns (bytes32);
 }

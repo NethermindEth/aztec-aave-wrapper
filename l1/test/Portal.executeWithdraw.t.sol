@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {Test, console2} from "forge-std/Test.sol";
-import {AztecAavePortalL1} from "../contracts/AztecAavePortalL1.sol";
-import {WithdrawIntent, IntentLib} from "../contracts/types/Intent.sol";
-import {IAztecOutbox} from "../contracts/interfaces/IAztecOutbox.sol";
-import {IWormholeRelayer} from "../contracts/interfaces/IWormholeRelayer.sol";
+import { Test, console2 } from "forge-std/Test.sol";
+import { AztecAavePortalL1 } from "../contracts/AztecAavePortalL1.sol";
+import { WithdrawIntent, IntentLib } from "../contracts/types/Intent.sol";
+import { IAztecOutbox } from "../contracts/interfaces/IAztecOutbox.sol";
+import { IWormholeRelayer } from "../contracts/interfaces/IWormholeRelayer.sol";
 
 /**
  * @title Portal.executeWithdraw Tests
@@ -87,11 +87,8 @@ contract PortalExecuteWithdrawTest is Test {
         vm.startPrank(relayer);
 
         // Execute withdrawal
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         vm.stopPrank();
@@ -114,16 +111,10 @@ contract PortalExecuteWithdrawTest is Test {
 
         // Expect event emission
         vm.expectEmit(true, false, false, true);
-        emit AztecAavePortalL1.WithdrawInitiated(
-            validIntent.intentId,
-            validIntent.amount
-        );
+        emit AztecAavePortalL1.WithdrawInitiated(validIntent.intentId, validIntent.amount);
 
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         vm.stopPrank();
@@ -137,11 +128,8 @@ contract PortalExecuteWithdrawTest is Test {
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, true);
 
         vm.prank(relayer);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         assertTrue(portal.consumedIntents(validIntent.intentId));
@@ -155,11 +143,8 @@ contract PortalExecuteWithdrawTest is Test {
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, true);
 
         vm.prank(relayer);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         assertTrue(portal.consumedIntents(validIntent.intentId));
@@ -174,11 +159,8 @@ contract PortalExecuteWithdrawTest is Test {
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, true);
 
         vm.prank(randomExecutor);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         assertTrue(portal.consumedIntents(validIntent.intentId));
@@ -191,12 +173,11 @@ contract PortalExecuteWithdrawTest is Test {
         validIntent.deadline = uint64(block.timestamp + 4 minutes);
 
         vm.prank(relayer);
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, validIntent.deadline));
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, validIntent.deadline)
+        );
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
     }
 
@@ -205,12 +186,11 @@ contract PortalExecuteWithdrawTest is Test {
         validIntent.deadline = uint64(block.timestamp + 25 hours);
 
         vm.prank(relayer);
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, validIntent.deadline));
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        vm.expectRevert(
+            abi.encodeWithSelector(AztecAavePortalL1.InvalidDeadline.selector, validIntent.deadline)
+        );
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
     }
 
@@ -226,11 +206,8 @@ contract PortalExecuteWithdrawTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert(AztecAavePortalL1.DeadlinePassed.selector);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
     }
 
@@ -246,11 +223,8 @@ contract PortalExecuteWithdrawTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert(AztecAavePortalL1.DeadlinePassed.selector);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
     }
 
@@ -263,23 +237,21 @@ contract PortalExecuteWithdrawTest is Test {
         vm.startPrank(relayer);
 
         // Execute once successfully
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Setup outbox for second attempt (would normally fail, but we allow for testing)
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber + 1, true);
 
         // Try to execute again - should revert due to replay protection
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.IntentAlreadyConsumed.selector, validIntent.intentId));
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber + 1,
-            leafIndex,
-            validSiblingPath
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AztecAavePortalL1.IntentAlreadyConsumed.selector, validIntent.intentId
+            )
+        );
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber + 1, leafIndex, validSiblingPath
         );
 
         vm.stopPrank();
@@ -293,26 +265,28 @@ contract PortalExecuteWithdrawTest is Test {
         vm.startPrank(relayer);
 
         // First execution
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // For second attempt, replay check should fail immediately
         uint256 consumeCountBefore = aztecOutbox.consumeCallCount();
 
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.IntentAlreadyConsumed.selector, validIntent.intentId));
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AztecAavePortalL1.IntentAlreadyConsumed.selector, validIntent.intentId
+            )
+        );
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Verify outbox was not called on second attempt (replay check happens before)
-        assertEq(aztecOutbox.consumeCallCount(), consumeCountBefore, "Outbox should not be called for replay attempt");
+        assertEq(
+            aztecOutbox.consumeCallCount(),
+            consumeCountBefore,
+            "Outbox should not be called for replay attempt"
+        );
 
         vm.stopPrank();
     }
@@ -325,23 +299,21 @@ contract PortalExecuteWithdrawTest is Test {
         vm.startPrank(relayer);
 
         // First execution with valid deadline
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Warp past the deadline
         vm.warp(validIntent.deadline + 1);
 
         // Second attempt should fail with replay error, NOT deadline error
-        vm.expectRevert(abi.encodeWithSelector(AztecAavePortalL1.IntentAlreadyConsumed.selector, validIntent.intentId));
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                AztecAavePortalL1.IntentAlreadyConsumed.selector, validIntent.intentId
+            )
+        );
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         vm.stopPrank();
@@ -356,11 +328,8 @@ contract PortalExecuteWithdrawTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert("Failed to consume outbox message");
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
     }
 
@@ -371,7 +340,7 @@ contract PortalExecuteWithdrawTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert("Failed to consume outbox message");
-        portal.executeWithdraw{value: 0.1 ether}(
+        portal.executeWithdraw{ value: 0.1 ether }(
             validIntent,
             l2BlockNumber, // Wrong block number
             leafIndex,
@@ -393,7 +362,7 @@ contract PortalExecuteWithdrawTest is Test {
 
         vm.prank(relayer);
         vm.expectRevert("Failed to consume outbox message");
-        portal.executeWithdraw{value: 0.1 ether}(
+        portal.executeWithdraw{ value: 0.1 ether }(
             validIntent, // Using correct intent but hash won't match
             l2BlockNumber,
             leafIndex,
@@ -408,11 +377,8 @@ contract PortalExecuteWithdrawTest is Test {
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, true);
 
         vm.prank(relayer);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Verify Wormhole received correct parameters
@@ -437,11 +403,8 @@ contract PortalExecuteWithdrawTest is Test {
         uint256 wormholeFee = 0.5 ether;
 
         vm.prank(relayer);
-        portal.executeWithdraw{value: wormholeFee}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: wormholeFee }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Verify Wormhole received the fee
@@ -453,11 +416,8 @@ contract PortalExecuteWithdrawTest is Test {
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, true);
 
         vm.prank(relayer);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Verify gas limit is set correctly
@@ -482,19 +442,13 @@ contract PortalExecuteWithdrawTest is Test {
         vm.startPrank(relayer);
 
         // Execute first intent
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         // Execute second intent - should succeed
-        portal.executeWithdraw{value: 0.1 ether}(
-            intent2,
-            l2BlockNumber + 1,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            intent2, l2BlockNumber + 1, leafIndex, validSiblingPath
         );
 
         vm.stopPrank();
@@ -510,11 +464,8 @@ contract PortalExecuteWithdrawTest is Test {
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, true);
 
         vm.prank(relayer);
-        portal.executeWithdraw{value: 0.1 ether}(
-            validIntent,
-            l2BlockNumber,
-            leafIndex,
-            validSiblingPath
+        portal.executeWithdraw{ value: 0.1 ether }(
+            validIntent, l2BlockNumber, leafIndex, validSiblingPath
         );
 
         MockWormholeRelayer.SendCall memory call = wormholeRelayer.getLastSend();
@@ -536,7 +487,7 @@ contract MockAztecOutbox is IAztecOutbox {
     function consume(
         bytes32 _message,
         uint256 _l2BlockNumber,
-        uint256 /* _leafIndex */,
+        uint256, /* _leafIndex */
         bytes32[] calldata /* _path */
     ) external returns (bool) {
         consumeCallCount++;
@@ -549,15 +500,21 @@ contract MockAztecOutbox is IAztecOutbox {
         return true;
     }
 
-    function wasConsumed(bytes32 message) external view returns (bool) {
+    function wasConsumed(
+        bytes32 message
+    ) external view returns (bool) {
         return consumed[message];
     }
 
-    function hasMessageBeenConsumed(bytes32 _message) external view returns (bool) {
+    function hasMessageBeenConsumed(
+        bytes32 _message
+    ) external view returns (bool) {
         return consumed[_message];
     }
 
-    function getRootForBlock(uint256 /* _l2BlockNumber */) external pure returns (bytes32) {
+    function getRootForBlock(
+        uint256 /* _l2BlockNumber */
+    ) external pure returns (bytes32) {
         return bytes32(0);
     }
 }
@@ -600,7 +557,7 @@ contract MockWormholeRelayer is IWormholeRelayer {
         bytes memory payload,
         uint256 receiverValue,
         uint256 gasLimit,
-        uint16 /* refundChain */,
+        uint16, /* refundChain */
         address /* refundAddress */
     ) external payable returns (uint64 sequence) {
         sendCalled = true;
@@ -623,11 +580,11 @@ contract MockWormholeRelayer is IWormholeRelayer {
         return lastSend;
     }
 
-    function quoteEVMDeliveryPrice(uint16 /* targetChain */, uint256 /* receiverValue */, uint256 /* gasLimit */)
-        external
-        pure
-        returns (uint256 nativePriceQuote, uint256 targetChainRefundPerGasUnused)
-    {
+    function quoteEVMDeliveryPrice(
+        uint16, /* targetChain */
+        uint256, /* receiverValue */
+        uint256 /* gasLimit */
+    ) external pure returns (uint256 nativePriceQuote, uint256 targetChainRefundPerGasUnused) {
         return (0.1 ether, 0);
     }
 
@@ -635,14 +592,16 @@ contract MockWormholeRelayer is IWormholeRelayer {
         return address(0);
     }
 
-    function deliveryAttempted(bytes32 /* deliveryHash */) external pure returns (bool) {
+    function deliveryAttempted(
+        bytes32 /* deliveryHash */
+    ) external pure returns (bool) {
         return false;
     }
 
     function deliver(
-        bytes[] memory /* encodedVMs */,
-        bytes memory /* encodedDeliveryVAA */,
-        address payable /* relayerRefundAddress */,
+        bytes[] memory, /* encodedVMs */
+        bytes memory, /* encodedDeliveryVAA */
+        address payable, /* relayerRefundAddress */
         bytes memory /* deliveryOverrides */
-    ) external payable {}
+    ) external payable { }
 }
