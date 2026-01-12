@@ -117,6 +117,8 @@ contract AaveExecutorTarget {
     error InsufficientDeposit(bytes32 intentId, address asset, uint256 requested, uint256 available);
     error ZeroAmount();
     error DenormalizationOverflow(uint256 amount, uint8 originalDecimals);
+    error QueueIndexNotActive(uint256 queueIndex);
+    error NotOriginalCaller(address expected, address actual);
 
     // ============ Constructor ============
 
@@ -383,6 +385,131 @@ contract AaveExecutorTarget {
 
         // Note: The withdrawn tokens need to be bridged back to L1 via Wormhole Token Bridge
         // This would be handled in a separate function or by the caller
+    }
+
+    /**
+     * @notice Retry a failed operation from the queue
+     * @dev Only the original caller who initiated the operation can retry it.
+     *      This ensures accountability and allows for proper gas cost tracking.
+     *
+     * On success:
+     * - Operation is removed from the queue
+     * - For deposits: tokens are supplied to Aave and tracked in deposits/intentShares
+     * - OperationRetried event is emitted
+     *
+     * On failure:
+     * - Operation stays in the queue with incremented retryCount
+     * - Error reason is updated
+     * - OperationQueued event is emitted with updated info
+     *
+     * @param queueIndex The index of the failed operation in the queue
+     */
+    function retryFailedOperation(uint256 queueIndex) external {
+        // Step 1: Verify queue index has an active operation
+        FailedOperation storage failedOp = failedOperations[queueIndex];
+        if (failedOp.intentId == bytes32(0)) {
+            revert QueueIndexNotActive(queueIndex);
+        }
+
+        // Step 2: Verify caller is the original caller
+        if (msg.sender != failedOp.originalCaller) {
+            revert NotOriginalCaller(failedOp.originalCaller, msg.sender);
+        }
+
+        // Step 3: Handle based on operation type
+        if (failedOp.operationType == OperationType.Deposit) {
+            _retryDeposit(queueIndex, failedOp);
+        }
+        // Note: Withdraw retry would be added here when needed
+    }
+
+    /**
+     * @notice Internal function to retry a failed deposit operation
+     * @param queueIndex The queue index for event emission
+     * @param failedOp The failed operation data (storage reference)
+     */
+    function _retryDeposit(uint256 queueIndex, FailedOperation storage failedOp) internal {
+        // Cache all values needed for events and state updates BEFORE any potential storage deletion
+        // This ensures we don't read from storage after _removeFromQueue deletes the entry
+        bytes32 intentId = failedOp.intentId;
+        bytes32 ownerHash = failedOp.ownerHash;
+        address asset = failedOp.asset;
+        uint256 amount = failedOp.amount;
+        uint256 retryCount = failedOp.retryCount + 1;
+
+        // Approve Aave pool to spend tokens
+        IERC20(asset).forceApprove(address(aavePool), amount);
+
+        // Try to execute Aave supply
+        try aavePool.supply(asset, amount, address(this), 0) {
+            // Success: Track the deposit and shares
+            deposits[intentId][asset] += amount;
+            intentShares[intentId] += amount;
+
+            // Emit success event (using cached values)
+            emit DepositExecuted(intentId, ownerHash, asset, amount, amount);
+            emit OperationRetried(queueIndex, intentId, retryCount);
+
+            // Remove from queue (safe to delete now since we cached all needed values)
+            _removeFromQueue(queueIndex);
+        } catch Error(string memory errorReason) {
+            // Reset approval
+            IERC20(asset).forceApprove(address(aavePool), 0);
+            // Update failed operation with new error and increment retry count
+            _updateFailedOperation(queueIndex, failedOp, errorReason);
+        } catch (bytes memory) {
+            // Reset approval
+            IERC20(asset).forceApprove(address(aavePool), 0);
+            // Update failed operation with generic error
+            _updateFailedOperation(queueIndex, failedOp, "Aave supply failed");
+        }
+    }
+
+    /**
+     * @notice Update a failed operation after a retry attempt fails
+     * @param queueIndex The queue index
+     * @param failedOp The failed operation data
+     * @param errorReason The new error reason
+     */
+    function _updateFailedOperation(uint256 queueIndex, FailedOperation storage failedOp, string memory errorReason)
+        internal
+    {
+        // Truncate error reason if too long
+        string memory truncatedReason = errorReason;
+        uint256 reasonLength = bytes(errorReason).length;
+        if (reasonLength > MAX_ERROR_REASON_LENGTH) {
+            // solhint-disable-next-line no-inline-assembly
+            assembly {
+                mstore(errorReason, MAX_ERROR_REASON_LENGTH)
+            }
+            truncatedReason = errorReason;
+        }
+
+        // Update the failed operation
+        failedOp.retryCount += 1;
+        failedOp.failedAt = block.timestamp;
+        failedOp.errorReason = truncatedReason;
+
+        // Emit event to indicate retry failed but operation is still queued
+        emit OperationQueued(
+            queueIndex, failedOp.intentId, failedOp.operationType, failedOp.asset, failedOp.amount, failedOp.originalCaller
+        );
+    }
+
+    /**
+     * @notice Remove a successfully retried operation from the queue
+     * @param queueIndex The queue index to remove
+     */
+    function _removeFromQueue(uint256 queueIndex) internal {
+        bytes32 intentId = failedOperations[queueIndex].intentId;
+
+        // Clear the storage slot
+        delete failedOperations[queueIndex];
+
+        // Decrement queue length
+        queueLength--;
+
+        emit OperationRemoved(queueIndex, intentId);
     }
 
     // ============ View Functions ============

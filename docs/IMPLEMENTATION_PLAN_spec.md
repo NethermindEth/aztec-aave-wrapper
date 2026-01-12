@@ -653,16 +653,18 @@ cd target && forge test --match-test test_queueStructures -vv
 Implement deposit execution: receive tokens from Wormhole, denormalize using original decimals, supply to Aave, track per-intent shares, send confirmation back (spec.md §4.1 Step 3-4). On failure, add to retry queue.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, receiveDeposit stub exists
-- `target/test/Executor.deposit.t.sol` - [DOES NOT EXIST] Tests needed
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with consumeAndExecuteDeposit fully implemented
+- `target/test/Executor.deposit.t.sol` - Tests for deposit functionality
 
-Current receiveDeposit stub does NOT:
-- Parse Wormhole token transfers
-- Denormalize amounts
-- Integrate with Aave
-- Track per-intent shares
-- Send confirmations back
-- Handle failures with retry queue
+Implementation includes:
+- VAA parsing and verification via Wormhole core contract
+- Replay protection with consumedVAAs mapping
+- Emitter chain/address verification
+- Amount denormalization from Wormhole's 8 decimals to original token decimals
+- Aave supply with try/catch for retry queue fallback
+- Per-intent share tracking via intentShares mapping
+- DepositExecuted event emission on success
+- Automatic queueing of failed operations with error reason tracking
 
 #### Validation
 ```bash
@@ -679,16 +681,23 @@ cd target && forge test --match-test test_denormalization -vvv
 
 ---
 
-### Step 4: Implement retryFailedOperation
+### Step 4: Implement retryFailedOperation **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: IMPLEMENTED
 
 #### Goal
 Allow original caller to retry failed operations from the queue.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, function not present
-- `target/test/Executor.retry.t.sol` - [DOES NOT EXIST] Tests needed
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with retryFailedOperation fully implemented
+- `target/test/Executor.retry.t.sol` - [EXISTS] Comprehensive tests for retry functionality
+
+Implementation includes:
+- Queue index validation (reverts with QueueIndexNotActive if no active operation)
+- Original caller verification (reverts with NotOriginalCaller if different address)
+- Deposit retry logic with Aave supply and proper state tracking
+- Success path: removes from queue, updates deposits/intentShares, emits events
+- Failure path: updates retryCount, failedAt timestamp, and errorReason
 
 #### Validation
 ```bash
