@@ -645,9 +645,9 @@ cd target && forge test --match-test test_queueStructures -vv
 
 ---
 
-### Step 3: Implement consumeAndExecuteDeposit with denormalization and retry queue
+### Step 3: Implement consumeAndExecuteDeposit with denormalization and retry queue **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (stub exists)
+**Status**: IMPLEMENTED
 
 #### Goal
 Implement deposit execution: receive tokens from Wormhole, denormalize using original decimals, supply to Aave, track per-intent shares, send confirmation back (spec.md §4.1 Step 3-4). On failure, add to retry queue.

@@ -24,6 +24,12 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
  * - VAA verification via Wormhole core contract
  * - Replay protection via consumedVAAs mapping
  * - Emitter address verification (only accepts from registered L1 portal)
+ *
+ * Denormalization:
+ * - Wormhole normalizes token amounts to 8 decimals for cross-chain transfers
+ * - This contract denormalizes back to original decimals using originalDecimals from intent
+ * - For tokens with < 8 decimals, no adjustment needed (Wormhole doesn't change them)
+ * - For tokens with > 8 decimals, multiply by 10^(originalDecimals - 8)
  */
 contract AaveExecutorTarget {
     using SafeERC20 for IERC20;
@@ -93,6 +99,14 @@ contract AaveExecutorTarget {
     /// @notice Emitted when a queued operation is removed from the queue
     event OperationRemoved(uint256 indexed queueIndex, bytes32 indexed intentId);
 
+    // ============ Constants ============
+
+    /// @notice Wormhole normalizes token amounts to 8 decimals for cross-chain transfers
+    uint8 public constant WORMHOLE_DECIMALS = 8;
+
+    /// @notice Maximum length for error reason strings stored in retry queue
+    uint256 private constant MAX_ERROR_REASON_LENGTH = 256;
+
     // ============ Errors ============
 
     error VAAAlreadyConsumed(bytes32 vaaHash);
@@ -102,6 +116,7 @@ contract AaveExecutorTarget {
     error DeadlinePassed(uint64 deadline, uint256 currentTime);
     error InsufficientDeposit(bytes32 intentId, address asset, uint256 requested, uint256 available);
     error ZeroAmount();
+    error DenormalizationOverflow(uint256 amount, uint8 originalDecimals);
 
     // ============ Constructor ============
 
@@ -130,6 +145,14 @@ contract AaveExecutorTarget {
      * 2. Check VAA hasn't been consumed (replay protection)
      * 3. Verify emitter chain and address match expected L1 portal
      * 4. Verify deadline hasn't passed
+     *
+     * Denormalization:
+     * - Wormhole normalizes amounts to 8 decimals for tokens with > 8 decimals
+     * - This function denormalizes back to original decimals before supplying to Aave
+     *
+     * Retry Queue:
+     * - If Aave supply fails, the operation is added to the retry queue
+     * - Failed operations can be retried later when conditions change
      *
      * @param encodedVAA The encoded Wormhole VAA containing the deposit intent
      */
@@ -176,18 +199,114 @@ contract AaveExecutorTarget {
             revert ZeroAmount();
         }
 
-        // Step 10: Execute the Aave supply
-        // Note: Tokens should have been bridged atomically with the VAA via Wormhole Token Bridge
-        // The caller is responsible for ensuring tokens are available
+        // Step 10: Denormalize amount from Wormhole's 8 decimals to original decimals
+        uint256 denormalizedAmount = _denormalizeAmount(intent.amount, intent.originalDecimals);
+
+        // Step 11: Execute the Aave supply with retry queue handling
+        _executeAaveSupply(intent, denormalizedAmount);
+    }
+
+    /**
+     * @notice Internal function to execute Aave supply with retry queue fallback
+     * @param intent The deposit intent
+     * @param amount The denormalized amount to supply
+     */
+    function _executeAaveSupply(DepositIntent memory intent, uint256 amount) internal {
+        // Approve Aave pool to spend tokens
         // Using forceApprove to handle tokens that require approval to be 0 before setting new value
-        IERC20(intent.asset).forceApprove(address(aavePool), intent.amount);
-        aavePool.supply(intent.asset, intent.amount, address(this), 0);
+        IERC20(intent.asset).forceApprove(address(aavePool), amount);
 
-        // Step 11: Track the deposit
-        deposits[intent.intentId][intent.asset] += intent.amount;
+        // Try to execute Aave supply
+        try aavePool.supply(intent.asset, amount, address(this), 0) {
+            // Success: Track the deposit and shares
+            deposits[intent.intentId][intent.asset] += amount;
 
-        // Step 12: Emit event (note: shares = amount for MVP simplification)
-        emit DepositExecuted(intent.intentId, intent.ownerHash, intent.asset, intent.amount, intent.amount);
+            // Track per-intent shares (MVP: shares = amount, no yield accounting)
+            intentShares[intent.intentId] += amount;
+
+            // Emit success event
+            emit DepositExecuted(intent.intentId, intent.ownerHash, intent.asset, amount, amount);
+        } catch Error(string memory errorReason) {
+            // Reset approval to 0 to prevent unintended spend of tokens held for retry
+            IERC20(intent.asset).forceApprove(address(aavePool), 0);
+            // Aave reverted with a reason string - add to retry queue
+            _addToRetryQueue(intent, amount, errorReason);
+        } catch (bytes memory) {
+            // Reset approval to 0 to prevent unintended spend of tokens held for retry
+            IERC20(intent.asset).forceApprove(address(aavePool), 0);
+            // Aave reverted without a reason or with custom error - add to retry queue
+            _addToRetryQueue(intent, amount, "Aave supply failed");
+        }
+    }
+
+    /**
+     * @notice Add a failed deposit operation to the retry queue
+     * @param intent The deposit intent that failed
+     * @param amount The denormalized amount
+     * @param errorReason The error reason (truncated if too long)
+     */
+    function _addToRetryQueue(DepositIntent memory intent, uint256 amount, string memory errorReason) internal {
+        // Truncate error reason if too long using assembly for gas efficiency
+        string memory truncatedReason = errorReason;
+        uint256 reasonLength = bytes(errorReason).length;
+        if (reasonLength > MAX_ERROR_REASON_LENGTH) {
+            // solhint-disable-next-line no-inline-assembly
+            assembly {
+                // Update the length field of the string to truncate it in place
+                // This is safe because we're reducing the length, not increasing it
+                mstore(errorReason, MAX_ERROR_REASON_LENGTH)
+            }
+            truncatedReason = errorReason;
+        }
+
+        // Create failed operation record
+        uint256 queueIndex = nextQueueIndex++;
+        failedOperations[queueIndex] = FailedOperation({
+            operationType: OperationType.Deposit,
+            intentId: intent.intentId,
+            ownerHash: intent.ownerHash,
+            asset: intent.asset,
+            amount: amount,
+            failedAt: block.timestamp,
+            retryCount: 0,
+            originalCaller: msg.sender,
+            errorReason: truncatedReason
+        });
+
+        queueLength++;
+
+        emit OperationQueued(queueIndex, intent.intentId, OperationType.Deposit, intent.asset, amount, msg.sender);
+    }
+
+    /**
+     * @notice Denormalize amount from Wormhole's 8 decimals to original token decimals
+     * @dev Wormhole normalizes tokens with > 8 decimals by dividing by 10^(decimals-8)
+     *      We reverse this by multiplying by 10^(decimals-8)
+     *      Tokens with <= 8 decimals are not modified by Wormhole
+     * @param amount The Wormhole-normalized amount (up to 8 decimals)
+     * @param originalDecimals The original token decimals
+     * @return The denormalized amount in original token decimals
+     */
+    function _denormalizeAmount(uint128 amount, uint8 originalDecimals) internal pure returns (uint256) {
+        // Tokens with <= 8 decimals are not normalized by Wormhole
+        if (originalDecimals <= WORMHOLE_DECIMALS) {
+            return uint256(amount);
+        }
+
+        // For tokens with > 8 decimals, multiply by 10^(originalDecimals - 8)
+        uint256 decimalDiff = uint256(originalDecimals - WORMHOLE_DECIMALS);
+
+        // Check for potential overflow before multiplication
+        // Max uint128 is ~3.4e38, max scaling is 10^10 (18-8 decimals), so ~3.4e48 fits in uint256
+        uint256 scaleFactor = 10 ** decimalDiff;
+        uint256 result = uint256(amount) * scaleFactor;
+
+        // Sanity check: result should not wrap around (would indicate overflow)
+        if (result / scaleFactor != uint256(amount)) {
+            revert DenormalizationOverflow(amount, originalDecimals);
+        }
+
+        return result;
     }
 
     /**
