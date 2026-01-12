@@ -59,7 +59,8 @@ contract PortalExecuteDepositTest is Test {
             wormholeRelayer,
             l2ContractAddress,
             targetChainId,
-            targetExecutor
+            targetExecutor,
+            address(this) // Initial owner
         );
 
         // Setup valid intent

@@ -20,6 +20,7 @@ contract DeployPortal is Script {
         bytes32 l2ContractAddress = vm.envBytes32("L2_CONTRACT_ADDRESS");
         uint16 targetChainId = uint16(vm.envUint("TARGET_CHAIN_ID"));
         bytes32 targetExecutor = vm.envBytes32("TARGET_EXECUTOR");
+        address initialOwner = vm.envAddress("PORTAL_OWNER");
 
         vm.startBroadcast();
 
@@ -31,11 +32,13 @@ contract DeployPortal is Script {
             wormholeRelayer,
             l2ContractAddress,
             targetChainId,
-            targetExecutor
+            targetExecutor,
+            initialOwner
         );
 
         console2.log("AztecAavePortalL1 deployed at:", address(portal));
         console2.log("Target chain ID:", targetChainId);
+        console2.log("Initial owner:", initialOwner);
 
         vm.stopBroadcast();
     }

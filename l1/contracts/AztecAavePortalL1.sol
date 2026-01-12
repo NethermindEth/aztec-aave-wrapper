@@ -20,6 +20,9 @@ import {
     ConfirmationLib
 } from "./types/Confirmation.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title AztecAavePortalL1
@@ -31,8 +34,15 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
  * - Bridges tokens + payloads to target chain executor via Wormhole
  * - Receives confirmations back from target chain
  * - Sends L1->L2 messages to Aztec for finalization
+ *
+ * Security features:
+ * - Ownable2Step: Two-step ownership transfer to prevent accidental transfers
+ * - Pausable: Admin can pause new operations while allowing in-flight operations to complete
+ * - Emergency withdraw: Admin can recover stuck tokens in emergency situations
  */
-contract AztecAavePortalL1 {
+contract AztecAavePortalL1 is Ownable2Step, Pausable {
+    using SafeERC20 for IERC20;
+
     // ============ Immutables ============
 
     /// @notice Aztec L2->L1 message outbox
@@ -100,6 +110,7 @@ contract AztecAavePortalL1 {
     error TokenPortalDepositFailed();
     error InvalidPayloadAsset(address expected, address received);
     error TokenTransferFailed();
+    error ZeroAddress();
 
     // ============ Events ============
 
@@ -131,8 +142,16 @@ contract AztecAavePortalL1 {
         address _wormholeRelayer,
         bytes32 _l2ContractAddress,
         uint16 _targetChainId,
-        bytes32 _targetExecutor
-    ) {
+        bytes32 _targetExecutor,
+        address _initialOwner
+    ) Ownable(_initialOwner) {
+        // Note: _initialOwner validation is handled by Ownable constructor
+        if (
+            _aztecOutbox == address(0) || _aztecInbox == address(0) || _tokenPortal == address(0)
+                || _wormholeTokenBridge == address(0) || _wormholeRelayer == address(0)
+        ) {
+            revert ZeroAddress();
+        }
         aztecOutbox = _aztecOutbox;
         aztecInbox = _aztecInbox;
         tokenPortal = _tokenPortal;
@@ -186,7 +205,7 @@ contract AztecAavePortalL1 {
         uint256 l2BlockNumber,
         uint256 leafIndex,
         bytes32[] calldata siblingPath
-    ) external payable {
+    ) external payable whenNotPaused {
         // Step 1: Check for replay attack first (cheapest check, prevents wasted computation)
         if (consumedIntents[intent.intentId]) {
             revert IntentAlreadyConsumed(intent.intentId);
@@ -263,7 +282,7 @@ contract AztecAavePortalL1 {
         uint256 l2BlockNumber,
         uint256 leafIndex,
         bytes32[] calldata siblingPath
-    ) external payable {
+    ) external payable whenNotPaused {
         // Step 1: Check for replay attack first (cheapest check, prevents wasted computation)
         if (consumedIntents[intent.intentId]) {
             revert IntentAlreadyConsumed(intent.intentId);
@@ -584,4 +603,55 @@ contract AztecAavePortalL1 {
 
         emit TokensDepositedToL2(intentId, messageKey, messageIndex);
     }
+
+    // ============ Admin Functions ============
+
+    /**
+     * @notice Pause new deposit and withdraw operations
+     * @dev Only callable by owner. Does NOT affect:
+     *      - receiveWormholeMessages (allows in-flight confirmations to complete)
+     *      - completeWithdrawalTransfer (allows in-flight token transfers to complete)
+     *      This ensures that operations already in progress can finalize,
+     *      preventing funds from being stuck in transit.
+     */
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /**
+     * @notice Resume deposit and withdraw operations
+     * @dev Only callable by owner.
+     */
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    /**
+     * @notice Emergency function to recover stuck tokens
+     * @dev Only callable by owner. This function should only be used in emergency
+     *      situations where tokens are stuck in the contract due to failed operations
+     *      or bugs. In production, this should be protected by a timelock or multisig.
+     *
+     *      IMPORTANT: This function does NOT check if tokens belong to in-flight operations.
+     *      Improper use could steal user funds. Production deployments should implement
+     *      additional safeguards such as:
+     *      - Timelock delays
+     *      - Multi-signature requirements
+     *      - Tracking of expected token balances per operation
+     *
+     * @param token The ERC20 token to withdraw
+     * @param to The recipient address
+     * @param amount The amount to withdraw
+     */
+    function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner {
+        if (to == address(0)) {
+            revert ZeroAddress();
+        }
+        IERC20(token).safeTransfer(to, amount);
+        emit EmergencyWithdraw(token, to, amount);
+    }
+
+    // ============ Admin Events ============
+
+    event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
 }
