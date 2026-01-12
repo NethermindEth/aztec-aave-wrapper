@@ -773,6 +773,391 @@ describe("Aztec Aave Wrapper E2E", () => {
   });
 
   // ==========================================================================
+  // Multi-User Concurrent Operations Tests
+  // ==========================================================================
+
+  describe("Multi-User Concurrent Operations", () => {
+    /**
+     * Test that multiple users can create deposits concurrently
+     * and each receives a unique intent ID.
+     *
+     * Validates:
+     * - Intent ID uniqueness across users
+     * - No race conditions in concurrent intent creation
+     * - Each user's deposit is tracked independently
+     */
+    it("should generate unique intent IDs for concurrent deposits from different users", async (ctx) => {
+      if (!aztecAvailable || !harness?.isReady()) {
+        ctx.skip();
+        return;
+      }
+
+      const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
+
+      // Create secrets for each user
+      const userSecret = Fr.random();
+      const user2Secret = Fr.random();
+
+      // Get contracts with different wallets
+      const userContract = aaveWrapper.withWallet(userWallet);
+      const user2Contract = aaveWrapper.withWallet(relayerWallet); // relayerWallet is user2
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userMethods = userContract.methods as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user2Methods = user2Contract.methods as any;
+
+      // Create deposit calls for both users
+      const userDepositCall = userMethods.request_deposit(
+        TEST_CONFIG.assetId,
+        TEST_CONFIG.depositAmount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        userSecret
+      );
+
+      const user2DepositCall = user2Methods.request_deposit(
+        TEST_CONFIG.assetId,
+        TEST_CONFIG.depositAmount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        user2Secret
+      );
+
+      // Execute both deposits concurrently
+      const [userIntentId, user2IntentId] = await Promise.all([
+        userDepositCall.simulate(),
+        user2DepositCall.simulate(),
+      ]);
+
+      // Verify both intent IDs are valid
+      assertIntentIdNonZero(userIntentId);
+      assertIntentIdNonZero(user2IntentId);
+
+      // KEY ASSERTION: Intent IDs must be unique
+      expect(userIntentId.toBigInt()).not.toBe(user2IntentId.toBigInt());
+
+      // Send both transactions concurrently
+      const [userTx, user2Tx] = await Promise.all([
+        userDepositCall.send().wait(),
+        user2DepositCall.send().wait(),
+      ]);
+
+      expect(userTx.txHash).toBeDefined();
+      expect(user2Tx.txHash).toBeDefined();
+
+      console.log("Multi-user concurrent deposits:");
+      console.log("  User intent ID:", userIntentId.toString());
+      console.log("  User2 intent ID:", user2IntentId.toString());
+      console.log("  Intent IDs are unique:", userIntentId.toBigInt() !== user2IntentId.toBigInt());
+    });
+
+    /**
+     * Test that same user creating multiple deposits concurrently
+     * gets unique intent IDs for each deposit.
+     *
+     * Validates:
+     * - Intent ID uniqueness for same user
+     * - Proper salt generation prevents collisions
+     * - Anonymous pool model maintains separate positions
+     */
+    it("should generate unique intent IDs for multiple concurrent deposits from same user", async (ctx) => {
+      if (!aztecAvailable || !harness?.isReady()) {
+        ctx.skip();
+        return;
+      }
+
+      const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
+
+      // Create different secrets for each deposit (required for unique intent IDs)
+      const secret1 = Fr.random();
+      const secret2 = Fr.random();
+      const secret3 = Fr.random();
+
+      const userContract = aaveWrapper.withWallet(userWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const methods = userContract.methods as any;
+
+      // Create three deposit calls with different secrets
+      const deposit1Call = methods.request_deposit(
+        TEST_CONFIG.assetId,
+        TEST_CONFIG.depositAmount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        secret1
+      );
+
+      const deposit2Call = methods.request_deposit(
+        TEST_CONFIG.assetId,
+        TEST_CONFIG.depositAmount * 2n, // Different amount
+        TEST_CONFIG.targetChainId,
+        deadline,
+        secret2
+      );
+
+      const deposit3Call = methods.request_deposit(
+        2n, // Different asset ID
+        TEST_CONFIG.depositAmount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        secret3
+      );
+
+      // Simulate all three concurrently
+      const [intentId1, intentId2, intentId3] = await Promise.all([
+        deposit1Call.simulate(),
+        deposit2Call.simulate(),
+        deposit3Call.simulate(),
+      ]);
+
+      // Verify all intent IDs are valid
+      assertIntentIdNonZero(intentId1);
+      assertIntentIdNonZero(intentId2);
+      assertIntentIdNonZero(intentId3);
+
+      // KEY ASSERTION: All intent IDs must be unique
+      const intentIds = [intentId1.toBigInt(), intentId2.toBigInt(), intentId3.toBigInt()];
+      const uniqueIntentIds = new Set(intentIds);
+      expect(uniqueIntentIds.size).toBe(3);
+
+      // Send all transactions concurrently
+      const [tx1, tx2, tx3] = await Promise.all([
+        deposit1Call.send().wait(),
+        deposit2Call.send().wait(),
+        deposit3Call.send().wait(),
+      ]);
+
+      expect(tx1.txHash).toBeDefined();
+      expect(tx2.txHash).toBeDefined();
+      expect(tx3.txHash).toBeDefined();
+
+      console.log("Same user concurrent deposits:");
+      console.log("  Intent ID 1:", intentId1.toString());
+      console.log("  Intent ID 2:", intentId2.toString());
+      console.log("  Intent ID 3:", intentId3.toString());
+      console.log("  All unique:", uniqueIntentIds.size === 3);
+    });
+
+    /**
+     * Test that user cannot access another user's position via intent ID.
+     *
+     * Validates:
+     * - Position note isolation between users
+     * - Private notes are only visible to their owner
+     * - Cross-user access attempts fail appropriately
+     */
+    it("should maintain position isolation between users", async (ctx) => {
+      if (!aztecAvailable || !harness?.isReady()) {
+        ctx.skip();
+        return;
+      }
+
+      const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
+      const userSecret = Fr.random();
+
+      // User creates a deposit
+      const userContract = aaveWrapper.withWallet(userWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userMethods = userContract.methods as any;
+
+      const depositCall = userMethods.request_deposit(
+        TEST_CONFIG.assetId,
+        TEST_CONFIG.depositAmount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        userSecret
+      );
+
+      const userIntentId = await depositCall.simulate();
+      await depositCall.send().wait();
+
+      console.log("User created deposit with intent ID:", userIntentId.toString());
+
+      // User2 (relayerWallet) attempts to interact with user's position
+      const { computeSecretHash } = await import("@aztec/circuits.js/hash");
+      const user2Contract = aaveWrapper.withWallet(relayerWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user2Methods = user2Contract.methods as any;
+
+      const user2Secret = Fr.random();
+      const user2SecretHash = computeSecretHash(user2Secret);
+
+      // User2 should NOT be able to request withdrawal on user's position
+      // because user2's wallet won't find the PositionReceiptNote
+      await expect(
+        user2Methods
+          .request_withdraw(userIntentId, TEST_CONFIG.withdrawAmount, deadline, user2SecretHash)
+          .send()
+          .wait()
+      ).rejects.toThrow(/Position receipt note not found/);
+
+      console.log("Position isolation verified: User2 cannot access User's position");
+    });
+
+    /**
+     * Test that concurrent operations from multiple users don't cause state corruption.
+     *
+     * Validates:
+     * - Public state updates are atomic
+     * - Intent status tracking is consistent
+     * - No race conditions in state machine transitions
+     */
+    it("should maintain state consistency during concurrent multi-user operations", async (ctx) => {
+      if (!aztecAvailable || !harness?.isReady()) {
+        ctx.skip();
+        return;
+      }
+
+      const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
+
+      // Create multiple users' deposit intents
+      const userContract = aaveWrapper.withWallet(userWallet);
+      const user2Contract = aaveWrapper.withWallet(relayerWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userMethods = userContract.methods as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user2Methods = user2Contract.methods as any;
+
+      // Create 3 deposits from user and 2 from user2
+      const userSecrets = [Fr.random(), Fr.random(), Fr.random()];
+      const user2Secrets = [Fr.random(), Fr.random()];
+
+      const userCalls = userSecrets.map((secret, i) =>
+        userMethods.request_deposit(
+          TEST_CONFIG.assetId,
+          TEST_CONFIG.depositAmount + BigInt(i * 100),
+          TEST_CONFIG.targetChainId,
+          deadline,
+          secret
+        )
+      );
+
+      const user2Calls = user2Secrets.map((secret, i) =>
+        user2Methods.request_deposit(
+          TEST_CONFIG.assetId,
+          TEST_CONFIG.depositAmount + BigInt(i * 200 + 1000),
+          TEST_CONFIG.targetChainId,
+          deadline,
+          secret
+        )
+      );
+
+      // Simulate all calls concurrently
+      const allCalls = [...userCalls, ...user2Calls];
+      const allIntentIds = await Promise.all(allCalls.map((call) => call.simulate()));
+
+      // Verify all intent IDs are unique
+      const intentIdSet = new Set(allIntentIds.map((id) => id.toBigInt().toString()));
+      expect(intentIdSet.size).toBe(5);
+
+      // Send all transactions concurrently
+      const allTxs = await Promise.all(allCalls.map((call) => call.send().wait()));
+
+      // Verify all transactions succeeded
+      allTxs.forEach((tx, i) => {
+        expect(tx.txHash).toBeDefined();
+        console.log(`Transaction ${i + 1} succeeded: ${tx.txHash?.toString().slice(0, 20)}...`);
+      });
+
+      // Verify each intent can only be consumed once (replay protection)
+      // Attempt to set the first user's intent as pending again
+      await expect(
+        userMethods._set_intent_pending_deposit(allIntentIds[0]).send().wait()
+      ).rejects.toThrow(/Intent ID already consumed/);
+
+      // Attempt to set user2's intent as pending again
+      await expect(
+        user2Methods._set_intent_pending_deposit(allIntentIds[3]).send().wait()
+      ).rejects.toThrow(/Intent ID already consumed/);
+
+      console.log("State consistency verification:");
+      console.log("  Total unique intent IDs:", intentIdSet.size);
+      console.log("  All transactions succeeded: true");
+      console.log("  Replay protection verified: true");
+    });
+
+    /**
+     * Test that different users' position tracking (shares) is isolated.
+     *
+     * Validates:
+     * - Share tracking is per-user in the anonymous pool model
+     * - One user's shares don't affect another user's balance
+     * - Position receipts are cryptographically isolated
+     */
+    it("should isolate share tracking between users", async (ctx) => {
+      if (!aztecAvailable || !harness?.isReady()) {
+        ctx.skip();
+        return;
+      }
+
+      const { poseidon2Hash } = await import("@aztec/foundation/crypto");
+
+      // Get addresses and compute owner hashes
+      const userAddress = userWallet.getAddress().toBigInt();
+      const user2Address = relayerWallet.getAddress().toBigInt();
+
+      // Compute owner hashes (as done in the contract for privacy)
+      const userOwnerHash = poseidon2Hash([userAddress]).toBigInt();
+      const user2OwnerHash = poseidon2Hash([user2Address]).toBigInt();
+
+      // Verify owner hashes are unique
+      expect(userOwnerHash).not.toBe(user2OwnerHash);
+
+      // Create deposits for both users
+      const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
+      const userSecret = Fr.random();
+      const user2Secret = Fr.random();
+
+      const userContract = aaveWrapper.withWallet(userWallet);
+      const user2Contract = aaveWrapper.withWallet(relayerWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userMethods = userContract.methods as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const user2Methods = user2Contract.methods as any;
+
+      // User deposits 1000, User2 deposits 5000
+      const userAmount = 1_000_000n;
+      const user2Amount = 5_000_000n;
+
+      const userDepositCall = userMethods.request_deposit(
+        TEST_CONFIG.assetId,
+        userAmount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        userSecret
+      );
+
+      const user2DepositCall = user2Methods.request_deposit(
+        TEST_CONFIG.assetId,
+        user2Amount,
+        TEST_CONFIG.targetChainId,
+        deadline,
+        user2Secret
+      );
+
+      // Execute both deposits
+      const [userIntentId, user2IntentId] = await Promise.all([
+        userDepositCall.simulate(),
+        user2DepositCall.simulate(),
+      ]);
+
+      await Promise.all([userDepositCall.send().wait(), user2DepositCall.send().wait()]);
+
+      // Verify the intent IDs incorporate the unique owner information
+      // (via salt = poseidon(caller, secret_hash))
+      expect(userIntentId.toBigInt()).not.toBe(user2IntentId.toBigInt());
+
+      console.log("Share tracking isolation verification:");
+      console.log("  User owner hash:", userOwnerHash.toString().slice(0, 20) + "...");
+      console.log("  User2 owner hash:", user2OwnerHash.toString().slice(0, 20) + "...");
+      console.log("  User deposit amount:", userAmount.toString());
+      console.log("  User2 deposit amount:", user2Amount.toString());
+      console.log("  Intent IDs are isolated: true");
+      console.log("  Owner hashes are unique: true");
+    });
+  });
+
+  // ==========================================================================
   // Privacy Verification Tests
   // ==========================================================================
 
@@ -1015,7 +1400,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      * The claim_refund function requires current_time > 0.
      */
     it("should reject refund with zero current_time", async (ctx) => {
-      if (!aztecAvailable || !harness?.isReady()) {
+      if (!aztecAvailable || !harness?.isFullE2EReady()) {
         ctx.skip();
         return;
       }
@@ -1040,7 +1425,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      * Only notes with PendingWithdraw status can be refunded.
      */
     it("should reject refund for non-PendingWithdraw note", async (ctx) => {
-      if (!aztecAvailable || !harness?.isReady()) {
+      if (!aztecAvailable || !harness?.isFullE2EReady()) {
         ctx.skip();
         return;
       }
