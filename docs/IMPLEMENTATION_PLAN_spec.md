@@ -968,26 +968,28 @@ Provide step-by-step instructions for local devnet deployment.
 
 ---
 
-### Step 3: Update CLAUDE.md with final architecture
+### Step 3: Update CLAUDE.md with final architecture **COMPLETE**
 
-**Status**: NOT STARTED (CLAUDE.md exists but needs architecture updates)
+**Status**: COMPLETE
 
 #### Goal
 Update project guidelines to reflect spec-aligned implementation with interview decisions.
 
 #### Files
-- `CLAUDE.md` - [EXISTS] Current version has basic project overview, needs architecture section updates
+- `CLAUDE.md` - [EXISTS] Updated with Architecture Details section covering privacy model and implementation decisions
 
-Current CLAUDE.md does NOT document:
+CLAUDE.md now documents:
 - Hash(ownerL2) privacy model
 - Per-intent share tracking
 - Retry queue mechanism
 - Full withdrawal only constraint
 - USDC-only MVP
+- Custodial model
 
 #### Validation
 ```bash
-grep -i "secret\|denomination" CLAUDE.md  # Should have no matches after update
+grep -i "secret\|denomination" CLAUDE.md  # Should have no matches (removed alternative approach)
+grep -i "hash(ownerL2)\|per-intent" CLAUDE.md  # Should have matches (new architecture)
 ```
 
 #### Failure modes

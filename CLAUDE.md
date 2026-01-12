@@ -11,7 +11,7 @@ Aztec Aave Wrapper enables privacy-preserving Aave lending from Aztec L2 via Wor
 2. **L1 Portal (Solidity/l1/)**: Consumes Aztec messages, bridges via Wormhole
 3. **Target Executor (Solidity/target/)**: Executes Aave operations on destination chain
 
-The privacy model uses "anyone can execute" - L1/target execution doesn't require user identity. User authentication is via secret/secretHash mechanism.
+**Privacy model**: Uses hash(ownerL2) to protect user identity across chains while enabling verification. L1/target execution doesn't require user identity ("anyone can execute" relay model).
 
 ## Build & Test Commands
 
@@ -95,12 +95,23 @@ Docker Compose runs three services:
 
 **Withdrawal**: Similar reverse flow with `request_withdraw()` and `finalize_withdraw()`
 
-## Privacy Considerations
+## Architecture Details
 
-- L2 owner address is NEVER included in cross-chain messages
-- Authentication uses secret/secretHash (only secret holder can claim)
+### Privacy Model
+- **hash(ownerL2)**: L2 owner address is hashed (Poseidon) before inclusion in cross-chain messages
+- Owner identity is never revealed on L1 or target chain
+- L2 maintains `intent_owners` mapping to resolve owner during finalization
 - Public events emit only intent_id and status, no user-identifying data
-- Position receipts are encrypted notes visible only to the owner
+
+### Key Implementation Decisions
+- **Per-intent share tracking**: Target executor tracks shares per intent ID (not per owner) to maintain privacy
+- **Full withdrawal only**: Withdrawals must be for the entire position (simplifies note lifecycle)
+- **Retry queue**: Failed operations queued indefinitely, retryable by original caller
+- **Deadline enforcement at L1**: 5 min minimum, 24 hour maximum (L2 has no block.timestamp access)
+
+### MVP Constraints
+- **USDC-only**: MVP focuses on single asset support (multi-asset structure exists but not tested)
+- **Custodial model**: Target executor holds all aTokens; user entitlement via private L2 receipts
 
 ## Git Commits
 
