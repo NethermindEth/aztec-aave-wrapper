@@ -872,9 +872,9 @@ cd e2e && bun run test --match "deadline refund"
 
 ---
 
-### Step 5: Test failure scenarios with retry **COMPLETE**
+### Step 5: Test failure scenarios with retry
 
-**Status**: COMPLETE
+**Status**: NOT IMPLEMENTED
 
 #### Goal
 Test edge cases: Aave failures with retry queue, replay attacks, deadline expiry.
@@ -934,8 +934,7 @@ grep -r "secret\|denomination" docs/ | wc -l  # Should be 0 (removed alternative
 Document implementation decisions, deviations from spec, and lessons learned.
 
 #### Files
-- `docs/` - [EXISTS] Directory created but empty
-- Need to create comprehensive documentation of architecture decisions
+- `docs/IMPLEMENTATION_NOTES.md` - [EXISTS] Comprehensive documentation of architecture decisions
 
 #### Validation
 ```bash
@@ -948,15 +947,15 @@ Document implementation decisions, deviations from spec, and lessons learned.
 
 ---
 
-### Step 2: Create deployment guide for local devnet
+### Step 2: Create deployment guide for local devnet **COMPLETE**
 
-**Status**: NOT STARTED
+**Status**: COMPLETE
 
 #### Goal
 Provide step-by-step instructions for local devnet deployment.
 
 #### Files
-- `docs/DEPLOYMENT.md` - [DOES NOT EXIST] Need to create deployment guide
+- `docs/DEPLOYMENT.md` - [EXISTS] Step-by-step deployment guide with troubleshooting section
 
 #### Validation
 ```bash
