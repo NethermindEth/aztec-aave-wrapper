@@ -8,6 +8,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
+    "test:unit": "vitest run --testNamePattern='Test Infrastructure|Helper'",
+    "test:mock": "TEST_ENVIRONMENT=local TEST_MODE=mock vitest run",
+    "test:integration": "TEST_ENVIRONMENT=testnet TEST_MODE=integration vitest run",
+    "test:setup": "vitest run src/setup.test.ts",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.cache"
   },

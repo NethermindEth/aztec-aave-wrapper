@@ -777,27 +777,32 @@ make deploy-local
 make e2e
 ```
 
-### Step 1: Setup E2E test infrastructure with separate test suites
+### Step 1: Setup E2E test infrastructure with separate test suites **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic e2e structure exists)
+**Status**: IMPLEMENTED
+
+The E2E test infrastructure is now complete with:
+- Test harness (setup.ts) with PXE client, chain clients, and account management
+- Configuration system (config.ts) supporting local/testnet environments and mock/integration modes
+- Aztec utilities (utils/aztec.ts) for note querying and contract interaction
+- Wormhole mock utilities (utils/wormhole-mock.ts) for local testing
+- Wormhole testnet utilities (utils/wormhole-testnet.ts) for integration tests
+- Custom Vitest matchers (vitest.setup.ts) for field/hash/address validation
+- Infrastructure tests (setup.test.ts) verifying all components
 
 #### Goal
 Create test harness with deployed contracts, funded accounts, and helper utilities. Configure separate unit (mock) and integration (Wormhole testnet) suites.
 
 #### Files
-- `e2e/src/setup.ts` - [DOES NOT EXIST] Deployment and setup utilities needed
-- `e2e/src/utils/aztec.ts` - [DOES NOT EXIST] Aztec PXE interaction helpers needed
-- `e2e/src/utils/wormhole-mock.ts` - [DOES NOT EXIST] Wormhole VAA mocking for unit tests
-- `e2e/src/utils/wormhole-testnet.ts` - [DOES NOT EXIST] Real Wormhole testnet interaction
-- `e2e/src/config.ts` - [DOES NOT EXIST] Environment configuration needed
-- `e2e/jest.config.js` - [DOES NOT EXIST] Test suite configuration needed
-- `e2e/src/e2e.test.ts` - [EXISTS] Basic test structure exists but needs comprehensive updates
-
-Current e2e tests in `e2e/src/e2e.test.ts` have basic deposit/withdraw flow tests but do NOT:
-- Separate mock vs testnet configurations
-- Include Wormhole integration
-- Verify privacy properties
-- Test failure scenarios comprehensively
+- `e2e/src/setup.ts` - [EXISTS] Complete test harness with PXE client, chain clients, and account management
+- `e2e/src/utils/aztec.ts` - [EXISTS] Aztec PXE interaction helpers
+- `e2e/src/utils/wormhole-mock.ts` - [EXISTS] Wormhole VAA mocking for unit tests
+- `e2e/src/utils/wormhole-testnet.ts` - [EXISTS] Real Wormhole testnet interaction
+- `e2e/src/config.ts` - [EXISTS] Environment configuration with local/testnet support
+- `e2e/vitest.config.ts` - [EXISTS] Vitest configuration with test modes
+- `e2e/src/vitest.setup.ts` - [EXISTS] Global setup with custom matchers
+- `e2e/src/setup.test.ts` - [EXISTS] Infrastructure verification tests
+- `e2e/src/e2e.test.ts` - [EXISTS] E2E flow tests (needs Wormhole integration)
 
 #### Validation
 ```bash
