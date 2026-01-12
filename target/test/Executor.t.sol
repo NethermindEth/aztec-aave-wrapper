@@ -7,6 +7,7 @@ import {MockWormholeCore} from "../contracts/mocks/MockWormholeCore.sol";
 import {MockLendingPool} from "../contracts/mocks/MockLendingPool.sol";
 import {MockERC20} from "../contracts/mocks/MockERC20.sol";
 import {DepositIntent, WithdrawIntent, IntentLib} from "../contracts/types/Intent.sol";
+import {FailedOperation, OperationType} from "../contracts/types/FailedOperation.sol";
 import {WormholeParser} from "../contracts/libraries/WormholeParser.sol";
 
 /**
@@ -404,6 +405,47 @@ contract ExecutorTest is Test {
         // Should revert with either InvalidEmitterChain or InvalidEmitterAddress
         vm.expectRevert();
         executor.consumeAndExecuteDeposit(vaa);
+    }
+
+    // ============ Queue Structure Tests ============
+
+    function test_queueStructures_initialState() public view {
+        // Verify initial queue state
+        assertEq(executor.nextQueueIndex(), 0);
+        assertEq(executor.queueLength(), 0);
+    }
+
+    function test_queueStructures_failedOperationStruct() public view {
+        // Verify we can read empty failed operation (all zeros)
+        FailedOperation memory op = executor.getFailedOperation(0);
+        assertEq(uint8(op.operationType), uint8(OperationType.Deposit));
+        assertEq(op.intentId, bytes32(0));
+        assertEq(op.ownerHash, bytes32(0));
+        assertEq(op.asset, address(0));
+        assertEq(op.amount, 0);
+        assertEq(op.failedAt, 0);
+        assertEq(op.retryCount, 0);
+        assertEq(op.originalCaller, address(0));
+        assertEq(bytes(op.errorReason).length, 0);
+    }
+
+    function test_queueStructures_intentSharesMapping() public view {
+        // Verify intentShares mapping is accessible
+        bytes32 intentId = keccak256("test.intent");
+        assertEq(executor.getIntentShares(intentId), 0);
+    }
+
+    function test_queueStructures_isQueueIndexActive() public view {
+        // Empty queue index should not be active
+        assertFalse(executor.isQueueIndexActive(0));
+        assertFalse(executor.isQueueIndexActive(1));
+        assertFalse(executor.isQueueIndexActive(999));
+    }
+
+    function test_queueStructures_operationTypeEnum() public pure {
+        // Verify operation types
+        assertEq(uint8(OperationType.Deposit), 0);
+        assertEq(uint8(OperationType.Withdraw), 1);
     }
 
     // ============ Helper Functions ============

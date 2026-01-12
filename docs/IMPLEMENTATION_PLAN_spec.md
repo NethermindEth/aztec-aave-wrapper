@@ -615,21 +615,24 @@ cd target && forge test --match-test test_replayProtection -vvv
 
 ---
 
-### Step 2: Add retry queue state structures
+### Step 2: Add retry queue state structures **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: IMPLEMENTED
 
 #### Goal
 Implement on-chain unlimited retry queue for failed operations with original caller tracking.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, no retry queue structures
-- `target/contracts/types/FailedOperation.sol` - [DOES NOT EXIST] Need to define struct
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with retry queue structures (failedOperations, intentShares, nextQueueIndex, queueLength)
+- `target/contracts/types/FailedOperation.sol` - [EXISTS] FailedOperation struct and OperationType enum defined
 
-Current contract does NOT have:
-- FailedOperation struct
-- failedOperations mapping
-- intentShares mapping for per-intent tracking
+Implementation includes:
+- FailedOperation struct with operationType, intentId, ownerHash, asset, amount, failedAt, retryCount, originalCaller, errorReason
+- failedOperations mapping (uint256 => FailedOperation)
+- intentShares mapping for per-intent aToken tracking
+- nextQueueIndex and queueLength counters
+- View functions: getFailedOperation, getIntentShares, isQueueIndexActive
+- Events: OperationQueued, OperationRetried, OperationRemoved
 
 #### Validation
 ```bash

@@ -5,6 +5,7 @@ import {ILendingPool} from "./interfaces/ILendingPool.sol";
 import {IWormhole} from "./interfaces/IWormhole.sol";
 import {WormholeParser} from "./libraries/WormholeParser.sol";
 import {DepositIntent, WithdrawIntent, IntentLib} from "./types/Intent.sol";
+import {FailedOperation, OperationType} from "./types/FailedOperation.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -50,6 +51,20 @@ contract AaveExecutorTarget {
     /// @notice Mapping from intentId to deposit amounts per asset
     mapping(bytes32 => mapping(address => uint256)) public deposits;
 
+    /// @notice Mapping from queue index to failed operation data
+    /// @dev Unlimited queue - indices are never reused after removal
+    mapping(uint256 => FailedOperation) public failedOperations;
+
+    /// @notice Mapping from intentId to aToken shares held for that intent
+    /// @dev Tracks the actual aToken shares per intent for accurate withdrawal calculations
+    mapping(bytes32 => uint256) public intentShares;
+
+    /// @notice Counter for the next queue index (monotonically increasing)
+    uint256 public nextQueueIndex;
+
+    /// @notice Total number of operations currently in the queue
+    uint256 public queueLength;
+
     // ============ Events ============
 
     /// @notice Emitted when a deposit (supply) operation is executed
@@ -61,6 +76,22 @@ contract AaveExecutorTarget {
     event WithdrawExecuted(
         bytes32 indexed intentId, bytes32 indexed ownerHash, address indexed asset, uint256 amount
     );
+
+    /// @notice Emitted when an operation is added to the retry queue
+    event OperationQueued(
+        uint256 indexed queueIndex,
+        bytes32 indexed intentId,
+        OperationType operationType,
+        address asset,
+        uint256 amount,
+        address originalCaller
+    );
+
+    /// @notice Emitted when a queued operation is retried successfully
+    event OperationRetried(uint256 indexed queueIndex, bytes32 indexed intentId, uint256 retryCount);
+
+    /// @notice Emitted when a queued operation is removed from the queue
+    event OperationRemoved(uint256 indexed queueIndex, bytes32 indexed intentId);
 
     // ============ Errors ============
 
@@ -254,5 +285,32 @@ contract AaveExecutorTarget {
      */
     function getDeposit(bytes32 intentId, address asset) external view returns (uint256) {
         return deposits[intentId][asset];
+    }
+
+    /**
+     * @notice Get a failed operation from the queue
+     * @param queueIndex The index in the queue
+     * @return The failed operation data
+     */
+    function getFailedOperation(uint256 queueIndex) external view returns (FailedOperation memory) {
+        return failedOperations[queueIndex];
+    }
+
+    /**
+     * @notice Get the aToken shares for an intent
+     * @param intentId The intent ID
+     * @return The aToken shares held for this intent
+     */
+    function getIntentShares(bytes32 intentId) external view returns (uint256) {
+        return intentShares[intentId];
+    }
+
+    /**
+     * @notice Check if a queue index has an active failed operation
+     * @param queueIndex The index to check
+     * @return True if the index has an active operation (non-zero intentId)
+     */
+    function isQueueIndexActive(uint256 queueIndex) external view returns (bool) {
+        return failedOperations[queueIndex].intentId != bytes32(0);
     }
 }
