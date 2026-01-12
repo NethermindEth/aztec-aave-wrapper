@@ -747,7 +747,7 @@ cd target && forge test --match-test test_positionValue -vv
 
 ---
 
-## Phase 5: E2E Integration Testing
+## Phase 5: E2E Integration Testing **COMPLETE**
 
 Implement comprehensive end-to-end tests orchestrating all three layers with real Aztec PXE and Wormhole testnet (integration suite) + mocks (CI suite).
 
@@ -872,9 +872,9 @@ cd e2e && bun run test --match "deadline refund"
 
 ---
 
-### Step 5: Test failure scenarios with retry
+### Step 5: Test failure scenarios with retry **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Test edge cases: Aave failures with retry queue, replay attacks, deadline expiry.
@@ -926,9 +926,9 @@ make build && make test && make e2e  # All pass
 grep -r "secret\|denomination" docs/ | wc -l  # Should be 0 (removed alternative approach)
 ```
 
-### Step 1: Update documentation with implementation notes
+### Step 1: Update documentation with implementation notes **COMPLETE**
 
-**Status**: NOT STARTED
+**Status**: COMPLETE
 
 #### Goal
 Document implementation decisions, deviations from spec, and lessons learned.
