@@ -615,24 +615,21 @@ cd target && forge test --match-test test_replayProtection -vvv
 
 ---
 
-### Step 2: Add retry queue state structures **COMPLETE**
+### Step 2: Add retry queue state structures
 
-**Status**: IMPLEMENTED
+**Status**: NOT IMPLEMENTED
 
 #### Goal
 Implement on-chain unlimited retry queue for failed operations with original caller tracking.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with retry queue structures (failedOperations, intentShares, nextQueueIndex, queueLength)
-- `target/contracts/types/FailedOperation.sol` - [EXISTS] FailedOperation struct and OperationType enum defined
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, no retry queue structures
+- `target/contracts/types/FailedOperation.sol` - [DOES NOT EXIST] Need to define struct
 
-Implementation includes:
-- FailedOperation struct with operationType, intentId, ownerHash, asset, amount, failedAt, retryCount, originalCaller, errorReason
-- failedOperations mapping (uint256 => FailedOperation)
-- intentShares mapping for per-intent aToken tracking
-- nextQueueIndex and queueLength counters
-- View functions: getFailedOperation, getIntentShares, isQueueIndexActive
-- Events: OperationQueued, OperationRetried, OperationRemoved
+Current contract does NOT have:
+- FailedOperation struct
+- failedOperations mapping
+- intentShares mapping for per-intent tracking
 
 #### Validation
 ```bash
@@ -645,26 +642,24 @@ cd target && forge test --match-test test_queueStructures -vv
 
 ---
 
-### Step 3: Implement consumeAndExecuteDeposit with denormalization and retry queue **COMPLETE**
+### Step 3: Implement consumeAndExecuteDeposit with denormalization and retry queue
 
-**Status**: IMPLEMENTED
+**Status**: PARTIALLY IMPLEMENTED (stub exists)
 
 #### Goal
 Implement deposit execution: receive tokens from Wormhole, denormalize using original decimals, supply to Aave, track per-intent shares, send confirmation back (spec.md §4.1 Step 3-4). On failure, add to retry queue.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with consumeAndExecuteDeposit fully implemented
-- `target/test/Executor.t.sol` - [EXISTS] Tests for deposit functionality
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, receiveDeposit stub exists
+- `target/test/Executor.deposit.t.sol` - [DOES NOT EXIST] Tests needed
 
-Implementation includes:
-- VAA parsing and verification via Wormhole core contract
-- Replay protection with consumedVAAs mapping
-- Emitter chain/address verification
-- Amount denormalization from Wormhole's 8 decimals to original token decimals
-- Aave supply with try/catch for retry queue fallback
-- Per-intent share tracking via intentShares mapping
-- DepositExecuted event emission on success
-- Automatic queueing of failed operations with error reason tracking
+Current receiveDeposit stub does NOT:
+- Parse Wormhole token transfers
+- Denormalize amounts
+- Integrate with Aave
+- Track per-intent shares
+- Send confirmations back
+- Handle failures with retry queue
 
 #### Validation
 ```bash
@@ -681,23 +676,16 @@ cd target && forge test --match-test test_denormalization -vvv
 
 ---
 
-### Step 4: Implement retryFailedOperation **COMPLETE**
+### Step 4: Implement retryFailedOperation
 
-**Status**: IMPLEMENTED
+**Status**: NOT IMPLEMENTED
 
 #### Goal
 Allow original caller to retry failed operations from the queue.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with retryFailedOperation fully implemented
-- `target/test/Executor.t.sol` - [EXISTS] Tests for retry functionality (in main test file)
-
-Implementation includes:
-- Queue index validation (reverts with QueueIndexNotActive if no active operation)
-- Original caller verification (reverts with NotOriginalCaller if different address)
-- Deposit retry logic with Aave supply and proper state tracking
-- Success path: removes from queue, updates deposits/intentShares, emits events
-- Failure path: updates retryCount, failedAt timestamp, and errorReason
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, function not present
+- `target/test/Executor.retry.t.sol` - [DOES NOT EXIST] Tests needed
 
 #### Validation
 ```bash
@@ -736,22 +724,16 @@ cd target && forge test --match-test test_withdraw_insufficientShares -vvv
 
 ---
 
-### Step 6: Add position query functions **COMPLETE**
+### Step 6: Add position query functions
 
-**Status**: IMPLEMENTED
+**Status**: NOT IMPLEMENTED
 
 #### Goal
 Implement position queries that show per-intent shares and current value per spec.md §3.1.
 
 #### Files
-- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] with position query functions implemented
-- Uses ILendingPool interface for aToken address lookup and normalized income
-
-Implementation includes:
-- getPositionValue(intentId, asset): Returns shares and current value including yield
-- getATokenAddress(asset): Returns the aToken address for an asset from Aave reserve data
-- getTotalPositionValue(asset): Returns total shares and value held by the contract
-- Internal RAY math functions (_rayMul, _rayDiv) for Aave yield calculations
+- `target/contracts/AaveExecutorTarget.sol` - [EXISTS] at target/src/AaveExecutorTarget.sol, query functions not present
+- `target/contracts/interfaces/IAToken.sol` - [DOES NOT EXIST] Import Aave aToken interface
 
 #### Validation
 ```bash
@@ -777,32 +759,27 @@ make deploy-local
 make e2e
 ```
 
-### Step 1: Setup E2E test infrastructure with separate test suites **COMPLETE**
+### Step 1: Setup E2E test infrastructure with separate test suites
 
-**Status**: IMPLEMENTED
-
-The E2E test infrastructure is now complete with:
-- Test harness (setup.ts) with PXE client, chain clients, and account management
-- Configuration system (config.ts) supporting local/testnet environments and mock/integration modes
-- Aztec utilities (utils/aztec.ts) for note querying and contract interaction
-- Wormhole mock utilities (utils/wormhole-mock.ts) for local testing
-- Wormhole testnet utilities (utils/wormhole-testnet.ts) for integration tests
-- Custom Vitest matchers (vitest.setup.ts) for field/hash/address validation
-- Infrastructure tests (setup.test.ts) verifying all components
+**Status**: PARTIALLY IMPLEMENTED (basic e2e structure exists)
 
 #### Goal
 Create test harness with deployed contracts, funded accounts, and helper utilities. Configure separate unit (mock) and integration (Wormhole testnet) suites.
 
 #### Files
-- `e2e/src/setup.ts` - [EXISTS] Complete test harness with PXE client, chain clients, and account management
-- `e2e/src/utils/aztec.ts` - [EXISTS] Aztec PXE interaction helpers
-- `e2e/src/utils/wormhole-mock.ts` - [EXISTS] Wormhole VAA mocking for unit tests
-- `e2e/src/utils/wormhole-testnet.ts` - [EXISTS] Real Wormhole testnet interaction
-- `e2e/src/config.ts` - [EXISTS] Environment configuration with local/testnet support
-- `e2e/vitest.config.ts` - [EXISTS] Vitest configuration with test modes
-- `e2e/src/vitest.setup.ts` - [EXISTS] Global setup with custom matchers
-- `e2e/src/setup.test.ts` - [EXISTS] Infrastructure verification tests
-- `e2e/src/e2e.test.ts` - [EXISTS] E2E flow tests (needs Wormhole integration)
+- `e2e/src/setup.ts` - [DOES NOT EXIST] Deployment and setup utilities needed
+- `e2e/src/utils/aztec.ts` - [DOES NOT EXIST] Aztec PXE interaction helpers needed
+- `e2e/src/utils/wormhole-mock.ts` - [DOES NOT EXIST] Wormhole VAA mocking for unit tests
+- `e2e/src/utils/wormhole-testnet.ts` - [DOES NOT EXIST] Real Wormhole testnet interaction
+- `e2e/src/config.ts` - [DOES NOT EXIST] Environment configuration needed
+- `e2e/jest.config.js` - [DOES NOT EXIST] Test suite configuration needed
+- `e2e/src/e2e.test.ts` - [EXISTS] Basic test structure exists but needs comprehensive updates
+
+Current e2e tests in `e2e/src/e2e.test.ts` have basic deposit/withdraw flow tests but do NOT:
+- Separate mock vs testnet configurations
+- Include Wormhole integration
+- Verify privacy properties
+- Test failure scenarios comprehensively
 
 #### Validation
 ```bash
