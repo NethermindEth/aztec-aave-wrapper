@@ -384,10 +384,10 @@ install:
 	bun install
 	@echo ""
 	@echo "Installing L1 Foundry dependencies..."
-	cd $(L1_DIR) && forge install --no-commit
+	cd $(L1_DIR) && forge install
 	@echo ""
 	@echo "Installing Target chain Foundry dependencies..."
-	cd $(TARGET_DIR) && forge install --no-commit
+	cd $(TARGET_DIR) && forge install
 	@echo ""
 	@echo -e "$(GREEN)All dependencies installed!$(NC)"
 	@echo ""
