@@ -3,6 +3,7 @@ pragma solidity ^0.8.33;
 
 import {IAztecOutbox} from "./interfaces/IAztecOutbox.sol";
 import {IWormholeTokenBridge} from "./interfaces/IWormholeTokenBridge.sol";
+import {IWormholeRelayer} from "./interfaces/IWormholeRelayer.sol";
 import {DepositIntent, WithdrawIntent, IntentLib} from "./types/Intent.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -51,6 +52,12 @@ contract AztecAavePortalL1 {
 
     /// @notice Maximum allowed deadline (24 hours)
     uint256 public constant MAX_DEADLINE = 24 hours;
+
+    // ============ Wormhole Configuration ============
+
+    /// @notice Gas limit for executing operations on target chain
+    /// @dev 200k should be sufficient for Aave withdraw + token bridge
+    uint256 public constant TARGET_GAS_LIMIT = 200_000;
 
     // ============ State ============
 
@@ -201,7 +208,92 @@ contract AztecAavePortalL1 {
         );
     }
 
-    // TODO: Implement executeWithdraw
+    /**
+     * @notice Execute a withdrawal intent by consuming L2->L1 message and sending to target chain
+     * @param intent The withdrawal intent from L2
+     * @param l2BlockNumber The L2 block number where the message was created
+     * @param leafIndex The index of the message in the L2 block's message tree
+     * @param siblingPath Merkle proof path from leaf to root
+     * @dev This function can be called by anyone (relayer model)
+     *
+     * Flow:
+     * 1. Validate deadline is within acceptable bounds
+     * 2. Consume L2->L1 message from Aztec outbox with proof
+     * 3. Check for replay attacks
+     * 4. Send withdrawal request to target chain via Wormhole Relayer
+     *
+     * Privacy: Uses ownerHash instead of owner address to prevent identity linkage
+     *
+     * Note: Unlike deposits, withdrawals use Wormhole Relayer (not Token Bridge) since
+     * no tokens are sent from L1 to target - the target executor will withdraw from Aave
+     * and bridge tokens back via Token Bridge.
+     */
+    function executeWithdraw(
+        WithdrawIntent calldata intent,
+        uint256 l2BlockNumber,
+        uint256 leafIndex,
+        bytes32[] calldata siblingPath
+    ) external payable {
+        // Step 1: Check for replay attack first (cheapest check, prevents wasted computation)
+        if (consumedIntents[intent.intentId]) {
+            revert IntentAlreadyConsumed(intent.intentId);
+        }
+
+        // Step 2: Check deadline hasn't passed
+        if (block.timestamp >= intent.deadline) {
+            revert DeadlinePassed();
+        }
+
+        // Step 3: Validate deadline is within acceptable bounds
+        _validateDeadline(intent.deadline);
+
+        // Step 4: Compute message hash for outbox consumption
+        // Must match the L2 encoding exactly
+        bytes32 messageHash = IntentLib.hashWithdrawIntent(intent);
+
+        // Step 5: Consume the L2->L1 message from Aztec outbox
+        // This will revert if the message doesn't exist or proof is invalid
+        bool consumed = IAztecOutbox(aztecOutbox).consume(
+            messageHash,
+            l2BlockNumber,
+            leafIndex,
+            siblingPath
+        );
+        require(consumed, "Failed to consume outbox message");
+
+        // Step 6: Mark intent as consumed for replay protection
+        // CRITICAL: Must be set BEFORE external calls to prevent reentrancy
+        consumedIntents[intent.intentId] = true;
+
+        // Step 7: Encode withdrawal payload for target executor
+        bytes memory payload = IntentLib.encodeWithdrawIntent(intent);
+
+        // Step 8: Send withdrawal request to target chain via Wormhole Relayer
+        // Note: msg.value should cover Wormhole relayer fees
+        // We use sendPayloadToEvm since we're only sending a message (no tokens)
+        // The target executor will withdraw from Aave and bridge tokens back
+        IWormholeRelayer(wormholeRelayer).sendPayloadToEvm{value: msg.value}(
+            targetChainId,
+            _bytes32ToAddress(targetExecutor),
+            payload,
+            0, // receiverValue - no native tokens needed on target
+            TARGET_GAS_LIMIT
+        );
+
+        emit WithdrawInitiated(intent.intentId, intent.amount);
+    }
+
+    // ============ Internal Helper Functions ============
+
+    /**
+     * @notice Convert bytes32 to address (takes last 20 bytes)
+     * @param _bytes32 The bytes32 value to convert
+     * @return The address
+     */
+    function _bytes32ToAddress(bytes32 _bytes32) internal pure returns (address) {
+        return address(uint160(uint256(_bytes32)));
+    }
+
     // TODO: Implement receiveWormholeMessages
     // TODO: Implement completeTransferWithPayload
 }

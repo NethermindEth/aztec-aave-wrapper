@@ -451,18 +451,16 @@ cd l1 && forge test --match-test test_deadlineValidation -vvv
 
 ---
 
-### Step 2: Add Wormhole token bridging with original decimals
+### Step 2: Add Wormhole token bridging with original decimals **COMPLETE**
 
-**Status**: NOT IMPLEMENTED
+**Status**: COMPLETE
 
 #### Goal
 Integrate Wormhole transferTokensWithPayload to bridge tokens and message to target chain, encoding original decimals for denormalization (spec.md §4.1 Step 2, §6 Mode B).
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, needs Wormhole integration
-- `l1/contracts/interfaces/IWormholeTokenBridge.sol` - [DOES NOT EXIST] Need to add interface
-
-Current portal does NOT integrate with Wormhole at all.
+- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] Wormhole integration complete
+- `l1/contracts/interfaces/IWormholeTokenBridge.sol` - [EXISTS] Interface added
 
 #### Validation
 ```bash
@@ -479,18 +477,16 @@ cd l1 && forge test --match-test test_decimals_encoding -vvv
 
 ---
 
-### Step 3: Implement executeWithdraw with Wormhole messaging
+### Step 3: Implement executeWithdraw with Wormhole messaging **COMPLETE**
 
-**Status**: PARTIALLY IMPLEMENTED (basic structure exists)
+**Status**: COMPLETE
 
 #### Goal
 Implement executeWithdraw to send withdrawal requests to target chain per spec.md §4.2 Step 2.
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, executeWithdraw stub exists
-- `l1/test/Portal.executeWithdraw.t.sol` - [DOES NOT EXIST] Tests need to be added
-
-Current executeWithdraw is a stub without Wormhole integration.
+- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] executeWithdraw implemented with Wormhole Relayer
+- `l1/test/Portal.executeWithdraw.t.sol` - [EXISTS] Comprehensive tests added
 
 #### Validation
 ```bash
