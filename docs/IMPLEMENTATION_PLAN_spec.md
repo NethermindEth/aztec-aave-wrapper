@@ -552,14 +552,16 @@ cd l1 && forge test --match-test test_completeWithdrawal -vvv
 
 ### Step 6: Add emergency pause and admin functions **COMPLETE**
 
-**Status**: IMPLEMENTED
+**Status**: NOT IMPLEMENTED
 
 #### Goal
 Add safety mechanisms: pause (blocks new operations only), emergency withdrawal, admin functions.
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] Inherits Ownable2Step and Pausable, implements pause/unpause and emergencyWithdraw
-- `l1/test/Portal.admin.t.sol` - [EXISTS] Comprehensive tests for admin functionality
+- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, no Pausable or Ownable imports
+- `l1/test/Portal.admin.t.sol` - [DOES NOT EXIST] Test admin functions
+
+Current contract does not inherit from Pausable or Ownable.
 
 #### Validation
 ```bash
@@ -584,7 +586,7 @@ cd target && forge test -vv
 cd target && forge coverage
 ```
 
-### Step 1: Implement VAA verification and replay protection
+### Step 1: Implement VAA verification and replay protection **COMPLETE**
 
 **Status**: PARTIALLY IMPLEMENTED (basic structure exists)
 

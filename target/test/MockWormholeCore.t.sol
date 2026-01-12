@@ -14,6 +14,7 @@ contract MockWormholeCoreTest is Test {
     MockWormholeCore public wormholeCore;
 
     uint16 public constant TARGET_CHAIN_ID = 23; // Arbitrum
+    uint16 public constant SOURCE_CHAIN_ID = 2; // Ethereum
 
     function setUp() public {
         wormholeCore = new MockWormholeCore(TARGET_CHAIN_ID);
@@ -73,49 +74,86 @@ contract MockWormholeCoreTest is Test {
         uint8 consistencyLevel = 15;
 
         // Just verify the message publishes successfully
-        // (event testing would require duplicating the event definition)
         uint64 sequence = wormholeCore.publishMessage(nonce, payload, consistencyLevel);
         assertEq(sequence, 0);
     }
 
-    // ============ VAA Parsing Tests ============
+    // ============ VAA Encoding/Parsing Tests ============
+
+    function test_EncodeMockVAA() public view {
+        uint16 emitterChain = SOURCE_CHAIN_ID;
+        bytes32 emitterAddress = bytes32(uint256(uint160(address(0x1234))));
+        uint64 sequence = 42;
+        bytes memory payload = abi.encode("test payload");
+
+        bytes memory vaa = wormholeCore.encodeMockVAA(emitterChain, emitterAddress, sequence, payload);
+
+        // VAA format: chainId(2) + emitterAddress(32) + sequence(8) + payload
+        assertEq(vaa.length, 2 + 32 + 8 + payload.length);
+    }
 
     function test_ParseAndVerifyVM_ValidVAA() public view {
-        // Create a simple VAA (just sequence as bytes32)
+        uint16 emitterChain = SOURCE_CHAIN_ID;
+        bytes32 emitterAddress = bytes32(uint256(uint160(address(0x1234))));
         uint64 sequence = 42;
-        bytes memory vaa = abi.encodePacked(bytes32(uint256(sequence)));
+        bytes memory payload = abi.encode("test payload");
+
+        bytes memory vaa = wormholeCore.encodeMockVAA(emitterChain, emitterAddress, sequence, payload);
 
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormholeCore.parseAndVerifyVM(vaa);
 
         assertTrue(valid);
         assertEq(reason, "");
+        assertEq(vm.emitterChainId, emitterChain);
+        assertEq(vm.emitterAddress, emitterAddress);
         assertEq(vm.sequence, sequence);
         assertEq(vm.version, 1);
-        assertEq(vm.emitterChainId, TARGET_CHAIN_ID);
         assertEq(vm.consistencyLevel, 1);
         assertEq(vm.hash, keccak256(vaa));
     }
 
-    function test_ParseAndVerifyVM_InvalidVAA() public view {
-        // Invalid VAA (wrong length)
+    function test_ParseAndVerifyVM_InvalidVAA_TooShort() public view {
         bytes memory invalidVaa = abi.encodePacked(bytes16(0));
 
         (, bool valid, string memory reason) = wormholeCore.parseAndVerifyVM(invalidVaa);
 
         assertFalse(valid);
-        assertEq(reason, "Invalid VAA format");
+        assertEq(reason, "VAA too short");
+    }
+
+    function test_ParseAndVerifyVM_RejectMode() public {
+        // Enable rejection mode
+        wormholeCore.setRejectAllVAAs(true, "Invalid guardian signatures");
+
+        bytes memory vaa = wormholeCore.encodeMockVAA(SOURCE_CHAIN_ID, bytes32(0), 1, "test");
+
+        (, bool valid, string memory reason) = wormholeCore.parseAndVerifyVM(vaa);
+
+        assertFalse(valid);
+        assertEq(reason, "Invalid guardian signatures");
+
+        // Disable rejection mode
+        wormholeCore.setRejectAllVAAs(false, "");
+
+        (, valid,) = wormholeCore.parseAndVerifyVM(vaa);
+        assertTrue(valid);
     }
 
     function test_ParseVM_ValidVAA() public view {
+        uint16 emitterChain = SOURCE_CHAIN_ID;
+        bytes32 emitterAddress = bytes32(uint256(uint160(address(0x5678))));
         uint64 sequence = 99;
-        bytes memory vaa = abi.encodePacked(bytes32(uint256(sequence)));
+        bytes memory payload = abi.encode("parse test");
+
+        bytes memory vaa = wormholeCore.encodeMockVAA(emitterChain, emitterAddress, sequence, payload);
 
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormholeCore.parseVM(vaa);
 
         assertTrue(valid);
         assertEq(reason, "");
+        assertEq(vm.emitterChainId, emitterChain);
+        assertEq(vm.emitterAddress, emitterAddress);
         assertEq(vm.sequence, sequence);
-        assertEq(vm.hash, keccak256(vaa));
     }
 
     function test_ParseVM_InvalidVAA() public view {
@@ -124,7 +162,7 @@ contract MockWormholeCoreTest is Test {
         (, bool valid, string memory reason) = wormholeCore.parseVM(invalidVaa);
 
         assertFalse(valid);
-        assertEq(reason, "Invalid VAA format");
+        assertEq(reason, "VAA too short");
     }
 
     // ============ Guardian Set Tests ============
@@ -159,20 +197,6 @@ contract MockWormholeCoreTest is Test {
         assertEq(guardianSet.keys[2], newGuardians[2]);
     }
 
-    // ============ Mock VAA Generation Tests ============
-
-    function test_GenerateMockVAA() public view {
-        uint16 emitterChain = 2; // Ethereum
-        bytes32 emitterAddress = bytes32(uint256(uint160(address(0x1234))));
-        uint64 sequence = 42;
-        bytes memory payload = abi.encode("test payload");
-
-        bytes memory vaa = wormholeCore.generateMockVAA(emitterChain, emitterAddress, sequence, payload);
-
-        // Mock VAA should just be the sequence encoded as bytes32
-        assertEq(vaa, abi.encodePacked(bytes32(uint256(sequence))));
-    }
-
     // ============ Integration Tests ============
 
     function test_Integration_PublishAndParse() public {
@@ -181,13 +205,15 @@ contract MockWormholeCoreTest is Test {
         uint64 publishedSeq = wormholeCore.publishMessage(0, payload, 1);
 
         // Generate a mock VAA for this sequence
-        bytes memory vaa = wormholeCore.generateMockVAA(2, bytes32(0), publishedSeq, payload);
+        bytes32 emitterAddress = bytes32(uint256(uint160(address(this))));
+        bytes memory vaa = wormholeCore.encodeMockVAA(SOURCE_CHAIN_ID, emitterAddress, publishedSeq, payload);
 
         // Parse and verify the VAA
         (IWormhole.VM memory vm, bool valid,) = wormholeCore.parseAndVerifyVM(vaa);
 
         assertTrue(valid);
         assertEq(vm.sequence, publishedSeq);
+        assertEq(vm.emitterAddress, emitterAddress);
     }
 
     function test_Integration_MultipleMessages() public {
@@ -199,5 +225,18 @@ contract MockWormholeCoreTest is Test {
         }
 
         assertEq(wormholeCore.getCurrentSequence(), 10);
+    }
+
+    // ============ Payload Extraction Tests ============
+
+    function test_PayloadExtraction() public view {
+        bytes memory originalPayload = abi.encode("complex", uint256(123), address(0x9999));
+        bytes memory vaa = wormholeCore.encodeMockVAA(SOURCE_CHAIN_ID, bytes32(0), 1, originalPayload);
+
+        (IWormhole.VM memory vm, bool valid,) = wormholeCore.parseAndVerifyVM(vaa);
+
+        assertTrue(valid);
+        assertEq(vm.payload.length, originalPayload.length);
+        assertEq(keccak256(vm.payload), keccak256(originalPayload));
     }
 }

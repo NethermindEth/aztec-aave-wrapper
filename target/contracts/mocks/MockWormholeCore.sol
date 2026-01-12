@@ -6,13 +6,13 @@ import {IWormhole} from "../interfaces/IWormhole.sol";
 /**
  * @title MockWormholeCore
  * @notice Mock implementation of Wormhole Core for local testing on target chain
- * @dev Provides VAA parsing and verification with signature bypass mode for testing
+ * @dev Provides VAA parsing and verification with configurable behavior for testing
  *
  * Features:
- * - Signature bypass mode (all VAAs considered valid in devnet)
- * - VAA parsing without cryptographic verification
+ * - Configurable emitter chain and address
+ * - Configurable validity mode (for testing rejection scenarios)
+ * - VAA encoding/decoding helpers for tests
  * - Message publishing with sequence tracking
- * - Guardian set management (mocked)
  *
  * Security: ONLY FOR TESTING - bypasses all signature verification
  */
@@ -34,6 +34,12 @@ contract MockWormholeCore is IWormhole {
     /// @notice Mock guardian set
     GuardianSet private currentGuardianSet;
 
+    /// @notice Whether to return valid=false for all VAAs (for testing rejection)
+    bool public rejectAllVAAs;
+
+    /// @notice Custom rejection reason for testing
+    string public rejectionReason;
+
     // ============ Events ============
 
     event LogMessagePublished(
@@ -45,6 +51,8 @@ contract MockWormholeCore is IWormhole {
     constructor(uint16 chainId_) {
         _chainId = chainId_;
         guardianSetIndex = 0;
+        rejectAllVAAs = false;
+        rejectionReason = "";
 
         // Initialize with a mock guardian set
         address[] memory guardians = new address[](1);
@@ -56,7 +64,7 @@ contract MockWormholeCore is IWormhole {
 
     /**
      * @notice Parse and verify a VAA
-     * @dev In mock mode, we skip signature verification and just parse the structure
+     * @dev Parses the VAA structure and returns configurable validity
      * @param encodedVM The encoded VAA bytes
      */
     function parseAndVerifyVM(bytes calldata encodedVM)
@@ -65,29 +73,37 @@ contract MockWormholeCore is IWormhole {
         override
         returns (VM memory vm, bool valid, string memory reason)
     {
-        // For simplicity in testing, we accept a minimal VAA format:
-        // bytes32(sequence) as the VAA
-        if (encodedVM.length == 32) {
-            uint64 seq = uint64(uint256(bytes32(encodedVM)));
-
-            vm = VM({
-                version: 1,
-                timestamp: uint32(block.timestamp),
-                nonce: 0,
-                emitterChainId: _chainId,
-                emitterAddress: bytes32(uint256(uint160(address(this)))),
-                sequence: seq,
-                consistencyLevel: 1,
-                payload: encodedVM,
-                guardianSetIndex: guardianSetIndex,
-                signatures: new Signature[](0),
-                hash: keccak256(encodedVM)
-            });
-
-            return (vm, true, "");
+        // Check if we should reject all VAAs (for testing)
+        if (rejectAllVAAs) {
+            return (vm, false, rejectionReason);
         }
 
-        return (vm, false, "Invalid VAA format");
+        // Parse the mock VAA format
+        // Format: emitterChainId (2) + emitterAddress (32) + sequence (8) + payload (remaining)
+        if (encodedVM.length < 42) {
+            return (vm, false, "VAA too short");
+        }
+
+        uint16 emitterChainId = uint16(bytes2(encodedVM[0:2]));
+        bytes32 emitterAddress = bytes32(encodedVM[2:34]);
+        uint64 seq = uint64(bytes8(encodedVM[34:42]));
+        bytes memory payload = encodedVM[42:];
+
+        vm = VM({
+            version: 1,
+            timestamp: uint32(block.timestamp),
+            nonce: 0,
+            emitterChainId: emitterChainId,
+            emitterAddress: emitterAddress,
+            sequence: seq,
+            consistencyLevel: 1,
+            payload: payload,
+            guardianSetIndex: guardianSetIndex,
+            signatures: new Signature[](0),
+            hash: keccak256(encodedVM)
+        });
+
+        return (vm, true, "");
     }
 
     /**
@@ -160,44 +176,58 @@ contract MockWormholeCore is IWormhole {
         override
         returns (VM memory vm, bool valid, string memory reason)
     {
-        // Simple parsing - in production this would verify signatures
-        if (encodedVM.length == 32) {
-            uint64 seq = uint64(uint256(bytes32(encodedVM)));
-
-            vm = VM({
-                version: 1,
-                timestamp: 0, // Mock timestamp
-                nonce: 0,
-                emitterChainId: 0,
-                emitterAddress: bytes32(0),
-                sequence: seq,
-                consistencyLevel: 1,
-                payload: encodedVM,
-                guardianSetIndex: 0,
-                signatures: new Signature[](0),
-                hash: keccak256(encodedVM)
-            });
-
-            return (vm, true, "");
+        if (encodedVM.length < 42) {
+            return (vm, false, "VAA too short");
         }
 
-        return (vm, false, "Invalid VAA format");
+        uint16 emitterChainId;
+        bytes32 emitterAddress;
+        uint64 seq;
+
+        assembly {
+            emitterChainId := shr(240, mload(add(encodedVM, 32)))
+            emitterAddress := mload(add(encodedVM, 34))
+            seq := shr(192, mload(add(encodedVM, 66)))
+        }
+
+        bytes memory payload = new bytes(encodedVM.length - 42);
+        for (uint256 i = 0; i < payload.length; i++) {
+            payload[i] = encodedVM[42 + i];
+        }
+
+        vm = VM({
+            version: 1,
+            timestamp: 0,
+            nonce: 0,
+            emitterChainId: emitterChainId,
+            emitterAddress: emitterAddress,
+            sequence: seq,
+            consistencyLevel: 1,
+            payload: payload,
+            guardianSetIndex: 0,
+            signatures: new Signature[](0),
+            hash: keccak256(encodedVM)
+        });
+
+        return (vm, true, "");
     }
 
     // ============ Mock-Specific Functions ============
 
     /**
-     * @notice Generate a mock VAA for testing
-     * @dev Returns a simple encoded VAA (just the sequence number)
+     * @notice Encode a mock VAA for testing
+     * @param emitterChainId The chain ID to include in the VAA
+     * @param emitterAddress The emitter address to include
+     * @param seq The sequence number
+     * @param payload The message payload
+     * @return The encoded VAA bytes
      */
-    function generateMockVAA(
-        uint16 emitterChainId,
-        bytes32 emitterAddress,
-        uint64 seq,
-        bytes memory payload
-    ) external pure returns (bytes memory) {
-        // For testing, we just return the sequence as bytes32
-        return abi.encodePacked(bytes32(uint256(seq)));
+    function encodeMockVAA(uint16 emitterChainId, bytes32 emitterAddress, uint64 seq, bytes memory payload)
+        external
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodePacked(emitterChainId, emitterAddress, seq, payload);
     }
 
     /**
@@ -213,5 +243,15 @@ contract MockWormholeCore is IWormhole {
     function updateGuardianSet(address[] memory newGuardians) external {
         guardianSetIndex++;
         currentGuardianSet = GuardianSet({keys: newGuardians, expirationTime: type(uint32).max});
+    }
+
+    /**
+     * @notice Set whether to reject all VAAs (for testing invalid VAA scenarios)
+     * @param reject True to reject all VAAs, false to accept
+     * @param reason The rejection reason to return
+     */
+    function setRejectAllVAAs(bool reject, string memory reason) external {
+        rejectAllVAAs = reject;
+        rejectionReason = reason;
     }
 }
