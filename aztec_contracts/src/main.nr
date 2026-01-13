@@ -18,7 +18,6 @@ use crate::types::DepositIntent;
 /// * `asset` - Asset address on target chain
 /// * `amount` - Deposit amount
 /// * `original_decimals` - Original token decimals for Wormhole
-/// * `target_chain_id` - Target chain for the deposit
 /// * `deadline` - Intent expiration timestamp
 /// * `salt` - Random value for uniqueness
 ///
@@ -29,7 +28,6 @@ pub fn compute_intent_id(
     asset: Field,
     amount: u128,
     original_decimals: u8,
-    target_chain_id: u32,
     deadline: u64,
     salt: Field,
 ) -> Field {
@@ -40,7 +38,6 @@ pub fn compute_intent_id(
         asset,
         amount as Field,
         original_decimals as Field,
-        target_chain_id as Field,
         deadline as Field,
         salt,
     ])
@@ -72,7 +69,6 @@ pub fn compute_deposit_message_content(intent: DepositIntent, secret_hash: Field
         intent.asset,
         intent.amount as Field,
         intent.original_decimals as Field,
-        intent.target_chain_id as Field,
         intent.deadline as Field,
         intent.salt,
         secret_hash,
@@ -327,7 +323,6 @@ pub(crate) contract AaveWrapper {
     /// * `asset` - Token address on target chain (stored as Field)
     /// * `amount` - Amount of tokens to deposit (in smallest unit, must be > 0)
     /// * `original_decimals` - Original token decimals for Wormhole normalization
-    /// * `target_chain_id` - Wormhole chain ID of the target chain (e.g., 23 for Arbitrum)
     /// * `deadline` - Unix timestamp after which the intent expires (must be within bounds)
     /// * `secret_hash` - Hash of a secret known only to the user, used to claim the confirmation
     ///
@@ -343,7 +338,6 @@ pub(crate) contract AaveWrapper {
         asset: Field,
         amount: u128,
         original_decimals: u8,
-        target_chain_id: u32,
         deadline: u64,
         secret_hash: Field,
     ) -> pub Field {
@@ -369,15 +363,7 @@ pub(crate) contract AaveWrapper {
         // Compute unique intent_id using poseidon2 hash of all inputs
         // The caller is included so intent_id is bound to the user, but since
         // poseidon2 is one-way, the caller cannot be recovered from intent_id
-        let intent_id = compute_intent_id(
-            caller,
-            asset,
-            amount,
-            original_decimals,
-            target_chain_id,
-            deadline,
-            salt,
-        );
+        let intent_id = compute_intent_id(caller, asset, amount, original_decimals, deadline, salt);
 
         // Create the deposit intent struct for L2 to L1 message
         let intent = DepositIntent::new(
@@ -386,7 +372,6 @@ pub(crate) contract AaveWrapper {
             asset,
             amount,
             original_decimals,
-            target_chain_id,
             deadline,
             salt,
         );

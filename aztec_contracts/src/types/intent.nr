@@ -13,7 +13,7 @@ use dep::aztec::protocol_types::traits::{Deserialize, Serialize};
 /// - Field types (32 bytes each): intent_id, owner_hash, asset
 /// - u128 (16 bytes): amount
 /// - u8 (1 byte): original_decimals
-/// - Smaller types: target_chain_id (u32), deadline (u64)
+/// - u64 (8 bytes): deadline
 /// - Field (32 bytes): salt
 #[derive(Deserialize, Eq, Serialize)]
 pub struct DepositIntent {
@@ -27,8 +27,6 @@ pub struct DepositIntent {
     pub amount: u128,
     /// Original token decimals for Wormhole denormalization
     pub original_decimals: u8,
-    /// Wormhole chain ID of the target chain for deposit
-    pub target_chain_id: u32,
     /// Unix timestamp after which this intent expires
     pub deadline: u64,
     /// Random salt for intent uniqueness and replay protection
@@ -62,20 +60,10 @@ impl DepositIntent {
         asset: Field,
         amount: u128,
         original_decimals: u8,
-        target_chain_id: u32,
         deadline: u64,
         salt: Field,
     ) -> Self {
-        Self {
-            intent_id,
-            owner_hash,
-            asset,
-            amount,
-            original_decimals,
-            target_chain_id,
-            deadline,
-            salt,
-        }
+        Self { intent_id, owner_hash, asset, amount, original_decimals, deadline, salt }
     }
 }
 
