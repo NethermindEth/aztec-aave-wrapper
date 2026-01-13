@@ -50,23 +50,15 @@ export function assertNoteFields(
   if (expectedFields.nonce !== undefined) {
     expect(actualFields.nonce, "Note nonce should match").toBe(expectedFields.nonce);
   }
-  if (expectedFields.intentId !== undefined) {
-    expect(actualFields.intentId, "Note intent_id should match").toBe(expectedFields.intentId);
-  }
   if (expectedFields.assetId !== undefined) {
     expect(actualFields.assetId, "Note asset_id should match").toBe(expectedFields.assetId);
   }
   if (expectedFields.shares !== undefined) {
     expect(actualFields.shares, "Note shares should match").toBe(expectedFields.shares);
   }
-  if (expectedFields.originalDecimals !== undefined) {
-    expect(actualFields.originalDecimals, "Note original_decimals should match").toBe(
-      expectedFields.originalDecimals
-    );
-  }
-  if (expectedFields.targetChainId !== undefined) {
-    expect(actualFields.targetChainId, "Note target_chain_id should match").toBe(
-      expectedFields.targetChainId
+  if (expectedFields.aaveMarketId !== undefined) {
+    expect(actualFields.aaveMarketId, "Note aave_market_id should match").toBe(
+      expectedFields.aaveMarketId
     );
   }
   if (expectedFields.status !== undefined) {

@@ -314,7 +314,6 @@ unconstrained fn test_position_receipt_note_active_position() {
     let nonce: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let shares: u128 = 100_000_000;
-    let target_chain_id: u32 = 23;
     let status: u8 = PositionStatus::ACTIVE;
 
     let receipt = PositionReceiptNote {
@@ -322,7 +321,6 @@ unconstrained fn test_position_receipt_note_active_position() {
         nonce,
         asset_id,
         shares,
-        target_chain_id,
         aave_market_id: 0,
         status,
     };
@@ -331,7 +329,6 @@ unconstrained fn test_position_receipt_note_active_position() {
     assert(receipt.nonce == nonce, "Nonce mismatch");
     assert(receipt.asset_id == asset_id, "Asset ID mismatch");
     assert(receipt.shares == shares, "Shares mismatch");
-    assert(receipt.target_chain_id == target_chain_id, "Target chain ID mismatch");
     assert(receipt.status == PositionStatus::ACTIVE, "Status should be ACTIVE");
 }
 
@@ -345,7 +342,6 @@ unconstrained fn test_position_receipt_note_pending_withdraw() {
     let nonce: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let withdrawal_amount: u128 = 100_000_000; // Full withdrawal amount stored in shares
-    let target_chain_id: u32 = 23;
     let status: u8 = PositionStatus::PENDING_WITHDRAW;
 
     let receipt = PositionReceiptNote {
@@ -353,7 +349,6 @@ unconstrained fn test_position_receipt_note_pending_withdraw() {
         nonce,
         asset_id,
         shares: withdrawal_amount,
-        target_chain_id,
         aave_market_id: 0,
         status,
     };
@@ -375,7 +370,6 @@ unconstrained fn test_position_receipt_note_equality() {
         nonce: 0x123,
         asset_id: 1,
         shares: 1000,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
@@ -385,7 +379,6 @@ unconstrained fn test_position_receipt_note_equality() {
         nonce: 0x123,
         asset_id: 1,
         shares: 1000,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
@@ -395,7 +388,6 @@ unconstrained fn test_position_receipt_note_equality() {
         nonce: 0x456, // Different nonce
         asset_id: 1,
         shares: 1000,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };

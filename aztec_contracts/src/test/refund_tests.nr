@@ -86,7 +86,6 @@ unconstrained fn test_refund_note_preserves_position_details() {
     let original_nonce: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let shares: u128 = 1000000;
-    let target_chain_id: u32 = 23;
     let aave_market_id: Field = 0;
 
     // Create a PendingWithdraw receipt
@@ -95,7 +94,6 @@ unconstrained fn test_refund_note_preserves_position_details() {
         nonce: original_nonce,
         asset_id,
         shares,
-        target_chain_id,
         aave_market_id,
         status: PositionStatus::PENDING_WITHDRAW,
     };
@@ -107,7 +105,6 @@ unconstrained fn test_refund_note_preserves_position_details() {
         nonce: new_nonce,
         asset_id,
         shares,
-        target_chain_id,
         aave_market_id,
         status: PositionStatus::ACTIVE,
     };
@@ -116,10 +113,6 @@ unconstrained fn test_refund_note_preserves_position_details() {
     assert(refunded_receipt.owner == pending_receipt.owner, "Owner must be preserved");
     assert(refunded_receipt.asset_id == pending_receipt.asset_id, "Asset ID must be preserved");
     assert(refunded_receipt.shares == pending_receipt.shares, "Shares must be preserved");
-    assert(
-        refunded_receipt.target_chain_id == pending_receipt.target_chain_id,
-        "Target chain ID must be preserved",
-    );
     assert(
         refunded_receipt.aave_market_id == pending_receipt.aave_market_id,
         "Aave market ID must be preserved",
@@ -290,7 +283,6 @@ unconstrained fn test_refund_various_amounts() {
         nonce,
         asset_id: 1,
         shares: small_shares,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::PENDING_WITHDRAW,
     };
@@ -302,7 +294,6 @@ unconstrained fn test_refund_various_amounts() {
         nonce,
         asset_id: 1,
         shares: large_shares,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::PENDING_WITHDRAW,
     };
@@ -310,51 +301,6 @@ unconstrained fn test_refund_various_amounts() {
     // Both should be valid
     assert(receipt_small.shares == small_shares, "Small amount should be stored correctly");
     assert(receipt_large.shares == large_shares, "Large amount should be stored correctly");
-}
-
-/// Test that refund works across different target chains.
-#[test]
-unconstrained fn test_refund_various_chains() {
-    let owner = AztecAddress::from_field(0xdeadbeef);
-    let nonce: Field = 0x123;
-
-    // Arbitrum
-    let receipt_arb = PositionReceiptNote {
-        owner,
-        nonce,
-        asset_id: 1,
-        shares: 1000000,
-        target_chain_id: 23,
-        aave_market_id: 0,
-        status: PositionStatus::PENDING_WITHDRAW,
-    };
-
-    // Optimism
-    let receipt_opt = PositionReceiptNote {
-        owner,
-        nonce,
-        asset_id: 1,
-        shares: 1000000,
-        target_chain_id: 24,
-        aave_market_id: 0,
-        status: PositionStatus::PENDING_WITHDRAW,
-    };
-
-    // Base
-    let receipt_base = PositionReceiptNote {
-        owner,
-        nonce,
-        asset_id: 1,
-        shares: 1000000,
-        target_chain_id: 30,
-        aave_market_id: 0,
-        status: PositionStatus::PENDING_WITHDRAW,
-    };
-
-    // All should preserve their chain IDs
-    assert(receipt_arb.target_chain_id == 23, "Arbitrum chain ID preserved");
-    assert(receipt_opt.target_chain_id == 24, "Optimism chain ID preserved");
-    assert(receipt_base.target_chain_id == 30, "Base chain ID preserved");
 }
 
 // ============================================================================

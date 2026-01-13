@@ -5,12 +5,12 @@ use dep::aztec::{
 
 /// Represents a user's claim on an Aave position bridged from Aztec L2.
 ///
-/// This private note tracks ownership of deposited assets on the target chain (e.g., Arbitrum).
+/// This private note tracks ownership of deposited assets on L1 Aave.
 /// The note is created after a successful deposit confirmation and nullified upon withdrawal.
 ///
 /// Status values:
-/// - 0: PendingDeposit - Deposit initiated, awaiting target chain confirmation
-/// - 1: Active - Position is active on target chain Aave pool
+/// - 0: PendingDeposit - Deposit initiated, awaiting L1 confirmation
+/// - 1: Active - Position is active on L1 Aave pool
 /// - 2: PendingWithdraw - Withdrawal initiated, awaiting completion
 #[derive(Deserialize, Eq, Packable, Serialize)]
 #[note]
@@ -23,8 +23,6 @@ pub struct PositionReceiptNote {
     pub asset_id: Field,
     /// Number of shares/aTokens held in the Aave position
     pub shares: u128,
-    /// Wormhole chain ID of the target chain where funds are deposited
-    pub target_chain_id: u32,
     /// Optional Aave market identifier (set to 0 if not used)
     pub aave_market_id: Field,
     /// Current status of the position (0=PendingDeposit, 1=Active, 2=PendingWithdraw)
@@ -33,9 +31,9 @@ pub struct PositionReceiptNote {
 
 /// Status constants for PositionReceiptNote
 pub mod PositionStatus {
-    /// Deposit has been requested but not yet confirmed on target chain
+    /// Deposit has been requested but not yet confirmed on L1
     pub global PENDING_DEPOSIT: u8 = 0;
-    /// Position is active and earning yield on target chain
+    /// Position is active and earning yield on L1
     pub global ACTIVE: u8 = 1;
     /// Withdrawal has been requested but not yet completed
     pub global PENDING_WITHDRAW: u8 = 2;

@@ -255,8 +255,7 @@ unconstrained fn test_front_running_resistance() {
 
 /// Test that deposit and withdraw confirmation hashes produce identical outputs.
 ///
-/// After removing target_chain_id from both confirmation functions, deposit and
-/// withdraw confirmations use the same hash structure: (intent_id, asset_id, amount).
+/// Deposit and withdraw confirmations use the same hash structure: (intent_id, asset_id, amount).
 ///
 /// **Design Note**: This is acceptable because:
 /// 1. The intent_id is unique per operation (generated during deposit request)
@@ -383,7 +382,6 @@ unconstrained fn test_position_receipt_note_zero_shares() {
         nonce: 0x123,
         asset_id: 1,
         shares: 0,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };
@@ -401,7 +399,6 @@ unconstrained fn test_position_receipt_note_max_shares() {
         nonce: 0x123,
         asset_id: 1,
         shares: max_shares,
-        target_chain_id: 23,
         aave_market_id: 0,
         status: PositionStatus::ACTIVE,
     };

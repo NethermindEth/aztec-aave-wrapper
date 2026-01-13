@@ -42,8 +42,6 @@ export interface WithdrawRequestParams {
   amount: bigint;
   /** Asset ID (Field element) */
   assetId: bigint;
-  /** Target chain ID */
-  targetChainId: number;
   /** Deadline timestamp (seconds) */
   deadline: bigint;
   /** Secret hash for authorization */
@@ -267,7 +265,6 @@ export class WithdrawFlowOrchestrator {
       l2Request.intentId,
       params.assetId,
       targetExecute.withdrawnAmount,
-      params.targetChainId,
       secret
     );
 
@@ -440,7 +437,6 @@ export class WithdrawFlowOrchestrator {
     intentId: bigint,
     assetId: bigint,
     amount: bigint,
-    targetChainId: number,
     secret: bigint
   ): Promise<{ success: boolean; txHash?: string }> {
     // Type assertion for aztec.js contract
@@ -454,9 +450,10 @@ export class WithdrawFlowOrchestrator {
       const methods = contractWithWallet.methods;
 
       // Call finalize_withdraw
+      // Signature: finalize_withdraw(intent_id, asset_id, amount, secret, message_leaf_index)
       // message_leaf_index is 0 for mock mode (no real L1->L2 message)
       const tx = await methods
-        .finalize_withdraw(intentId, assetId, amount, targetChainId, secret, 0n)
+        .finalize_withdraw(intentId, assetId, amount, secret, 0n)
         .send()
         .wait();
 

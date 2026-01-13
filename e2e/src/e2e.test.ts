@@ -11,10 +11,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import {
-  WORMHOLE_CHAIN_IDS,
-  LOCAL_PRIVATE_KEYS,
-} from "@aztec-aave-wrapper/shared";
+import { LOCAL_PRIVATE_KEYS } from "@aztec-aave-wrapper/shared";
 import { createWalletClient, http, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -56,8 +53,6 @@ const TEST_CONFIG = {
   assetId: 1n,
   /** Original decimals for USDC */
   originalDecimals: 6,
-  /** Target chain ID (Arbitrum) */
-  targetChainId: WORMHOLE_CHAIN_IDS.LOCAL_TARGET,
 };
 
 // =============================================================================
@@ -329,12 +324,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const methods = userContract.methods as any;
 
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = methods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         secretHash
       );
@@ -481,12 +475,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       const methods = userContract.methods as any;
 
       // L2 accepts the deposit request - deadline validation happens at L1
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = methods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         expiredDeadline,
         secretHash
       );
@@ -543,12 +536,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       const methods = userContract.methods as any;
 
       // Create first deposit - this sets intent_status to PENDING_DEPOSIT
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = methods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         secretHash
       );
@@ -626,12 +618,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const methods = userContract.methods as any;
 
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = methods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         depositDeadline,
         depositSecretHash
       );
@@ -787,7 +778,6 @@ describe("Aztec Aave Wrapper E2E", () => {
             withdrawIntentId,
             TEST_CONFIG.assetId,
             TEST_CONFIG.withdrawAmount,
-            TEST_CONFIG.targetChainId,
             withdrawSecret,
             0n // message_leaf_index
           );
@@ -952,12 +942,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       const user2Methods = user2Contract.methods as any;
 
       // Create deposit calls for both users
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const userDepositCall = userMethods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         userSecretHash
       );
@@ -966,7 +955,6 @@ describe("Aztec Aave Wrapper E2E", () => {
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         user2SecretHash
       );
@@ -1037,12 +1025,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       const methods = userContract.methods as any;
 
       // Create three deposit calls with different secrets
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const deposit1Call = methods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         secretHash1
       );
@@ -1051,7 +1038,6 @@ describe("Aztec Aave Wrapper E2E", () => {
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount * 2n, // Different amount
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         secretHash2
       );
@@ -1060,7 +1046,6 @@ describe("Aztec Aave Wrapper E2E", () => {
         2n, // Different asset ID
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         secretHash3
       );
@@ -1130,12 +1115,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userMethods = userContract.methods as any;
 
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = userMethods.request_deposit(
         TEST_CONFIG.assetId,
         TEST_CONFIG.depositAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         userSecretHash
       );
@@ -1205,13 +1189,12 @@ describe("Aztec Aave Wrapper E2E", () => {
         user2Secrets.map((secret) => computeSecretHash(secret))
       );
 
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const userCalls = userSecretHashes.map((secretHash, i) =>
         userMethods.request_deposit(
           TEST_CONFIG.assetId,
           TEST_CONFIG.depositAmount + BigInt(i * 100),
           TEST_CONFIG.originalDecimals,
-          TEST_CONFIG.targetChainId,
           deadline,
           secretHash
         )
@@ -1222,7 +1205,6 @@ describe("Aztec Aave Wrapper E2E", () => {
           TEST_CONFIG.assetId,
           TEST_CONFIG.depositAmount + BigInt(i * 200 + 1000),
           TEST_CONFIG.originalDecimals,
-          TEST_CONFIG.targetChainId,
           deadline,
           secretHash
         )
@@ -1319,12 +1301,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       const userAmount = 1_000_000n;
       const user2Amount = 5_000_000n;
 
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const userDepositCall = userMethods.request_deposit(
         TEST_CONFIG.assetId,
         userAmount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         userSecretHash
       );
@@ -1333,7 +1314,6 @@ describe("Aztec Aave Wrapper E2E", () => {
         TEST_CONFIG.assetId,
         user2Amount,
         TEST_CONFIG.originalDecimals,
-        TEST_CONFIG.targetChainId,
         deadline,
         user2SecretHash
       );

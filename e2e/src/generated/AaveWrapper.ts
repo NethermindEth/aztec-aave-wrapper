@@ -149,11 +149,11 @@ nonce: {
     /** constructor(admin: struct, portal_address: struct) */
     constructor: ((admin: AztecAddressLike, portal_address: EthAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** finalize_deposit(intent_id: field, asset_id: field, shares: integer, target_chain_id: integer, secret: field, message_leaf_index: field) */
-    finalize_deposit: ((intent_id: FieldLike, asset_id: FieldLike, shares: (bigint | number), target_chain_id: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** finalize_deposit(intent_id: field, asset_id: field, shares: integer, secret: field, message_leaf_index: field) */
+    finalize_deposit: ((intent_id: FieldLike, asset_id: FieldLike, shares: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** finalize_withdraw(intent_id: field, asset_id: field, amount: integer, target_chain_id: integer, secret: field, message_leaf_index: field) */
-    finalize_withdraw: ((intent_id: FieldLike, asset_id: FieldLike, amount: (bigint | number), target_chain_id: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** finalize_withdraw(intent_id: field, asset_id: field, amount: integer, secret: field, message_leaf_index: field) */
+    finalize_withdraw: ((intent_id: FieldLike, asset_id: FieldLike, amount: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -161,8 +161,8 @@ nonce: {
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** request_deposit(asset: field, amount: integer, original_decimals: integer, target_chain_id: integer, deadline: integer, secret_hash: field) */
-    request_deposit: ((asset: FieldLike, amount: (bigint | number), original_decimals: (bigint | number), target_chain_id: (bigint | number), deadline: (bigint | number), secret_hash: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** request_deposit(asset: field, amount: integer, original_decimals: integer, deadline: integer, secret_hash: field) */
+    request_deposit: ((asset: FieldLike, amount: (bigint | number), original_decimals: (bigint | number), deadline: (bigint | number), secret_hash: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** request_withdraw(nonce: field, amount: integer, deadline: integer, secret_hash: field) */
     request_withdraw: ((nonce: FieldLike, amount: (bigint | number), deadline: (bigint | number), secret_hash: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

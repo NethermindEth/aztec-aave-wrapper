@@ -48,11 +48,9 @@ export enum PositionStatus {
 export interface ParsedPositionNote {
   owner: bigint;
   nonce: bigint;
-  intentId: bigint;
   assetId: bigint;
   shares: bigint;
-  originalDecimals: number;
-  targetChainId: number;
+  aaveMarketId: bigint;
   status: PositionStatus;
 }
 
@@ -161,11 +159,13 @@ export class AztecHelper {
   }
 
   /**
-   * Get a specific position note by intent ID.
+   * Get a specific position note by intent ID (stored as nonce).
+   *
+   * The intent_id is stored as the nonce field in the PositionReceiptNote.
    *
    * @param contract - AaveWrapper contract instance
    * @param owner - Owner wallet
-   * @param intentId - Intent ID to search for
+   * @param intentId - Intent ID to search for (matches the nonce field)
    * @returns Parsed position note or null if not found
    */
   async getPositionByIntentId(
@@ -174,7 +174,7 @@ export class AztecHelper {
     intentId: bigint
   ): Promise<ParsedPositionNote | null> {
     const notes = await this.getPositionNotes(contract, owner);
-    return notes.find((note) => note.intentId === intentId) || null;
+    return notes.find((note) => note.nonce === intentId) || null;
   }
 
   /**
@@ -183,21 +183,19 @@ export class AztecHelper {
   private parsePositionNote(note: Note): ParsedPositionNote {
     const items = note.items;
 
-    if (items.length < 8) {
+    if (items.length < 6) {
       throw new Error(
-        `Invalid position note: expected 8 fields, got ${items.length}`
+        `Invalid position note: expected 6 fields, got ${items.length}`
       );
     }
 
     return {
       owner: items[0]!.toBigInt(),
       nonce: items[1]!.toBigInt(),
-      intentId: items[2]!.toBigInt(),
-      assetId: items[3]!.toBigInt(),
-      shares: items[4]!.toBigInt(),
-      originalDecimals: Number(items[5]!.toBigInt()),
-      targetChainId: Number(items[6]!.toBigInt()),
-      status: Number(items[7]!.toBigInt()) as PositionStatus,
+      assetId: items[2]!.toBigInt(),
+      shares: items[3]!.toBigInt(),
+      aaveMarketId: items[4]!.toBigInt(),
+      status: Number(items[5]!.toBigInt()) as PositionStatus,
     };
   }
 

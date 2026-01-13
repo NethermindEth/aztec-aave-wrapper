@@ -55,7 +55,6 @@ describe("Helper Functions Tests", () => {
       const asset = 1n;
       const amount = 1000n;
       const originalDecimals = 6;
-      const targetChainId = 23;
       const deadline = 1700000000n;
       const salt = 42n;
 
@@ -64,7 +63,6 @@ describe("Helper Functions Tests", () => {
         asset,
         amount,
         originalDecimals,
-        targetChainId,
         deadline,
         salt
       );
@@ -85,7 +83,6 @@ describe("Helper Functions Tests", () => {
       const asset = 1n;
       const amount = 1000n;
       const originalDecimals = 6;
-      const targetChainId = 23;
       const deadline = 1700000000n;
       const salt = 42n;
 
@@ -94,7 +91,6 @@ describe("Helper Functions Tests", () => {
         asset,
         amount,
         originalDecimals,
-        targetChainId,
         deadline,
         salt
       );
@@ -104,7 +100,6 @@ describe("Helper Functions Tests", () => {
         asset,
         amount,
         originalDecimals,
-        targetChainId,
         deadline,
         salt
       );
@@ -118,7 +113,6 @@ describe("Helper Functions Tests", () => {
       const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
       const asset = 1n;
       const originalDecimals = 6;
-      const targetChainId = 23;
       const deadline = 1700000000n;
       const salt = 42n;
 
@@ -127,7 +121,6 @@ describe("Helper Functions Tests", () => {
         asset,
         1000n,
         originalDecimals,
-        targetChainId,
         deadline,
         salt
       );
@@ -137,7 +130,6 @@ describe("Helper Functions Tests", () => {
         asset,
         2000n,
         originalDecimals,
-        targetChainId,
         deadline,
         salt
       );
@@ -265,17 +257,15 @@ describe("Helper Functions Tests", () => {
     it("should extract all fields from a note", () => {
       if (!aztecAvailable) return;
 
-      // Create a mock note with the expected structure
+      // Create a mock note with the expected structure matching PositionReceiptNote
       const mockNote = {
         items: [
           new Fr(0x1111n), // owner
           new Fr(0x2222n), // nonce
-          new Fr(0x3333n), // intentId
-          new Fr(0x4444n), // assetId
-          new Fr(0x5555n), // shares
-          new Fr(6n), // originalDecimals
-          new Fr(23n), // targetChainId
-          new Fr(0n), // status (Active = 0)
+          new Fr(0x3333n), // assetId
+          new Fr(0x4444n), // shares
+          new Fr(0x5555n), // aaveMarketId
+          new Fr(1n), // status (Active = 1)
         ],
       };
 
@@ -284,12 +274,10 @@ describe("Helper Functions Tests", () => {
       expect(fields).toEqual({
         owner: 0x1111n,
         nonce: 0x2222n,
-        intentId: 0x3333n,
-        assetId: 0x4444n,
-        shares: 0x5555n,
-        originalDecimals: 6,
-        targetChainId: 23,
-        status: 0,
+        assetId: 0x3333n,
+        shares: 0x4444n,
+        aaveMarketId: 0x5555n,
+        status: 1,
       });
     });
 
@@ -297,11 +285,11 @@ describe("Helper Functions Tests", () => {
       if (!aztecAvailable) return;
 
       const mockNote = {
-        items: [new Fr(1n), new Fr(2n)], // Only 2 fields instead of 8
+        items: [new Fr(1n), new Fr(2n)], // Only 2 fields instead of 6
       };
 
       expect(() => extractNoteFields(mockNote as any)).toThrow(
-        /Expected at least 8 fields/
+        /Expected at least 6 fields/
       );
     });
   });
@@ -356,18 +344,16 @@ describe("Assertion Helpers Tests", () => {
       const actualFields: PositionReceiptFields = {
         owner: 0x1111n,
         nonce: 0x2222n,
-        intentId: 0x3333n,
-        assetId: 0x4444n,
-        shares: 0x5555n,
-        originalDecimals: 6,
-        targetChainId: 23,
-        status: 0,
+        assetId: 0x3333n,
+        shares: 0x4444n,
+        aaveMarketId: 0x5555n,
+        status: 1,
       };
 
       assertNoteFields(actualFields, {
-        intentId: 0x3333n,
-        shares: 0x5555n,
-        status: 0,
+        assetId: 0x3333n,
+        shares: 0x4444n,
+        status: 1,
       });
     });
 
@@ -375,17 +361,15 @@ describe("Assertion Helpers Tests", () => {
       const actualFields: PositionReceiptFields = {
         owner: 0x1111n,
         nonce: 0x2222n,
-        intentId: 0x3333n,
-        assetId: 0x4444n,
-        shares: 0x5555n,
-        originalDecimals: 6,
-        targetChainId: 23,
-        status: 0,
+        assetId: 0x3333n,
+        shares: 0x4444n,
+        aaveMarketId: 0x5555n,
+        status: 1,
       };
 
       expect(() =>
         assertNoteFields(actualFields, {
-          intentId: 0x9999n, // Wrong value
+          assetId: 0x9999n, // Wrong value
         })
       ).toThrow();
     });

@@ -41,8 +41,8 @@ export interface DepositRequestParams {
   assetId: bigint;
   /** Amount to deposit */
   amount: bigint;
-  /** Target chain ID */
-  targetChainId: number;
+  /** Original token decimals (e.g., 6 for USDC) */
+  originalDecimals: number;
   /** Deadline timestamp (seconds) */
   deadline: bigint;
   /** Secret for authorization */
@@ -302,10 +302,11 @@ export class DepositFlowOrchestrator {
     const methods = contractWithWallet.methods;
 
     // Create call instance
+    // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
     const depositCall = methods.request_deposit(
       params.assetId,
       params.amount,
-      params.targetChainId,
+      params.originalDecimals,
       params.deadline,
       params.secret
     );

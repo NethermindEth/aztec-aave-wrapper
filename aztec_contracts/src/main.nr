@@ -463,13 +463,11 @@ pub(crate) contract AaveWrapper {
         let note_nonce = intent_id;
 
         // Create the position receipt note with Active status
-        // Note: target_chain_id is set to 0 as it's no longer used in the protocol
         let receipt = PositionReceiptNote {
             owner,
             nonce: note_nonce,
             asset_id,
             shares,
-            target_chain_id: 0,
             aave_market_id: 0,
             status: PositionStatus::ACTIVE,
         };
@@ -600,7 +598,6 @@ pub(crate) contract AaveWrapper {
             nonce: receipt.nonce,
             asset_id: receipt.asset_id,
             shares: amount, // Store withdrawal amount for validation in finalize_withdraw
-            target_chain_id: receipt.target_chain_id,
             aave_market_id: receipt.aave_market_id,
             status: PositionStatus::PENDING_WITHDRAW,
         };
@@ -868,7 +865,6 @@ pub(crate) contract AaveWrapper {
             nonce: new_nonce,
             asset_id: receipt.asset_id,
             shares: receipt.shares,
-            target_chain_id: receipt.target_chain_id,
             aave_market_id: receipt.aave_market_id,
             status: PositionStatus::ACTIVE,
         };

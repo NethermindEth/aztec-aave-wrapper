@@ -18,27 +18,25 @@ import { computeSecretHash as aztecComputeSecretHash } from "@aztec/stdlib/hash"
 /**
  * Compute the expected intent_id for a deposit request.
  *
- * This matches the computation in main.nr:372-380:
+ * This matches the computation in main.nr compute_intent_id:
  * ```noir
  * let intent_id = compute_intent_id(
  *     caller,
  *     asset,
  *     amount,
  *     original_decimals,
- *     target_chain_id,
  *     deadline,
  *     salt,
  * );
  * ```
  *
- * And main.nr:38-46:
+ * Which internally uses:
  * ```noir
  * poseidon2_hash([
  *     caller.to_field(),
  *     asset,
  *     amount as Field,
  *     original_decimals as Field,
- *     target_chain_id as Field,
  *     deadline as Field,
  *     salt,
  * ])
@@ -48,7 +46,6 @@ import { computeSecretHash as aztecComputeSecretHash } from "@aztec/stdlib/hash"
  * @param asset - The asset ID (Field element)
  * @param amount - The deposit amount (as bigint, will be converted to Field)
  * @param originalDecimals - The original token decimals (as number, will be converted to Field)
- * @param targetChainId - The target chain ID (as number, will be converted to Field)
  * @param deadline - The deadline timestamp (as bigint)
  * @param salt - The salt value (Field element)
  * @returns The computed intent_id as a Field element
@@ -58,20 +55,18 @@ export async function computeExpectedIntentId(
   asset: bigint,
   amount: bigint,
   originalDecimals: number,
-  targetChainId: number,
   deadline: bigint,
   salt: bigint
 ): Promise<ReturnType<typeof poseidon2Hash>> {
   // Convert AztecAddress to Field
   const callerField = caller.toBigInt();
 
-  // Pack inputs into array for hashing, matching main.nr:38-46
+  // Pack inputs into array for hashing
   return await poseidon2Hash([
     callerField,
     asset,
     amount,
     BigInt(originalDecimals),
-    BigInt(targetChainId),
     deadline,
     salt,
   ]);
@@ -165,12 +160,10 @@ export async function advanceTime(seconds: number): Promise<void> {
  * struct PositionReceiptNote {
  *   owner: AztecAddress,
  *   nonce: Field,
- *   intent_id: Field,
  *   asset_id: Field,
- *   shares: Field,
- *   original_decimals: u8,
- *   target_chain_id: Field,
- *   status: PositionStatus,
+ *   shares: u128,
+ *   aave_market_id: Field,
+ *   status: u8,
  * }
  * ```
  *
@@ -180,11 +173,9 @@ export async function advanceTime(seconds: number): Promise<void> {
 export interface PositionReceiptFields {
   owner: bigint;
   nonce: bigint;
-  intentId: bigint;
   assetId: bigint;
   shares: bigint;
-  originalDecimals: number;
-  targetChainId: number;
+  aaveMarketId: bigint;
   status: number;
 }
 
@@ -193,19 +184,17 @@ export function extractNoteFields(note: Note): PositionReceiptFields {
   // The order matches the struct definition in position_receipt.nr
   const items = note.items;
 
-  if (items.length < 8) {
-    throw new Error(`Expected at least 8 fields in PositionReceiptNote, got ${items.length}`);
+  if (items.length < 6) {
+    throw new Error(`Expected at least 6 fields in PositionReceiptNote, got ${items.length}`);
   }
 
   return {
     owner: items[0]!.toBigInt(),
     nonce: items[1]!.toBigInt(),
-    intentId: items[2]!.toBigInt(),
-    assetId: items[3]!.toBigInt(),
-    shares: items[4]!.toBigInt(),
-    originalDecimals: Number(items[5]!.toBigInt()),
-    targetChainId: Number(items[6]!.toBigInt()),
-    status: Number(items[7]!.toBigInt()),
+    assetId: items[2]!.toBigInt(),
+    shares: items[3]!.toBigInt(),
+    aaveMarketId: items[4]!.toBigInt(),
+    status: Number(items[5]!.toBigInt()),
   };
 }
 

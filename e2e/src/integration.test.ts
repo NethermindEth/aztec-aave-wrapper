@@ -40,8 +40,6 @@ const TEST_CONFIG = {
   withdrawAmount: 500n,
   /** Original token decimals (e.g., USDC = 6) */
   originalDecimals: 6,
-  /** Target chain ID */
-  targetChainId: 23,
   /** Deadline offset (1 hour from now) */
   deadlineOffset: 60 * 60,
 };
@@ -241,12 +239,11 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       const userBContract = AaveWrapperContract.at(contractAddress, userBWallet);
 
       // User A requests deposit using typed methods
-      // Signature: request_deposit(asset, amount, original_decimals, target_chain_id, deadline, secret_hash)
+      // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = userAContract.methods.request_deposit(
         1n,                              // asset
         TEST_CONFIG.depositAmount,       // amount
         TEST_CONFIG.originalDecimals,    // original_decimals
-        TEST_CONFIG.targetChainId,       // target_chain_id
         deadline,                        // deadline
         secretHashA                      // secret_hash
       );
@@ -317,7 +314,6 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
         1n,                              // asset
         TEST_CONFIG.depositAmount,       // amount
         TEST_CONFIG.originalDecimals,    // original_decimals
-        TEST_CONFIG.targetChainId,       // target_chain_id
         deadline,                        // deadline
         secretHash                       // secret_hash
       );
@@ -366,7 +362,6 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
         1n,                              // asset
         TEST_CONFIG.depositAmount,       // amount
         TEST_CONFIG.originalDecimals,    // original_decimals
-        TEST_CONFIG.targetChainId,       // target_chain_id
         deadline,                        // deadline
         secretHash                       // secret_hash
       );
