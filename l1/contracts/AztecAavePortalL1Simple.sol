@@ -133,7 +133,9 @@ contract AztecAavePortalL1Simple is Ownable2Step, Pausable {
      * @notice Validate that a deadline is within acceptable bounds
      * @param deadline The deadline timestamp to validate
      */
-    function _validateDeadline(uint256 deadline) internal view {
+    function _validateDeadline(
+        uint256 deadline
+    ) internal view {
         uint256 timeUntilDeadline = deadline > block.timestamp ? deadline - block.timestamp : 0;
 
         if (timeUntilDeadline < MIN_DEADLINE) {
@@ -149,7 +151,9 @@ contract AztecAavePortalL1Simple is Ownable2Step, Pausable {
      * @param asset The underlying asset address
      * @return aTokenAddress The aToken address
      */
-    function _getATokenAddress(address asset) internal view returns (address aTokenAddress) {
+    function _getATokenAddress(
+        address asset
+    ) internal view returns (address aTokenAddress) {
         (,,,,,,,, aTokenAddress,,,,,,) = ILendingPool(aavePool).getReserveData(asset);
     }
 
@@ -414,7 +418,9 @@ contract AztecAavePortalL1Simple is Ownable2Step, Pausable {
      * @param intentId The intent ID
      * @return shares The number of shares
      */
-    function getIntentShares(bytes32 intentId) external view returns (uint128) {
+    function getIntentShares(
+        bytes32 intentId
+    ) external view returns (uint128) {
         return intentShares[intentId];
     }
 
@@ -423,7 +429,9 @@ contract AztecAavePortalL1Simple is Ownable2Step, Pausable {
      * @param intentId The intent ID
      * @return asset The asset address
      */
-    function getIntentAsset(bytes32 intentId) external view returns (address) {
+    function getIntentAsset(
+        bytes32 intentId
+    ) external view returns (address) {
         return intentAssets[intentId];
     }
 

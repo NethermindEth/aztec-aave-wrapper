@@ -25,10 +25,17 @@ contract MockLendingPool is ILendingPool {
     /// @notice Mock normalized income per asset (RAY = 1e27)
     mapping(address => uint256) public normalizedIncomes;
 
-    event Supply(address indexed asset, uint256 amount, address indexed onBehalfOf, uint16 referralCode);
+    event Supply(
+        address indexed asset, uint256 amount, address indexed onBehalfOf, uint16 referralCode
+    );
     event Withdraw(address indexed asset, uint256 amount, address indexed to);
 
-    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external override {
+    function supply(
+        address asset,
+        uint256 amount,
+        address onBehalfOf,
+        uint16 referralCode
+    ) external override {
         require(!failSupply, "MockLendingPool: supply failed");
 
         // Transfer tokens from sender to this contract
@@ -40,7 +47,11 @@ contract MockLendingPool is ILendingPool {
         emit Supply(asset, amount, onBehalfOf, referralCode);
     }
 
-    function withdraw(address asset, uint256 amount, address to) external override returns (uint256) {
+    function withdraw(
+        address asset,
+        uint256 amount,
+        address to
+    ) external override returns (uint256) {
         require(!failWithdraw, "MockLendingPool: withdraw failed");
 
         // Check deposit balance
@@ -57,22 +68,23 @@ contract MockLendingPool is ILendingPool {
         return amount;
     }
 
-    function getUserAccountData(address)
-        external
-        pure
-        override
-        returns (uint256, uint256, uint256, uint256, uint256, uint256)
-    {
+    function getUserAccountData(
+        address
+    ) external pure override returns (uint256, uint256, uint256, uint256, uint256, uint256) {
         return (0, 0, 0, 0, 0, type(uint256).max);
     }
 
-    function getReserveNormalizedIncome(address asset) external view override returns (uint256) {
+    function getReserveNormalizedIncome(
+        address asset
+    ) external view override returns (uint256) {
         uint256 income = normalizedIncomes[asset];
         // Default to RAY (1e27) if not set, which represents 1.0 (no yield)
         return income == 0 ? 1e27 : income;
     }
 
-    function getReserveData(address asset)
+    function getReserveData(
+        address asset
+    )
         external
         view
         override
@@ -100,11 +112,15 @@ contract MockLendingPool is ILendingPool {
     }
 
     // Test helpers
-    function setFailSupply(bool fail) external {
+    function setFailSupply(
+        bool fail
+    ) external {
         failSupply = fail;
     }
 
-    function setFailWithdraw(bool fail) external {
+    function setFailWithdraw(
+        bool fail
+    ) external {
         failWithdraw = fail;
     }
 

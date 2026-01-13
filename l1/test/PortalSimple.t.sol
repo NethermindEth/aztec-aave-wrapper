@@ -352,7 +352,9 @@ contract PortalSimpleTest is Test {
         bytes32 secretHash = keccak256("secret");
 
         vm.prank(relayer);
-        portal.executeWithdraw(withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath);
+        portal.executeWithdraw(
+            withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath
+        );
 
         // Verify intent was consumed
         assertTrue(portal.consumedIntents(withdrawIntent.intentId));
@@ -407,7 +409,9 @@ contract PortalSimpleTest is Test {
         );
 
         vm.prank(relayer);
-        portal.executeWithdraw(withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath);
+        portal.executeWithdraw(
+            withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath
+        );
     }
 
     // ============ Withdraw Failure Tests ============
@@ -459,7 +463,9 @@ contract PortalSimpleTest is Test {
 
         // First withdrawal succeeds
         vm.prank(relayer);
-        portal.executeWithdraw(withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath);
+        portal.executeWithdraw(
+            withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath
+        );
 
         // Try again - should fail because already consumed
         vm.expectRevert(
@@ -468,7 +474,9 @@ contract PortalSimpleTest is Test {
             )
         );
         vm.prank(relayer);
-        portal.executeWithdraw(withdrawIntent, secretHash, l2BlockNumber + 1, leafIndex, validSiblingPath);
+        portal.executeWithdraw(
+            withdrawIntent, secretHash, l2BlockNumber + 1, leafIndex, validSiblingPath
+        );
     }
 
     function test_executeWithdraw_RevertIf_DeadlinePassed() public {
@@ -498,7 +506,9 @@ contract PortalSimpleTest is Test {
         bytes32 secretHash = keccak256("secret");
         vm.expectRevert(AztecAavePortalL1Simple.DeadlinePassed.selector);
         vm.prank(relayer);
-        portal.executeWithdraw(withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath);
+        portal.executeWithdraw(
+            withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath
+        );
     }
 
     function test_executeWithdraw_RevertIf_Paused() public {
@@ -529,7 +539,9 @@ contract PortalSimpleTest is Test {
         bytes32 secretHash = keccak256("secret");
         vm.expectRevert();
         vm.prank(relayer);
-        portal.executeWithdraw(withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath);
+        portal.executeWithdraw(
+            withdrawIntent, secretHash, l2BlockNumber, leafIndex, validSiblingPath
+        );
     }
 
     // ============ Admin Tests ============
@@ -661,11 +673,15 @@ contract MockAztecOutbox is IAztecOutbox {
         return true;
     }
 
-    function hasMessageBeenConsumed(bytes32 _message) external view returns (bool) {
+    function hasMessageBeenConsumed(
+        bytes32 _message
+    ) external view returns (bool) {
         return consumed[_message];
     }
 
-    function getRootForBlock(uint256 /* _l2BlockNumber */ ) external pure returns (bytes32) {
+    function getRootForBlock(
+        uint256 /* _l2BlockNumber */
+    ) external pure returns (bytes32) {
         return bytes32(0);
     }
 }
@@ -696,20 +712,21 @@ contract MockTokenPortal is ITokenPortal {
     uint256 public lastAmount;
     bytes32 public lastSecretHash;
 
-    function depositToAztecPublic(bytes32, /* _to */ uint256 _amount, bytes32 _secretHash)
-        external
-        returns (bytes32 messageKey, uint256 messageIndex)
-    {
+    function depositToAztecPublic(
+        bytes32, /* _to */
+        uint256 _amount,
+        bytes32 _secretHash
+    ) external returns (bytes32 messageKey, uint256 messageIndex) {
         depositCalled = true;
         lastAmount = _amount;
         lastSecretHash = _secretHash;
         return (keccak256("messageKey"), 0);
     }
 
-    function depositToAztecPrivate(uint256 _amount, bytes32 _secretHashForL2MessageConsumption)
-        external
-        returns (bytes32 messageKey, uint256 messageIndex)
-    {
+    function depositToAztecPrivate(
+        uint256 _amount,
+        bytes32 _secretHashForL2MessageConsumption
+    ) external returns (bytes32 messageKey, uint256 messageIndex) {
         depositCalled = true;
         lastAmount = _amount;
         lastSecretHash = _secretHashForL2MessageConsumption;
@@ -767,19 +784,21 @@ contract MockAaveLendingPool is ILendingPool {
         return amount;
     }
 
-    function getUserAccountData(address)
-        external
-        pure
-        returns (uint256, uint256, uint256, uint256, uint256, uint256)
-    {
+    function getUserAccountData(
+        address
+    ) external pure returns (uint256, uint256, uint256, uint256, uint256, uint256) {
         return (0, 0, 0, 0, 0, type(uint256).max);
     }
 
-    function getReserveNormalizedIncome(address) external pure returns (uint256) {
+    function getReserveNormalizedIncome(
+        address
+    ) external pure returns (uint256) {
         return 1e27; // RAY = 1.0
     }
 
-    function getReserveData(address)
+    function getReserveData(
+        address
+    )
         external
         view
         returns (
@@ -804,11 +823,15 @@ contract MockAaveLendingPool is ILendingPool {
     }
 
     // Test helpers
-    function setFailSupply(bool fail) external {
+    function setFailSupply(
+        bool fail
+    ) external {
         failSupply = fail;
     }
 
-    function setFailWithdraw(bool fail) external {
+    function setFailWithdraw(
+        bool fail
+    ) external {
         failWithdraw = fail;
     }
 
