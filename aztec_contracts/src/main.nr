@@ -144,7 +144,6 @@ use crate::types::WithdrawIntent;
 /// # Arguments
 /// * `intent` - The withdraw intent containing intent_id, owner_hash, amount, and deadline
 /// * `asset_id` - The asset being withdrawn
-/// * `target_chain_id` - The target chain where the position exists
 /// * `secret_hash` - Hash of the secret for claiming the confirmation
 ///
 /// # Returns
@@ -152,7 +151,6 @@ use crate::types::WithdrawIntent;
 pub fn compute_withdraw_message_content(
     intent: WithdrawIntent,
     asset_id: Field,
-    target_chain_id: u32,
     secret_hash: Field,
 ) -> Field {
     // Hash intent fields plus secret_hash for the L2 to L1 message
@@ -163,7 +161,6 @@ pub fn compute_withdraw_message_content(
         intent.amount as Field,
         intent.deadline as Field,
         asset_id,
-        target_chain_id as Field,
         secret_hash,
     ])
 }
@@ -622,12 +619,7 @@ pub(crate) contract AaveWrapper {
 
         // Compute the message content hash for L2 to L1 messaging
         // Uses owner_hash and secret_hash - L1 relayers don't learn the owner
-        let content = compute_withdraw_message_content(
-            intent,
-            receipt.asset_id,
-            receipt.target_chain_id,
-            secret_hash,
-        );
+        let content = compute_withdraw_message_content(intent, receipt.asset_id, secret_hash);
 
         // Send L2 to L1 message to the portal contract
         let portal = self.storage.portal_address.read();

@@ -58,7 +58,7 @@ unconstrained fn test_compute_deposit_confirmation_content_zero_values() {
 #[test]
 unconstrained fn test_compute_withdraw_message_content_zero_values() {
     let intent = WithdrawIntent::new(0, 0, 0, 0);
-    let hash = compute_withdraw_message_content(intent, 0, 0, 0);
+    let hash = compute_withdraw_message_content(intent, 0, 0);
 
     assert(hash != 0, "Withdraw message hash computation must handle zero inputs");
 }
@@ -93,10 +93,9 @@ unconstrained fn test_compute_withdraw_message_content_max_amount() {
     let max_amount: u128 = 0xffffffffffffffffffffffffffffffff; // Max u128
     let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, max_amount, 1700000000);
     let asset_id: Field = 1;
-    let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
 
-    let hash = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
+    let hash = compute_withdraw_message_content(intent, asset_id, secret_hash);
 
     assert(hash != 0, "Hash computation must handle maximum u128 values");
 }
@@ -159,13 +158,12 @@ unconstrained fn test_intent_id_caller_binding() {
 unconstrained fn test_withdraw_message_secret_binding() {
     let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1700000000);
     let asset_id: Field = 1;
-    let target_chain_id: u32 = 23;
 
     let secret_hash1: Field = 0x1111111111111111;
     let secret_hash2: Field = 0x2222222222222222;
 
-    let hash1 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash1);
-    let hash2 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash2);
+    let hash1 = compute_withdraw_message_content(intent, asset_id, secret_hash1);
+    let hash2 = compute_withdraw_message_content(intent, asset_id, secret_hash2);
 
     assert(
         hash1 != hash2,
@@ -318,13 +316,11 @@ unconstrained fn test_withdraw_message_vs_confirmation_different() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
-    let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
 
     let intent = WithdrawIntent::new(intent_id, 0xabcd1234, amount, deadline);
 
-    let message_hash =
-        compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
+    let message_hash = compute_withdraw_message_content(intent, asset_id, secret_hash);
     let confirmation_hash = compute_withdraw_confirmation_content(intent_id, asset_id, amount);
 
     assert(

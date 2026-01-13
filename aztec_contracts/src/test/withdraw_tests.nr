@@ -38,12 +38,11 @@ unconstrained fn test_compute_withdraw_message_content_deterministic() {
         1700000000, // deadline
     );
     let asset_id: Field = 1;
-    let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xabcdef123456;
 
     // Compute hash twice
-    let hash1 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
-    let hash2 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
+    let hash1 = compute_withdraw_message_content(intent, asset_id, secret_hash);
+    let hash2 = compute_withdraw_message_content(intent, asset_id, secret_hash);
 
     // Should produce identical hashes
     assert(hash1 == hash2, "Withdraw content hash should be deterministic");
@@ -55,39 +54,34 @@ unconstrained fn test_compute_withdraw_message_content_deterministic() {
 unconstrained fn test_compute_withdraw_message_content_different_inputs() {
     let intent = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1700000000);
     let asset_id: Field = 1;
-    let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
 
-    let hash1 = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
+    let hash1 = compute_withdraw_message_content(intent, asset_id, secret_hash);
 
     // Change intent_id
     let intent2 = WithdrawIntent::new(0x9999999999999999, 0xabcd1234, 1000000, 1700000000);
-    let hash2 = compute_withdraw_message_content(intent2, asset_id, target_chain_id, secret_hash);
+    let hash2 = compute_withdraw_message_content(intent2, asset_id, secret_hash);
 
     // Change secret_hash
-    let hash3 = compute_withdraw_message_content(intent, asset_id, target_chain_id, 0xcafebabe);
+    let hash3 = compute_withdraw_message_content(intent, asset_id, 0xcafebabe);
 
     // Change amount
     let intent4 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 2000000, 1700000000);
-    let hash4 = compute_withdraw_message_content(intent4, asset_id, target_chain_id, secret_hash);
+    let hash4 = compute_withdraw_message_content(intent4, asset_id, secret_hash);
 
     // Change asset_id
-    let hash5 = compute_withdraw_message_content(intent, 2, target_chain_id, secret_hash);
-
-    // Change target_chain_id
-    let hash6 = compute_withdraw_message_content(intent, asset_id, 42, secret_hash);
+    let hash5 = compute_withdraw_message_content(intent, 2, secret_hash);
 
     // Change deadline
-    let intent7 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1800000000);
-    let hash7 = compute_withdraw_message_content(intent7, asset_id, target_chain_id, secret_hash);
+    let intent6 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, 1000000, 1800000000);
+    let hash6 = compute_withdraw_message_content(intent6, asset_id, secret_hash);
 
     // All hashes should be different
     assert(hash1 != hash2, "Different intent_id should produce different hash");
     assert(hash1 != hash3, "Different secret_hash should produce different hash");
     assert(hash1 != hash4, "Different amount should produce different hash");
     assert(hash1 != hash5, "Different asset_id should produce different hash");
-    assert(hash1 != hash6, "Different target_chain_id should produce different hash");
-    assert(hash1 != hash7, "Different deadline should produce different hash");
+    assert(hash1 != hash6, "Different deadline should produce different hash");
     assert(hash2 != hash3, "Hashes should be unique for each input combination");
 }
 
@@ -103,11 +97,10 @@ unconstrained fn test_compute_withdraw_message_different_amounts() {
     let intent_1 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, amount_1, 1700000000);
     let intent_2 = WithdrawIntent::new(0x1234567890abcdef, 0xabcd1234, amount_2, 1700000000);
     let asset_id: Field = 1;
-    let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
 
-    let hash_1 = compute_withdraw_message_content(intent_1, asset_id, target_chain_id, secret_hash);
-    let hash_2 = compute_withdraw_message_content(intent_2, asset_id, target_chain_id, secret_hash);
+    let hash_1 = compute_withdraw_message_content(intent_1, asset_id, secret_hash);
+    let hash_2 = compute_withdraw_message_content(intent_2, asset_id, secret_hash);
 
     assert(hash_1 != 0, "First withdrawal should produce valid hash");
     assert(hash_2 != 0, "Second withdrawal should produce valid hash");
@@ -118,18 +111,15 @@ unconstrained fn test_compute_withdraw_message_different_amounts() {
 #[test]
 unconstrained fn test_compute_withdraw_message_deadline_sensitivity() {
     let asset_id: Field = 1;
-    let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
 
     // Urgent withdrawal (short deadline)
     let intent_urgent = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700003600); // 1 hour
-    let hash_urgent =
-        compute_withdraw_message_content(intent_urgent, asset_id, target_chain_id, secret_hash);
+    let hash_urgent = compute_withdraw_message_content(intent_urgent, asset_id, secret_hash);
 
     // Patient withdrawal (long deadline)
     let intent_patient = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700604800); // 1 week
-    let hash_patient =
-        compute_withdraw_message_content(intent_patient, asset_id, target_chain_id, secret_hash);
+    let hash_patient = compute_withdraw_message_content(intent_patient, asset_id, secret_hash);
 
     assert(hash_urgent != hash_patient, "Different deadlines should produce different hashes");
 }
@@ -266,10 +256,9 @@ unconstrained fn test_withdraw_intent_full_withdrawal() {
     assert(intent.amount == total_shares, "Full withdrawal amount should be stored correctly");
 
     let asset_id: Field = 2; // WETH
-    let target_chain_id: u32 = 23;
     let secret_hash: Field = 0xdeadbeef;
 
-    let hash = compute_withdraw_message_content(intent, asset_id, target_chain_id, secret_hash);
+    let hash = compute_withdraw_message_content(intent, asset_id, secret_hash);
 
     assert(hash != 0, "Full withdrawal should produce valid hash");
 }
@@ -284,7 +273,7 @@ unconstrained fn test_withdraw_intent_minimum_withdrawal() {
     assert(intent.amount == min_amount, "Minimum amount should be stored correctly");
 
     let secret_hash: Field = 0xdeadbeef;
-    let hash = compute_withdraw_message_content(intent, 1, 23, secret_hash);
+    let hash = compute_withdraw_message_content(intent, 1, secret_hash);
 
     assert(hash != 0, "Minimum withdrawal should produce valid hash");
 }
@@ -419,39 +408,18 @@ unconstrained fn test_position_receipt_note_equality() {
 // Cross-Chain Withdrawal Tests
 // ============================================================================
 
-/// Test withdrawal from different supported chains.
-#[test]
-unconstrained fn test_withdraw_from_different_chains() {
-    let asset_id: Field = 1;
-    let intent = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700000000);
-    let secret_hash: Field = 0xdeadbeef;
-
-    // Arbitrum (Wormhole chain ID 23)
-    let hash_arb = compute_withdraw_message_content(intent, asset_id, 23, secret_hash);
-    // Optimism (Wormhole chain ID 24)
-    let hash_opt = compute_withdraw_message_content(intent, asset_id, 24, secret_hash);
-    // Base (Wormhole chain ID 30)
-    let hash_base = compute_withdraw_message_content(intent, asset_id, 30, secret_hash);
-
-    // All should produce different hashes
-    assert(hash_arb != hash_opt, "Different chains should produce different hashes");
-    assert(hash_opt != hash_base, "Different chains should produce different hashes");
-    assert(hash_arb != hash_base, "Different chains should produce different hashes");
-}
-
 /// Test withdrawal of different assets.
 #[test]
 unconstrained fn test_withdraw_different_assets() {
-    let target_chain_id: u32 = 23;
     let intent = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1700000000);
     let secret_hash: Field = 0xdeadbeef;
 
     // USDC withdrawal
-    let hash_usdc = compute_withdraw_message_content(intent, 1, target_chain_id, secret_hash);
+    let hash_usdc = compute_withdraw_message_content(intent, 1, secret_hash);
     // WETH withdrawal
-    let hash_weth = compute_withdraw_message_content(intent, 2, target_chain_id, secret_hash);
+    let hash_weth = compute_withdraw_message_content(intent, 2, secret_hash);
     // DAI withdrawal
-    let hash_dai = compute_withdraw_message_content(intent, 3, target_chain_id, secret_hash);
+    let hash_dai = compute_withdraw_message_content(intent, 3, secret_hash);
 
     // All should produce different hashes
     assert(hash_usdc != hash_weth, "Different assets should produce different hashes");
