@@ -74,7 +74,6 @@ export interface L1ExecuteDepositParams {
     asset: Address;
     amount: bigint;
     deadline: bigint;
-    targetChainId: number;
     originalDecimals: number;
   };
   /** L2 block number for outbox proof */
@@ -475,14 +474,13 @@ export class DepositFlowOrchestrator {
 /**
  * Compute the expected intent ID for verification.
  *
- * This matches the computation in main.nr:38-46.
+ * This matches the computation in main.nr.
  */
 export async function computeExpectedIntentId(
   caller: bigint,
   asset: bigint,
   amount: bigint,
   originalDecimals: number,
-  targetChainId: number,
   deadline: bigint,
   salt: bigint
 ): Promise<bigint> {
@@ -493,7 +491,6 @@ export async function computeExpectedIntentId(
     asset,
     amount,
     BigInt(originalDecimals),
-    BigInt(targetChainId),
     deadline,
     salt,
   ]);

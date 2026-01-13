@@ -1,15 +1,15 @@
 /**
  * Intent Type Definitions
  *
- * Shared message payload structures for cross-chain communication.
+ * Shared message payload structures for L2→L1 communication.
  * These types must match the Noir definitions in aztec_contracts/src/types/intent.nr
- * and Solidity definitions in l1/contracts/types/Intent.sol and target/contracts/types/Intent.sol
+ * and Solidity definitions in l1/contracts/types/Intent.sol
  */
 
 /**
- * Intent to deposit assets into Aave on a target chain
+ * Intent to deposit assets into Aave on L1
  *
- * Sent from Aztec L2 → L1 Portal → Target Executor
+ * Sent from Aztec L2 → L1 Portal
  * Privacy: Uses hash(ownerL2) instead of plain owner address
  */
 export interface DepositIntent {
@@ -21,19 +21,14 @@ export interface DepositIntent {
    */
   ownerHash: string; // bytes32 hex string
 
-  /** Token address on target chain to deposit */
+  /** Token address on L1 to deposit */
   asset: string; // address hex string
 
   /** Amount of tokens to deposit (in token's smallest unit) */
   amount: bigint; // uint128
 
-  /** Original token decimals for Wormhole denormalization
-   * Wormhole normalizes to 8 decimals; this allows reconstruction on target
-   */
+  /** Original token decimals for denormalization */
   originalDecimals: number; // uint8
-
-  /** Wormhole chain ID of the target chain for deposit */
-  targetChainId: number; // uint32
 
   /** Unix timestamp after which this intent expires */
   deadline: bigint; // uint64
@@ -43,9 +38,9 @@ export interface DepositIntent {
 }
 
 /**
- * Intent to withdraw assets from Aave on a target chain
+ * Intent to withdraw assets from Aave on L1
  *
- * Sent from Aztec L2 → L1 Portal → Target Executor
+ * Sent from Aztec L2 → L1 Portal
  * Privacy: Uses hash(ownerL2) for consistency with deposits
  */
 export interface WithdrawIntent {
@@ -88,9 +83,6 @@ export namespace IntentUtils {
     if (intent.originalDecimals < 0 || intent.originalDecimals > 255) {
       throw new Error('Invalid originalDecimals: must be 0-255');
     }
-    if (intent.targetChainId <= 0 || intent.targetChainId > 0xFFFFFFFF) {
-      throw new Error('Invalid targetChainId: must be valid uint32');
-    }
     if (intent.deadline <= 0n) {
       throw new Error('Invalid deadline: must be positive');
     }
@@ -127,7 +119,6 @@ export namespace IntentUtils {
     asset: string;
     amount: bigint;
     originalDecimals: number;
-    targetChainId: number;
     deadline: bigint;
     salt: string;
   } {
@@ -137,7 +128,6 @@ export namespace IntentUtils {
       asset: intent.asset,
       amount: intent.amount,
       originalDecimals: intent.originalDecimals,
-      targetChainId: intent.targetChainId,
       deadline: intent.deadline,
       salt: intent.salt,
     };

@@ -49,8 +49,6 @@ export interface DepositIntent {
   assetId: Bytes32;
   /** Amount to deposit (in token decimals) */
   amount: bigint;
-  /** Wormhole chain ID of target chain */
-  targetChainId: number;
   /** Unix timestamp deadline for execution */
   deadline: bigint;
   /** L2 owner address (for confirmation routing) */
@@ -87,65 +85,8 @@ export interface PositionReceipt {
   assetId: Bytes32;
   /** Number of shares (proportional claim on aTokens) */
   shares: bigint;
-  /** Wormhole chain ID where position exists */
-  targetChainId: number;
   /** Current status of the position */
   status: IntentStatus;
-}
-
-// =============================================================================
-// Wormhole Message Types
-// =============================================================================
-
-/**
- * Action types for Wormhole payloads
- */
-export enum WormholeAction {
-  /** Deposit tokens to Aave */
-  Deposit = 0,
-  /** Withdraw tokens from Aave */
-  Withdraw = 1,
-  /** Confirmation message (success/failure) */
-  Confirm = 2,
-}
-
-/**
- * Confirmation status in Wormhole messages
- */
-export enum ConfirmationStatus {
-  Success = 0,
-  Failed = 1,
-}
-
-/**
- * Wormhole deposit payload (L1 → Target)
- */
-export interface WormholeDepositPayload {
-  action: WormholeAction.Deposit;
-  intentId: Bytes32;
-  asset: Address;
-  amount: bigint;
-  deadline: bigint;
-}
-
-/**
- * Wormhole withdraw payload (L1 → Target)
- */
-export interface WormholeWithdrawPayload {
-  action: WormholeAction.Withdraw;
-  intentId: Bytes32;
-  amount: bigint;
-  deadline: bigint;
-}
-
-/**
- * Wormhole confirmation payload (Target → L1)
- */
-export interface WormholeConfirmPayload {
-  action: WormholeAction.Confirm;
-  intentId: Bytes32;
-  principal: bigint;
-  status: ConfirmationStatus;
 }
 
 // =============================================================================
@@ -178,8 +119,6 @@ export interface ChainConfig {
   name: string;
   /** Native chain ID (EVM chain ID or Aztec network ID) */
   chainId: number;
-  /** Wormhole chain ID (different from native) */
-  wormholeChainId: number;
   /** RPC endpoint URL */
   rpcUrl: string;
 }
@@ -194,6 +133,4 @@ export interface EnvironmentConfig {
   l1: ChainConfig;
   /** L2 chain config (Aztec) */
   l2: ChainConfig;
-  /** Target chain config (Arbitrum) */
-  target: ChainConfig;
 }

@@ -419,7 +419,6 @@ export async function computeIntentId(params: {
   asset: bigint;
   amount: bigint;
   originalDecimals: number;
-  targetChainId: number;
   deadline: bigint;
   salt: bigint;
 }): Promise<bigint> {
@@ -430,7 +429,6 @@ export async function computeIntentId(params: {
     params.asset,
     params.amount,
     BigInt(params.originalDecimals),
-    BigInt(params.targetChainId),
     params.deadline,
     params.salt,
   ]);

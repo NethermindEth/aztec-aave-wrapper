@@ -16,7 +16,6 @@ import type {
 } from "@aztec-aave-wrapper/shared";
 import {
   CHAIN_IDS,
-  WORMHOLE_CHAIN_IDS,
   LOCAL_RPC_URLS,
 } from "@aztec-aave-wrapper/shared";
 
@@ -33,7 +32,7 @@ import addresses from "./config/addresses.json" with { type: "json" };
 export type TestEnvironment = "local" | "testnet";
 
 /**
- * Test mode determines whether to use mock or real Wormhole
+ * Test mode determines whether to use mock or real L1 execution
  */
 export type TestMode = "mock" | "integration";
 
@@ -49,8 +48,6 @@ export interface TestConfig {
   chains: {
     l1: ChainConfig;
     l2: ChainConfig;
-    /** Target chain (optional, for cross-chain tests) */
-    target?: ChainConfig;
   };
   /** Contract addresses */
   addresses: ContractAddresses;
@@ -82,7 +79,7 @@ export interface TestConfig {
 
 /**
  * Create configuration for local devnet environment
- * Note: Uses simplified L1-only architecture (no target chain / Wormhole bridging)
+ * Note: Uses simplified L1-only architecture (no target chain)
  */
 function createLocalConfig(mode: TestMode): TestConfig {
   return {
@@ -92,16 +89,13 @@ function createLocalConfig(mode: TestMode): TestConfig {
       l1: {
         name: "Anvil L1",
         chainId: CHAIN_IDS.ANVIL_L1,
-        wormholeChainId: WORMHOLE_CHAIN_IDS.LOCAL_L1,
         rpcUrl: LOCAL_RPC_URLS.L1,
       },
       l2: {
         name: "Aztec Sandbox",
         chainId: 31337, // Aztec uses same as L1 for local
-        wormholeChainId: 0, // No Wormhole on L2
         rpcUrl: LOCAL_RPC_URLS.PXE,
       },
-      // Target chain is not used in simplified L1-only architecture
     },
     addresses: addresses.local as ContractAddresses,
     timeouts: {
@@ -120,7 +114,7 @@ function createLocalConfig(mode: TestMode): TestConfig {
 
 /**
  * Create configuration for testnet environment
- * Note: Uses simplified L1-only architecture (no target chain / Wormhole bridging)
+ * Note: Uses simplified L1-only architecture (no target chain)
  */
 function createTestnetConfig(mode: TestMode): TestConfig {
   return {
@@ -130,23 +124,20 @@ function createTestnetConfig(mode: TestMode): TestConfig {
       l1: {
         name: "Ethereum Sepolia",
         chainId: CHAIN_IDS.ETHEREUM_SEPOLIA,
-        wormholeChainId: WORMHOLE_CHAIN_IDS.ETHEREUM_SEPOLIA,
         rpcUrl: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
       },
       l2: {
         name: "Aztec Devnet",
         chainId: 0, // TBD when Aztec devnet is available
-        wormholeChainId: 0,
         rpcUrl: process.env.AZTEC_DEVNET_URL || "http://localhost:8080",
       },
-      // Target chain is not used in simplified L1-only architecture
     },
     addresses: addresses.testnet as ContractAddresses,
     timeouts: {
       pxeConnection: 60_000,
       deployment: 120_000,
       transaction: 60_000,
-      crossChain: 300_000, // 5 min for real Wormhole
+      crossChain: 300_000, // 5 min for cross-chain messages
     },
     amounts: {
       defaultDeposit: 1_000_000n,
@@ -223,6 +214,5 @@ export function areAddressesDeployed(config: TestConfig): boolean {
 // Re-export commonly used constants for convenience
 export {
   CHAIN_IDS,
-  WORMHOLE_CHAIN_IDS,
   LOCAL_RPC_URLS,
 } from "@aztec-aave-wrapper/shared";

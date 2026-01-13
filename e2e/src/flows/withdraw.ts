@@ -70,7 +70,6 @@ export interface L1ExecuteWithdrawParams {
     ownerHash: Hex;
     amount: bigint;
     deadline: bigint;
-    targetChainId: number;
   };
   /** L2 block number for outbox proof */
   l2BlockNumber: bigint;

@@ -99,13 +99,6 @@ export interface DeploymentResults {
   l1: {
     portal: DeploymentResult;
   };
-  target: {
-    executor: DeploymentResult;
-  };
-  wormhole?: {
-    mockBridge?: DeploymentResult;
-    mockRelayer?: DeploymentResult;
-  };
 }
 
 /**
@@ -115,7 +108,6 @@ export interface InitializationStatus {
   aztecAvailable: boolean;
   pxeConnected: boolean;
   l1Connected: boolean;
-  targetConnected: boolean;
   contractsDeployed: boolean;
   accountsCreated: boolean;
 }
@@ -150,7 +142,6 @@ export class TestHarness {
 
   // Chain clients
   private _l1Client: ChainClient | null = null;
-  private _targetClient: ChainClient | null = null;
 
   // Test accounts
   private _accounts: {
@@ -175,7 +166,6 @@ export class TestHarness {
     aztecAvailable: false,
     pxeConnected: false,
     l1Connected: false,
-    targetConnected: false,
     contractsDeployed: false,
     accountsCreated: false,
   };
@@ -197,12 +187,6 @@ export class TestHarness {
     if (!this._l1Client)
       throw new Error("L1 client not initialized. Call initialize() first.");
     return this._l1Client;
-  }
-
-  get targetClient(): ChainClient {
-    if (!this._targetClient)
-      throw new Error("Target client not initialized. Call initialize() first.");
-    return this._targetClient;
   }
 
   get accounts() {
@@ -245,13 +229,10 @@ export class TestHarness {
     skipAccounts?: boolean;
     /** Skip contract deployment (use existing) */
     skipDeployment?: boolean;
-    /** Deploy mock Wormhole contracts */
-    deployWormholeMocks?: boolean;
   }): Promise<InitializationStatus> {
     const opts = {
       skipAccounts: false,
       skipDeployment: false,
-      deployWormholeMocks: this.config.mode === "mock",
       ...options,
     };
 
@@ -276,7 +257,7 @@ export class TestHarness {
 
     // Step 6: Deploy contracts
     if (!opts.skipDeployment && this._status.accountsCreated) {
-      await this.deployContracts(opts.deployWormholeMocks);
+      await this.deployContracts();
     }
 
     return this._status;
@@ -289,14 +270,12 @@ export class TestHarness {
     // Reset state
     this._node = null;
     this._l1Client = null;
-    this._targetClient = null;
     this._accounts = { admin: null, user: null, user2: null };
     this._contracts = { aaveWrapper: null };
     this._status = {
       aztecAvailable: false,
       pxeConnected: false,
       l1Connected: false,
-      targetConnected: false,
       contractsDeployed: false,
       accountsCreated: false,
     };
@@ -395,7 +374,7 @@ export class TestHarness {
   }
 
   /**
-   * Setup L1 and Target chain clients.
+   * Setup L1 chain client.
    */
   private async setupChainClients(): Promise<void> {
     // L1 Client
@@ -433,48 +412,6 @@ export class TestHarness {
         error instanceof Error ? error.message : error
       );
       this._status.l1Connected = false;
-    }
-
-    // Target Client (optional - not used in simplified L1-only architecture)
-    if (this.config.chains.target) {
-      try {
-        const targetChain: Chain = {
-          id: this.config.chains.target.chainId,
-          name: this.config.chains.target.name,
-          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-          rpcUrls: {
-            default: { http: [this.config.chains.target.rpcUrl] },
-          },
-        };
-
-        const targetAccount = privateKeyToAccount(LOCAL_PRIVATE_KEYS.DEPLOYER);
-
-        this._targetClient = {
-          public: createPublicClient({
-            chain: targetChain,
-            transport: http(this.config.chains.target.rpcUrl),
-          }),
-          wallet: createWalletClient({
-            account: targetAccount,
-            chain: targetChain,
-            transport: http(this.config.chains.target.rpcUrl),
-          }),
-          chain: targetChain,
-        };
-
-        // Test connection
-        await this._targetClient.public.getChainId();
-        this._status.targetConnected = true;
-      } catch (error) {
-        console.warn(
-          `Target not available at ${this.config.chains.target.rpcUrl}:`,
-          error instanceof Error ? error.message : error
-        );
-        this._status.targetConnected = false;
-      }
-    } else {
-      // Target chain not configured (L1-only architecture)
-      this._status.targetConnected = false;
     }
   }
 
@@ -566,10 +503,8 @@ export class TestHarness {
 
   /**
    * Deploy contracts for testing.
-   *
-   * @param deployWormholeMocks - Whether to deploy mock Wormhole contracts
    */
-  private async deployContracts(deployWormholeMocks: boolean): Promise<void> {
+  private async deployContracts(): Promise<void> {
     if (!this.aztec || !this._artifact || !this._accounts.admin) return;
 
     try {
@@ -614,11 +549,6 @@ export class TestHarness {
 
       this._status.contractsDeployed = true;
       console.log("AaveWrapper deployed at:", deployedContract.address.toString());
-
-      // TODO: Deploy mock Wormhole contracts if needed
-      if (deployWormholeMocks && this._status.l1Connected) {
-        console.log("Mock Wormhole deployment not yet implemented");
-      }
     } catch (error) {
       console.warn(
         "Failed to deploy contracts:",
@@ -653,13 +583,12 @@ export class TestHarness {
   }
 
   /**
-   * Check if full E2E testing is available (all chains connected).
+   * Check if full E2E testing is available (L1 connected and contracts deployed).
    */
   isFullE2EReady(): boolean {
     return (
       this.isReady() &&
       this._status.l1Connected &&
-      this._status.targetConnected &&
       this._status.contractsDeployed
     );
   }
@@ -675,7 +604,6 @@ export class TestHarness {
       `  Aztec Available: ${this._status.aztecAvailable}`,
       `  PXE Connected: ${this._status.pxeConnected}`,
       `  L1 Connected: ${this._status.l1Connected}`,
-      `  Target Connected: ${this._status.targetConnected}`,
       `  Accounts Created: ${this._status.accountsCreated}`,
       `  Contracts Deployed: ${this._status.contractsDeployed}`,
     ];

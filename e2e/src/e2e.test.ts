@@ -19,16 +19,8 @@ import { privateKeyToAccount } from "viem/accounts";
 // Import test utilities
 import { TestHarness, type ChainClient } from "./setup";
 import { getConfig } from "./config";
-import {
-  type DepositFlowOrchestrator,
-  createDepositOrchestrator,
-  verifyRelayerPrivacy,
-} from "./flows/deposit";
-import {
-  type WithdrawFlowOrchestrator,
-  createWithdrawOrchestrator,
-  verifyWithdrawRelayerPrivacy,
-} from "./flows/withdraw";
+import { verifyRelayerPrivacy } from "./flows/deposit";
+import { verifyWithdrawRelayerPrivacy } from "./flows/withdraw";
 import { WormholeMock, ConfirmationStatus } from "./utils/wormhole-mock";
 import { deadlineFromOffset, AztecHelper } from "./utils/aztec";
 import {
@@ -36,6 +28,14 @@ import {
   assertDeadlineInFuture,
 } from "./helpers/assertions";
 import { logger } from "./helpers/logger";
+
+// Stub for WormholeMock - L1-only architecture uses L1 for Aave operations
+// TODO: Refactor tests to use L1-only flow instead of cross-chain mock
+const createStubChainClient = (): ChainClient => ({
+  public: null as any,
+  wallet: null as any,
+  chain: { id: 31337, name: "Stub" } as any,
+});
 
 // Import addresses configuration
 import addresses from "./config/addresses.json" with { type: "json" };
@@ -111,20 +111,20 @@ describe("Aztec Aave Wrapper E2E", () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let relayerAddress: any = null;
 
-  // L1/Target chain clients
+  // L1 chain client
   let l1Client: ChainClient;
-  let targetClient: ChainClient;
 
-  // Relayer wallets for L1/Target (different from user for privacy)
+  // Stub target client for WormholeMock compatibility (L1-only architecture)
+  // TODO: Refactor tests to remove cross-chain mock dependency
+  const targetClient = createStubChainClient();
+
+  // Relayer wallets (different from user for privacy)
   let l1RelayerWallet: ReturnType<typeof createWalletClient>;
+  // Stub relayer for target chain tests (uses L1 relayer in L1-only mode)
   let targetRelayerWallet: ReturnType<typeof createWalletClient>;
 
   // Contract instance
   let aaveWrapper: ContractInstance;
-
-  // Flow orchestrators
-  let depositOrchestrator: DepositFlowOrchestrator;
-  let withdrawOrchestrator: WithdrawFlowOrchestrator;
 
   // Aztec helper
   let aztecHelper: AztecHelper;
@@ -159,12 +159,9 @@ describe("Aztec Aave Wrapper E2E", () => {
     harness = new TestHarness(config);
     const status = await harness.initialize();
 
-    // Get chain clients from harness (available regardless of PXE status)
+    // Get chain client from harness (available regardless of PXE status)
     if (status.l1Connected) {
       l1Client = harness.l1Client;
-    }
-    if (status.targetConnected) {
-      targetClient = harness.targetClient;
     }
 
     if (!status.pxeConnected) {
@@ -199,41 +196,8 @@ describe("Aztec Aave Wrapper E2E", () => {
         chain: l1Client.chain,
         transport: http(config.chains.l1.rpcUrl),
       });
-    }
-
-    if (status.targetConnected && config.chains.target) {
-      targetRelayerWallet = createWalletClient({
-        account: relayerAccount,
-        chain: targetClient.chain,
-        transport: http(config.chains.target.rpcUrl),
-      });
-
-      // Initialize deposit and withdraw orchestrators (requires target chain)
-      if (status.l1Connected) {
-        const orchestratorAddresses = {
-          l1Portal: (config.addresses.l1?.portal || addresses.local.l1.portal) as Address,
-          // Note: Target executor not available in simplified L1-only mode
-          targetExecutor: "0x0000000000000000000000000000000000000000" as Address,
-          l2Contract: (config.addresses.l2?.aaveWrapper ||
-            addresses.local.l2.aaveWrapper) as Hex,
-        };
-
-        depositOrchestrator = createDepositOrchestrator(
-          l1Client,
-          targetClient,
-          orchestratorAddresses,
-          true // Use mock mode for local testing
-        );
-        await depositOrchestrator.initialize();
-
-        withdrawOrchestrator = createWithdrawOrchestrator(
-          l1Client,
-          targetClient,
-          orchestratorAddresses,
-          true // Use mock mode for local testing
-        );
-        await withdrawOrchestrator.initialize();
-      }
+      // In L1-only mode, use L1 relayer for both L1 and "target" operations
+      targetRelayerWallet = l1RelayerWallet;
     }
 
     // Initialize Aztec helper
@@ -246,7 +210,6 @@ describe("Aztec Aave Wrapper E2E", () => {
     logger.suiteSetup({
       pxe: status.pxeConnected,
       l1: status.l1Connected,
-      target: status.targetConnected,
       accounts: status.accountsCreated,
       contracts: status.contractsDeployed,
     });
@@ -259,13 +222,7 @@ describe("Aztec Aave Wrapper E2E", () => {
   });
 
   beforeEach(() => {
-    // Reset orchestrator state for test isolation
-    if (depositOrchestrator) {
-      depositOrchestrator.reset();
-    }
-    if (withdrawOrchestrator) {
-      withdrawOrchestrator.reset();
-    }
+    // Reset state for test isolation
   });
 
   // ==========================================================================
@@ -1715,24 +1672,17 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify L1 client
       const l1ChainId = await l1Client.public.getChainId();
       expect(l1ChainId).toBe(config.chains.l1.chainId);
-
-      // Verify Target client (optional in L1-only mode)
-      if (harness?.status.targetConnected && config.chains.target) {
-        const targetChainId = await targetClient.public.getChainId();
-        expect(targetChainId).toBe(config.chains.target.chainId);
-        logger.info(`Chain clients verified - L1: ${l1ChainId}, Target: ${targetChainId}`);
-      } else {
-        logger.info(`Chain client verified - L1: ${l1ChainId} (L1-only mode)`);
-      }
+      logger.info(`Chain client verified - L1: ${l1ChainId}`);
     });
 
     it("should have Wormhole mock initialized", (ctx) => {
-      if (!harness?.status.l1Connected || !harness?.status.targetConnected) {
-        logger.skip("Chain clients not connected");
+      if (!harness?.status.l1Connected) {
+        logger.skip("L1 chain client not connected");
         ctx.skip();
         return;
       }
 
+      // Using stub targetClient for WormholeMock in L1-only mode
       const mock = new WormholeMock(l1Client, targetClient);
       mock.initialize({
         l1Portal: "0x1234567890123456789012345678901234567890" as Address,
