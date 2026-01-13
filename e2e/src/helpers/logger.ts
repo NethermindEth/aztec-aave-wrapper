@@ -4,7 +4,7 @@
  * Provides clear, structured logging for e2e tests so product managers
  * and non-developers can understand the cross-chain flow.
  *
- * Flow: Aztec L2 → Ethereum L1 → Target Chain (Aave) → L1 → L2
+ * Flow: Aztec L2 → Ethereum L1 (Portal + Aave) → L2
  */
 
 const COLORS = {
@@ -62,20 +62,18 @@ export const logger = {
   suiteSetup(services: {
     pxe: boolean;
     l1: boolean;
-    target: boolean;
     accounts: boolean;
     contracts: boolean;
   }) {
     console.log();
     console.log(`${COLORS.bright}${"=".repeat(70)}${COLORS.reset}`);
     console.log(`${COLORS.bright}  Aztec Aave Wrapper - E2E Test Suite${COLORS.reset}`);
-    console.log(`${COLORS.dim}  Privacy-preserving DeFi: Aztec L2 -> Aave on target chain${COLORS.reset}`);
+    console.log(`${COLORS.dim}  Privacy-preserving DeFi: Aztec L2 -> Aave on L1${COLORS.reset}`);
     console.log(`${"=".repeat(70)}`);
     console.log();
     console.log(`${COLORS.bright}Services:${COLORS.reset}`);
     console.log(`  ${services.pxe ? "✓" : "✗"} Aztec PXE (Private Execution Environment)`);
-    console.log(`  ${services.l1 ? "✓" : "✗"} Ethereum L1 (Portal contract)`);
-    console.log(`  ${services.target ? "✓" : "✗"} Target Chain (Aave executor)`);
+    console.log(`  ${services.l1 ? "✓" : "✗"} Ethereum L1 (Portal + Aave)`);
     console.log(`  ${services.accounts ? "✓" : "✗"} Test accounts created`);
     console.log(`  ${services.contracts ? "✓" : "✗"} Contracts deployed`);
     console.log();
@@ -121,7 +119,7 @@ export const logger = {
   },
 
   /**
-   * Log Target chain operation
+   * Log Target chain operation (used by mock tests)
    */
   target(action: string, details?: Record<string, unknown>) {
     console.log(`${CHAIN_LABELS.TARGET} ${action}`);
@@ -133,7 +131,7 @@ export const logger = {
   },
 
   /**
-   * Log bridge (Wormhole) operation
+   * Log bridge (Wormhole) operation (used by mock tests)
    */
   bridge(action: string, direction: "L1->Target" | "Target->L1") {
     const arrow = direction === "L1->Target" ? "→" : "←";

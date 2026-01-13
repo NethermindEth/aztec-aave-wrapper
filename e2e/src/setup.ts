@@ -5,7 +5,7 @@
  * - Node client initialization (3.0.0+ SDK)
  * - Account creation and management
  * - Contract deployment
- * - L1/Target chain setup
+ * - L1 chain setup
  *
  * Usage:
  *   import { TestHarness } from './setup';
@@ -68,7 +68,7 @@ export interface TestAccount {
 }
 
 /**
- * L1/Target chain client wrapper
+ * L1 chain client wrapper
  */
 export interface ChainClient {
   /** Public client for reading state */
@@ -85,7 +85,7 @@ export interface ChainClient {
 export interface DeploymentResult {
   /** Contract address */
   address: string;
-  /** Deployment transaction hash (L1/Target only) */
+  /** Deployment transaction hash (L1 only) */
   txHash?: string;
 }
 
