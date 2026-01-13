@@ -203,12 +203,8 @@ make deploy-local
 ```
 
 Deployment sequence:
-1. Deploy MockWormholeCore on L1
-2. Deploy MockWormholeTokenBridge on L1
-3. Deploy MockWormholeRelayer on L1
-4. Deploy MockWormholeCore on Target
-5. Deploy AztecAavePortalL1 on L1
-6. (Future) Deploy AaveExecutorTarget on Target
+1. Deploy AztecAavePortalL1 on L1
+2. (Future) Deploy AaveExecutorTarget on Target
 
 Addresses are saved to `.deployments.local.json`.
 
@@ -463,9 +459,6 @@ make devnet-up
 ```bash
 # View saved addresses
 cat .deployments.local.json
-
-# View Wormhole mock addresses
-cat .wormhole-mocks.json
 ```
 
 ---

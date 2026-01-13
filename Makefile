@@ -315,17 +315,6 @@ deploy-local: check-devnet-running
 	@echo "Deployment addresses saved to .deployments.local.json"
 	@echo ""
 
-## deploy-mocks: Deploy only Wormhole mock contracts
-deploy-mocks: check-devnet-running
-	@echo ""
-	@echo "Deploying Wormhole mock contracts..."
-	@echo "====================================="
-	@echo ""
-	bun run scripts/deploy-mocks.ts
-	@echo ""
-	@echo -e "$(GREEN)Mock deployment complete!$(NC)"
-	@echo ""
-
 # Internal target to check if devnet is running
 check-devnet-running:
 	@echo "Checking if devnet is running..."

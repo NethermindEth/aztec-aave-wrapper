@@ -80,28 +80,11 @@ grep "solc_version" target/foundry.toml | grep "0.8.33"
 
 ---
 
-### Step 2: Add Wormhole mock contracts for local testing **COMPLETE**
+### Step 2: Wormhole mock contracts (REMOVED)
 
-**Status**: NOT IMPLEMENTED
+**Status**: REMOVED - Architecture simplified to L1-only without Wormhole bridging
 
-#### Goal
-Create mock Wormhole contracts to enable local devnet testing without external Wormhole infrastructure. Mocks should simulate VAA generation and token normalization.
-
-#### Files
-- `l1/contracts/mocks/MockWormholeTokenBridge.sol` - [DOES NOT EXIST] Mock transferTokensWithPayload with 8-decimal normalization
-- `l1/contracts/mocks/MockWormholeRelayer.sol` - [DOES NOT EXIST] Mock message delivery
-- `target/contracts/mocks/MockWormholeCore.sol` - [DOES NOT EXIST] Mock VAA verification (signature bypass mode)
-- `scripts/deploy-mocks.ts` - [DOES NOT EXIST] Deploy script for local testing
-
-#### Validation
-```bash
-cd l1 && forge test --match-contract MockWormhole -vv
-```
-
-#### Failure modes
-- Mock VAA generation complexity - start with signature bypass mode
-- Cross-chain message delivery timing issues - add manual delivery triggers
-- Token normalization (8 decimals) not mocked properly - test with USDC (6 decimals)
+This step has been removed as the project moved to an L1-only architecture. Test files now define inline mock contracts as needed.
 
 ---
 

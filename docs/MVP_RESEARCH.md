@@ -226,17 +226,17 @@ function executeDeposit(...) external {
 - `MockERC20` ✅ exists at `l1/contracts/mocks/MockERC20.sol`
 - `MockLendingPool` - Need to **move** from `target/contracts/mocks/` to `l1/contracts/mocks/`
 
-**Current L1 mocks** (to be removed for MVP):
-- `MockWormholeCore` - at `l1/contracts/mocks/MockWormholeCore.sol`
-- `MockWormholeTokenBridge` - at `l1/contracts/mocks/MockWormholeTokenBridge.sol`
-- `MockWormholeRelayer` - at `l1/contracts/mocks/MockWormholeRelayer.sol`
+**L1 mocks** (removed as part of L1-only simplification):
+- `MockWormholeCore` - REMOVED
+- `MockWormholeTokenBridge` - REMOVED
+- `MockWormholeRelayer` - REMOVED
 
 ### 3.6 Deploy Script Updates
 
 **File**: `scripts/deploy-local.ts`
 
-**Current state**: The deploy script still deploys the full three-chain architecture:
-- L1: MockWormholeCore, MockWormholeTokenBridge, MockWormholeRelayer, MockERC20, AztecAavePortalL1
+**Current state**: The deploy script deploys the simplified L1-only architecture:
+- L1: MockERC20, AztecAavePortalL1
 - Target: MockWormholeCore, MockLendingPool, MockERC20, AaveExecutorTarget
 - L2: AaveWrapper
 
@@ -460,9 +460,6 @@ target/contracts/mocks/MockLendingPool.sol
 target/contracts/mocks/MockWormholeCore.sol
 target/contracts/types/FailedOperation.sol
 target/contracts/types/Intent.sol
-l1/contracts/mocks/MockWormholeCore.sol
-l1/contracts/mocks/MockWormholeTokenBridge.sol
-l1/contracts/mocks/MockWormholeRelayer.sol
 l1/contracts/interfaces/IWormholeTokenBridge.sol
 l1/contracts/interfaces/IWormholeRelayer.sol
 ```
