@@ -150,11 +150,10 @@ unconstrained fn test_compute_withdraw_confirmation_content_deterministic() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
-    let target_chain_id: u32 = 23;
 
     // Compute hash twice
-    let hash1 = compute_withdraw_confirmation_content(intent_id, asset_id, amount, target_chain_id);
-    let hash2 = compute_withdraw_confirmation_content(intent_id, asset_id, amount, target_chain_id);
+    let hash1 = compute_withdraw_confirmation_content(intent_id, asset_id, amount);
+    let hash2 = compute_withdraw_confirmation_content(intent_id, asset_id, amount);
 
     // Should produce identical hashes
     assert(hash1 == hash2, "Withdraw confirmation hash should be deterministic");
@@ -167,16 +166,14 @@ unconstrained fn test_compute_withdraw_confirmation_content_different_inputs() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
-    let target_chain_id: u32 = 23;
 
-    let hash1 = compute_withdraw_confirmation_content(intent_id, asset_id, amount, target_chain_id);
+    let hash1 = compute_withdraw_confirmation_content(intent_id, asset_id, amount);
 
     // Change intent_id
     let hash2 = compute_withdraw_confirmation_content(
         0x9999999999999999, // Different intent_id
         asset_id,
         amount,
-        target_chain_id,
     );
 
     // Change amount
@@ -184,7 +181,6 @@ unconstrained fn test_compute_withdraw_confirmation_content_different_inputs() {
         intent_id,
         asset_id,
         2000000, // Different amount
-        target_chain_id,
     );
 
     // Change asset_id
@@ -192,22 +188,12 @@ unconstrained fn test_compute_withdraw_confirmation_content_different_inputs() {
         intent_id,
         2, // Different asset_id
         amount,
-        target_chain_id,
-    );
-
-    // Change target_chain_id
-    let hash5 = compute_withdraw_confirmation_content(
-        intent_id,
-        asset_id,
-        amount,
-        42, // Different chain_id
     );
 
     // All hashes should be different
     assert(hash1 != hash2, "Different intent_id should produce different hash");
     assert(hash1 != hash3, "Different amount should produce different hash");
     assert(hash1 != hash4, "Different asset_id should produce different hash");
-    assert(hash1 != hash5, "Different target_chain_id should produce different hash");
     assert(hash2 != hash3, "Hashes should be unique for each input combination");
 }
 
@@ -222,22 +208,11 @@ unconstrained fn test_compute_withdraw_confirmation_with_interest() {
     let original_shares: u128 = 100_000_000; // 100 aUSDC
     // Amount after interest accrual (e.g., 5% APY for 1 year)
     let amount_with_interest: u128 = 105_000_000; // 105 USDC
-    let target_chain_id: u32 = 23;
 
-    let hash = compute_withdraw_confirmation_content(
-        intent_id,
-        asset_id,
-        amount_with_interest,
-        target_chain_id,
-    );
+    let hash = compute_withdraw_confirmation_content(intent_id, asset_id, amount_with_interest);
 
     // Hash should be different from same intent with original amount
-    let hash_original = compute_withdraw_confirmation_content(
-        intent_id,
-        asset_id,
-        original_shares,
-        target_chain_id,
-    );
+    let hash_original = compute_withdraw_confirmation_content(intent_id, asset_id, original_shares);
 
     assert(hash != hash_original, "Different amounts should produce different hashes");
     assert(hash != 0, "Interest-bearing withdrawal should produce valid hash");

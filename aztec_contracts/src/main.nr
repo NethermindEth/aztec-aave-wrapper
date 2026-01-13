@@ -115,7 +115,6 @@ pub fn compute_deposit_confirmation_content(
 /// * `intent_id` - The unique identifier of the withdrawal intent
 /// * `asset_id` - Identifier for the withdrawn asset
 /// * `amount` - Amount of tokens that were withdrawn
-/// * `target_chain_id` - Wormhole chain ID where the withdrawal was executed
 ///
 /// # Returns
 /// * `Field` - The message content hash for L1->L2 verification
@@ -123,14 +122,11 @@ pub fn compute_withdraw_confirmation_content(
     intent_id: Field,
     asset_id: Field,
     amount: u128,
-    target_chain_id: u32,
 ) -> Field {
     // Hash confirmation data for L1 to L2 message verification
     // This must match the encoding used by the L1 portal when sending the message
     // Owner is authenticated via secret, not included in hash
-    poseidon2_hash(
-        [intent_id, asset_id, amount as Field, target_chain_id as Field],
-    )
+    poseidon2_hash([intent_id, asset_id, amount as Field])
 }
 
 use crate::types::WithdrawIntent;
@@ -726,8 +722,7 @@ pub(crate) contract AaveWrapper {
         // Compute the expected message content hash
         // This must match exactly what the L1 portal sent
         // Note: owner is NOT in the hash - authentication is via the secret
-        let content =
-            compute_withdraw_confirmation_content(intent_id, asset_id, amount, target_chain_id);
+        let content = compute_withdraw_confirmation_content(intent_id, asset_id, amount);
 
         // Get the portal address for message verification
         let portal = self.storage.portal_address.read();
