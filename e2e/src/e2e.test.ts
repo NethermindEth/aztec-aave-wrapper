@@ -1,8 +1,9 @@
 /**
  * End-to-end tests for Aztec Aave Wrapper
  *
- * These tests validate the complete flow from L2 → L1 → Target → L1 → L2
- * for both deposit and withdrawal operations.
+ * These tests validate the complete flow for deposit and withdrawal operations.
+ * In simplified L1-only mode: L2 → L1 → L2 (Aave on L1)
+ * In cross-chain mode: L2 → L1 → Target → L1 → L2 (Aave on target chain via Wormhole)
  *
  * Prerequisites:
  * - Local devnet running (docker compose up)
@@ -200,39 +201,39 @@ describe("Aztec Aave Wrapper E2E", () => {
       });
     }
 
-    if (status.targetConnected) {
+    if (status.targetConnected && config.chains.target) {
       targetRelayerWallet = createWalletClient({
         account: relayerAccount,
         chain: targetClient.chain,
         transport: http(config.chains.target.rpcUrl),
       });
-    }
 
-    // Initialize deposit and withdraw orchestrators
-    if (status.l1Connected && status.targetConnected) {
-      const orchestratorAddresses = {
-        l1Portal: (config.addresses.l1?.portal || addresses.local.l1.portal) as Address,
-        targetExecutor: (config.addresses.target?.executor ||
-          addresses.local.target.executor) as Address,
-        l2Contract: (config.addresses.l2?.aaveWrapper ||
-          addresses.local.l2.aaveWrapper) as Hex,
-      };
+      // Initialize deposit and withdraw orchestrators (requires target chain)
+      if (status.l1Connected) {
+        const orchestratorAddresses = {
+          l1Portal: (config.addresses.l1?.portal || addresses.local.l1.portal) as Address,
+          // Note: Target executor not available in simplified L1-only mode
+          targetExecutor: "0x0000000000000000000000000000000000000000" as Address,
+          l2Contract: (config.addresses.l2?.aaveWrapper ||
+            addresses.local.l2.aaveWrapper) as Hex,
+        };
 
-      depositOrchestrator = createDepositOrchestrator(
-        l1Client,
-        targetClient,
-        orchestratorAddresses,
-        true // Use mock mode for local testing
-      );
-      await depositOrchestrator.initialize();
+        depositOrchestrator = createDepositOrchestrator(
+          l1Client,
+          targetClient,
+          orchestratorAddresses,
+          true // Use mock mode for local testing
+        );
+        await depositOrchestrator.initialize();
 
-      withdrawOrchestrator = createWithdrawOrchestrator(
-        l1Client,
-        targetClient,
-        orchestratorAddresses,
-        true // Use mock mode for local testing
-      );
-      await withdrawOrchestrator.initialize();
+        withdrawOrchestrator = createWithdrawOrchestrator(
+          l1Client,
+          targetClient,
+          orchestratorAddresses,
+          true // Use mock mode for local testing
+        );
+        await withdrawOrchestrator.initialize();
+      }
     }
 
     // Initialize Aztec helper
@@ -364,13 +365,14 @@ describe("Aztec Aave Wrapper E2E", () => {
       logger.privacy("Relayer executes without knowing user identity");
 
       // Step 6: Simulate target chain execution and Aave supply
+      // Note: In simplified L1-only mode, this uses mock addresses
       logger.step(4, "Bridge tokens to target chain via Wormhole");
       const wormholeMock = new WormholeMock(l1Client, targetClient);
       wormholeMock.initialize({
         l1Portal: (addresses.local.l1.portal ||
           "0x1234567890123456789012345678901234567890") as Address,
-        targetExecutor: (addresses.local.target.executor ||
-          "0x1234567890123456789012345678901234567890") as Address,
+        // Target executor not available in L1-only mode, use placeholder
+        targetExecutor: "0x1234567890123456789012345678901234567890" as Address,
       });
 
       logger.bridge("Sending deposit payload to target chain", "L1->Target");
@@ -638,12 +640,13 @@ describe("Aztec Aave Wrapper E2E", () => {
       });
 
       // Simulate deposit flow completion (mock mode)
+      // Note: In simplified L1-only mode, this uses mock addresses
       const wormholeMock = new WormholeMock(l1Client, targetClient);
       wormholeMock.initialize({
         l1Portal: (addresses.local.l1.portal ||
           "0x1234567890123456789012345678901234567890") as Address,
-        targetExecutor: (addresses.local.target.executor ||
-          "0x1234567890123456789012345678901234567890") as Address,
+        // Target executor not available in L1-only mode, use placeholder
+        targetExecutor: "0x1234567890123456789012345678901234567890" as Address,
       });
 
       // Simulate deposit to target
@@ -1703,8 +1706,8 @@ describe("Aztec Aave Wrapper E2E", () => {
     });
 
     it("should have chain clients initialized", async (ctx) => {
-      if (!harness?.status.l1Connected || !harness?.status.targetConnected) {
-        logger.skip("Chain clients not connected");
+      if (!harness?.status.l1Connected) {
+        logger.skip("L1 chain client not connected");
         ctx.skip();
         return;
       }
@@ -1713,11 +1716,14 @@ describe("Aztec Aave Wrapper E2E", () => {
       const l1ChainId = await l1Client.public.getChainId();
       expect(l1ChainId).toBe(config.chains.l1.chainId);
 
-      // Verify Target client
-      const targetChainId = await targetClient.public.getChainId();
-      expect(targetChainId).toBe(config.chains.target.chainId);
-
-      logger.info(`Chain clients verified - L1: ${l1ChainId}, Target: ${targetChainId}`);
+      // Verify Target client (optional in L1-only mode)
+      if (harness?.status.targetConnected && config.chains.target) {
+        const targetChainId = await targetClient.public.getChainId();
+        expect(targetChainId).toBe(config.chains.target.chainId);
+        logger.info(`Chain clients verified - L1: ${l1ChainId}, Target: ${targetChainId}`);
+      } else {
+        logger.info(`Chain client verified - L1: ${l1ChainId} (L1-only mode)`);
+      }
     });
 
     it("should have Wormhole mock initialized", (ctx) => {

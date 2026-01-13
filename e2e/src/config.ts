@@ -3,7 +3,7 @@
  *
  * Provides configuration for:
  * - Local devnet (Docker Compose environment)
- * - Testnet (Wormhole testnet + Arbitrum Sepolia)
+ * - Testnet (simplified L1-only mode)
  *
  * Usage:
  *   import { getConfig, TestEnvironment } from './config';
@@ -12,16 +12,12 @@
 
 import type {
   ContractAddresses,
-  EnvironmentConfig,
   ChainConfig,
 } from "@aztec-aave-wrapper/shared";
 import {
   CHAIN_IDS,
   WORMHOLE_CHAIN_IDS,
   LOCAL_RPC_URLS,
-  AAVE_POOL_ADDRESSES,
-  WORMHOLE_TOKEN_BRIDGE_ADDRESSES,
-  WORMHOLE_RELAYER_ADDRESSES,
 } from "@aztec-aave-wrapper/shared";
 
 // Import deployed addresses (populated by deployment scripts)
@@ -53,7 +49,8 @@ export interface TestConfig {
   chains: {
     l1: ChainConfig;
     l2: ChainConfig;
-    target: ChainConfig;
+    /** Target chain (optional, for cross-chain tests) */
+    target?: ChainConfig;
   };
   /** Contract addresses */
   addresses: ContractAddresses;
@@ -85,6 +82,7 @@ export interface TestConfig {
 
 /**
  * Create configuration for local devnet environment
+ * Note: Uses simplified L1-only architecture (no target chain / Wormhole bridging)
  */
 function createLocalConfig(mode: TestMode): TestConfig {
   return {
@@ -103,12 +101,7 @@ function createLocalConfig(mode: TestMode): TestConfig {
         wormholeChainId: 0, // No Wormhole on L2
         rpcUrl: LOCAL_RPC_URLS.PXE,
       },
-      target: {
-        name: "Anvil Target",
-        chainId: CHAIN_IDS.ANVIL_TARGET,
-        wormholeChainId: WORMHOLE_CHAIN_IDS.LOCAL_TARGET,
-        rpcUrl: LOCAL_RPC_URLS.TARGET,
-      },
+      // Target chain is not used in simplified L1-only architecture
     },
     addresses: addresses.local as ContractAddresses,
     timeouts: {
@@ -127,6 +120,7 @@ function createLocalConfig(mode: TestMode): TestConfig {
 
 /**
  * Create configuration for testnet environment
+ * Note: Uses simplified L1-only architecture (no target chain / Wormhole bridging)
  */
 function createTestnetConfig(mode: TestMode): TestConfig {
   return {
@@ -145,14 +139,7 @@ function createTestnetConfig(mode: TestMode): TestConfig {
         wormholeChainId: 0,
         rpcUrl: process.env.AZTEC_DEVNET_URL || "http://localhost:8080",
       },
-      target: {
-        name: "Arbitrum Sepolia",
-        chainId: CHAIN_IDS.ARBITRUM_SEPOLIA,
-        wormholeChainId: WORMHOLE_CHAIN_IDS.ARBITRUM_SEPOLIA,
-        rpcUrl:
-          process.env.ARBITRUM_SEPOLIA_RPC_URL ||
-          "https://sepolia-rollup.arbitrum.io/rpc",
-      },
+      // Target chain is not used in simplified L1-only architecture
     },
     addresses: addresses.testnet as ContractAddresses,
     timeouts: {
@@ -229,23 +216,9 @@ export function areAddressesDeployed(config: TestConfig): boolean {
 
   return (
     config.addresses.l2.aaveWrapper !== zeroAztecAddress &&
-    config.addresses.l1.portal !== zeroAddress &&
-    config.addresses.target.executor !== zeroAddress
+    config.addresses.l1.portal !== zeroAddress
   );
 }
-
-/**
- * Well-known testnet addresses for Wormhole and Aave
- */
-export const TESTNET_ADDRESSES = {
-  wormhole: {
-    bridge: WORMHOLE_TOKEN_BRIDGE_ADDRESSES[CHAIN_IDS.ARBITRUM_SEPOLIA],
-    relayer: WORMHOLE_RELAYER_ADDRESSES[CHAIN_IDS.ARBITRUM_SEPOLIA],
-  },
-  aave: {
-    pool: AAVE_POOL_ADDRESSES[CHAIN_IDS.ARBITRUM_SEPOLIA],
-  },
-} as const;
 
 // Re-export commonly used constants for convenience
 export {

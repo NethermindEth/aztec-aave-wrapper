@@ -40,7 +40,7 @@ beforeAll(async () => {
   console.log(`Mode: ${globalTestConfig.mode}`);
   console.log(`L1 RPC: ${globalTestConfig.chains.l1.rpcUrl}`);
   console.log(`L2 PXE: ${globalTestConfig.chains.l2.rpcUrl}`);
-  console.log(`Target RPC: ${globalTestConfig.chains.target.rpcUrl}`);
+  console.log(`Target RPC: ${globalTestConfig.chains.target?.rpcUrl ?? "(not configured - L1-only mode)"}`);
   console.log("========================================\n");
 
   isTestEnvironmentReady = true;

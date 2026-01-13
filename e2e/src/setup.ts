@@ -435,40 +435,45 @@ export class TestHarness {
       this._status.l1Connected = false;
     }
 
-    // Target Client
-    try {
-      const targetChain: Chain = {
-        id: this.config.chains.target.chainId,
-        name: this.config.chains.target.name,
-        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-        rpcUrls: {
-          default: { http: [this.config.chains.target.rpcUrl] },
-        },
-      };
+    // Target Client (optional - not used in simplified L1-only architecture)
+    if (this.config.chains.target) {
+      try {
+        const targetChain: Chain = {
+          id: this.config.chains.target.chainId,
+          name: this.config.chains.target.name,
+          nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+          rpcUrls: {
+            default: { http: [this.config.chains.target.rpcUrl] },
+          },
+        };
 
-      const targetAccount = privateKeyToAccount(LOCAL_PRIVATE_KEYS.DEPLOYER);
+        const targetAccount = privateKeyToAccount(LOCAL_PRIVATE_KEYS.DEPLOYER);
 
-      this._targetClient = {
-        public: createPublicClient({
+        this._targetClient = {
+          public: createPublicClient({
+            chain: targetChain,
+            transport: http(this.config.chains.target.rpcUrl),
+          }),
+          wallet: createWalletClient({
+            account: targetAccount,
+            chain: targetChain,
+            transport: http(this.config.chains.target.rpcUrl),
+          }),
           chain: targetChain,
-          transport: http(this.config.chains.target.rpcUrl),
-        }),
-        wallet: createWalletClient({
-          account: targetAccount,
-          chain: targetChain,
-          transport: http(this.config.chains.target.rpcUrl),
-        }),
-        chain: targetChain,
-      };
+        };
 
-      // Test connection
-      await this._targetClient.public.getChainId();
-      this._status.targetConnected = true;
-    } catch (error) {
-      console.warn(
-        `Target not available at ${this.config.chains.target.rpcUrl}:`,
-        error instanceof Error ? error.message : error
-      );
+        // Test connection
+        await this._targetClient.public.getChainId();
+        this._status.targetConnected = true;
+      } catch (error) {
+        console.warn(
+          `Target not available at ${this.config.chains.target.rpcUrl}:`,
+          error instanceof Error ? error.message : error
+        );
+        this._status.targetConnected = false;
+      }
+    } else {
+      // Target chain not configured (L1-only architecture)
       this._status.targetConnected = false;
     }
   }

@@ -163,20 +163,10 @@ export interface ContractAddresses {
   l1: {
     /** Portal contract address on Ethereum */
     portal: Address;
-    /** Token portal for bridging tokens */
-    tokenPortal: Address;
-  };
-  target: {
-    /** Executor contract on target chain */
-    executor: Address;
-    /** Aave Pool address on target chain */
-    aavePool: Address;
-  };
-  wormhole: {
-    /** Wormhole token bridge address */
-    bridge: Address;
-    /** Wormhole relayer address */
-    relayer: Address;
+    /** Mock USDC token address (for local development) */
+    mockUsdc: Address;
+    /** Mock Aave lending pool address (for local development) */
+    mockLendingPool: Address;
   };
 }
 

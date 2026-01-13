@@ -32,7 +32,8 @@ describe("E2E Setup Infrastructure", () => {
       expect(localConfig.mode).toBe("mock");
       expect(localConfig.chains.l1.rpcUrl).toBe("http://localhost:8545");
       expect(localConfig.chains.l2.rpcUrl).toBe("http://localhost:8081");
-      expect(localConfig.chains.target.rpcUrl).toBe("http://localhost:8546");
+      // Target chain is optional in L1-only mode
+      expect(localConfig.chains.target).toBeUndefined();
     });
 
     it("should load testnet configuration", () => {
@@ -41,7 +42,8 @@ describe("E2E Setup Infrastructure", () => {
       expect(testnetConfig.environment).toBe("testnet");
       expect(testnetConfig.mode).toBe("integration");
       expect(testnetConfig.chains.l1.chainId).toBe(11155111); // Sepolia
-      expect(testnetConfig.chains.target.chainId).toBe(421614); // Arbitrum Sepolia
+      // Target chain is optional in L1-only mode
+      expect(testnetConfig.chains.target).toBeUndefined();
     });
 
     it("should load configuration from environment", () => {
