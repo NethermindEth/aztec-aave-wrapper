@@ -4,34 +4,38 @@
  * This module provides helper functions for orchestrating the complete deposit flow
  * as specified in spec.md §4.1:
  *
- * Flow: L2 request → L1 bridge → Target Aave supply → L1 confirm → L2 finalize
+ * Flow (L1-only architecture): L2 request → L1 portal → Aave supply → L1 confirm → L2 finalize
  *
- * The deposit flow consists of 6 steps:
+ * The deposit flow consists of 5 steps:
  * 1. User initiates on L2 (private) - request_deposit creates intent and L2→L1 message
- * 2. L1 portal executes (public) - consumes message, bridges via Wormhole
- * 3. Target executor supplies to Aave - receives tokens, supplies to pool
- * 4. Target executor returns confirmation - sends Wormhole message back to L1
- * 5. L1 portal posts completion to Aztec - sends L1→L2 message
- * 6. L2 finalizes (private) - creates PositionReceiptNote
+ * 2. L1 portal executes (public) - consumes message, supplies to Aave directly
+ * 3. L1 portal sends confirmation to Aztec - sends L1→L2 message with shares
+ * 4. L2 finalizes (private) - creates PositionReceiptNote
  *
  * Privacy Property:
- * - The relayer executing L1/Target steps should be different from the user
+ * - The relayer executing L1 steps should be different from the user
  * - L2 owner address is NEVER included in cross-chain messages
  * - Authentication uses secret/secretHash mechanism
+ *
+ * Note: This is the simplified L1-only architecture where Aave operations
+ * happen directly on L1, eliminating the need for Wormhole bridging.
  */
 
-import type { Address, Hex, PublicClient, WalletClient } from "viem";
-import { encodeFunctionData, keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
+import type { Address, Hex, WalletClient } from "viem";
+import { keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
 import type { ChainClient } from "../setup";
-import {
-  WormholeMock,
-  ConfirmationStatus,
-  encodeDepositConfirmation,
-} from "../utils/wormhole-mock";
 
 // =============================================================================
 // Type Definitions
 // =============================================================================
+
+/**
+ * Confirmation status for deposit/withdraw operations
+ */
+export enum ConfirmationStatus {
+  Success = 0,
+  Failed = 1,
+}
 
 /**
  * Deposit intent parameters for L2 request
@@ -92,36 +96,18 @@ export interface L1ExecuteResult {
   txHash: Hex;
   /** Whether execution succeeded */
   success: boolean;
-  /** Wormhole sequence number (for tracking) */
-  wormholeSequence?: bigint;
-}
-
-/**
- * Target executor result
- */
-export interface TargetExecuteResult {
-  /** Transaction hash on target chain */
-  txHash: Hex;
-  /** Whether execution succeeded */
-  success: boolean;
   /** Shares received from Aave supply */
-  shares: bigint;
-  /** Confirmation status */
-  status: ConfirmationStatus;
+  shares?: bigint;
 }
 
 /**
- * Full deposit flow result
+ * Full deposit flow result (L1-only architecture)
  */
 export interface FullDepositFlowResult {
   /** L2 request result */
   l2Request: DepositRequestResult;
-  /** L1 execution result */
+  /** L1 execution result (includes Aave supply) */
   l1Execute: L1ExecuteResult;
-  /** Target execution result */
-  targetExecute: TargetExecuteResult;
-  /** L1 confirmation result */
-  l1Confirmation: { success: boolean; txHash?: Hex };
   /** L2 finalization result */
   l2Finalize: { success: boolean; txHash?: string };
   /** Privacy verification passed */
@@ -134,8 +120,6 @@ export interface FullDepositFlowResult {
 export interface RelayerConfig {
   /** L1 relayer wallet client */
   l1Relayer: WalletClient;
-  /** Target chain relayer wallet client */
-  targetRelayer: WalletClient;
 }
 
 // =============================================================================
@@ -143,82 +127,82 @@ export interface RelayerConfig {
 // =============================================================================
 
 /**
- * DepositFlowOrchestrator manages the complete deposit flow across all chains.
+ * DepositFlowOrchestrator manages the complete deposit flow for L1-only architecture.
  *
  * This class coordinates:
  * - L2 Aztec contract interactions
- * - L1 portal execution
- * - Wormhole message delivery (mock or testnet)
- * - Target chain Aave operations
+ * - L1 portal execution with direct Aave supply
  * - Privacy verification
+ *
+ * Note: This is the simplified L1-only architecture. Aave operations happen
+ * directly on L1, eliminating the need for cross-chain Wormhole messaging.
  *
  * @example
  * ```ts
- * const orchestrator = new DepositFlowOrchestrator(harness);
+ * const orchestrator = new DepositFlowOrchestrator(l1Client, addresses);
  * await orchestrator.initialize();
  *
- * const result = await orchestrator.executeFullDeposit({
- *   assetId: 1n,
- *   amount: 1_000_000n,
- *   targetChainId: 23,
- *   deadline: deadlineFromOffset(3600),
- *   secret: Fr.random().toBigInt(),
- * }, relayerConfig);
+ * const result = await orchestrator.executeFullDeposit(
+ *   l2Contract,
+ *   userWallet,
+ *   {
+ *     assetId: 1n,
+ *     amount: 1_000_000n,
+ *     originalDecimals: 6,
+ *     deadline: deadlineFromOffset(3600),
+ *     secret: Fr.random().toBigInt(),
+ *   },
+ *   relayerConfig,
+ *   userAddress
+ * );
  *
  * expect(result.privacyVerified).toBe(true);
  * ```
  */
 export class DepositFlowOrchestrator {
   private l1Client: ChainClient;
-  private targetClient: ChainClient;
-  private wormholeMock: WormholeMock | null = null;
   private addresses: {
     l1Portal: Address;
-    targetExecutor: Address;
+    aavePool: Address;
     l2Contract: Hex;
   };
   private useMock: boolean;
 
   constructor(
     l1Client: ChainClient,
-    targetClient: ChainClient,
     addresses: {
       l1Portal: Address;
-      targetExecutor: Address;
+      aavePool: Address;
       l2Contract: Hex;
     },
     useMock: boolean = true
   ) {
     this.l1Client = l1Client;
-    this.targetClient = targetClient;
     this.addresses = addresses;
     this.useMock = useMock;
   }
 
   /**
-   * Initialize the orchestrator and set up Wormhole mock if needed.
+   * Initialize the orchestrator.
    */
   async initialize(): Promise<void> {
-    if (this.useMock) {
-      this.wormholeMock = new WormholeMock(this.l1Client, this.targetClient);
-      this.wormholeMock.initialize({
-        l1Portal: this.addresses.l1Portal,
-        targetExecutor: this.addresses.targetExecutor,
-      });
+    // No Wormhole mock needed in L1-only architecture
+    // Just verify we have the required addresses
+    if (!this.addresses.l1Portal || !this.addresses.aavePool) {
+      throw new Error("L1 portal and Aave pool addresses are required");
     }
   }
 
   /**
-   * Execute the full deposit flow from L2 to Target and back.
+   * Execute the full deposit flow from L2 to L1 Aave and back.
    *
-   * This implements the complete spec.md §4.1 deposit flow:
+   * This implements the L1-only deposit flow:
    * 1. L2 request_deposit
-   * 2. L1 executeDeposit
-   * 3. Target consumeAndExecuteDeposit
-   * 4. Target sends confirmation
-   * 5. L1 receives and sends to L2
-   * 6. L2 finalize_deposit
+   * 2. L1 executeDeposit (consumes message, supplies to Aave, sends confirmation)
+   * 3. L2 finalize_deposit
    *
+   * @param l2Contract L2 contract instance
+   * @param userWallet User's wallet
    * @param params Deposit parameters
    * @param relayer Relayer configuration (must be different from user for privacy)
    * @param userAddress User's address (for privacy verification)
@@ -234,7 +218,7 @@ export class DepositFlowOrchestrator {
     // Step 1: Execute L2 request_deposit
     const l2Request = await this.executeL2Request(l2Contract, userWallet, params);
 
-    // Step 2: Execute L1 portal deposit (relayer executes, not user)
+    // Step 2: Execute L1 portal deposit with direct Aave supply (relayer executes, not user)
     const l1Execute = await this.executeL1Deposit(
       relayer.l1Relayer,
       l2Request,
@@ -246,40 +230,21 @@ export class DepositFlowOrchestrator {
     const l1ExecutorAddress = relayer.l1Relayer.account?.address;
     const privacyCheckL1 = l1ExecutorAddress?.toLowerCase() !== userAddress.toLowerCase();
 
-    // Step 3: Execute target chain Aave supply (via Wormhole delivery)
-    const targetExecute = await this.executeTargetDeposit(
-      relayer.targetRelayer,
-      l2Request.intentId,
-      params
-    );
-
-    // Privacy check: Target executor should not be the user
-    const targetExecutorAddress = relayer.targetRelayer.account?.address;
-    const privacyCheckTarget = targetExecutorAddress?.toLowerCase() !== userAddress.toLowerCase();
-
-    // Step 4: Send confirmation back to L1
-    const l1Confirmation = await this.sendConfirmationToL1(
-      l2Request.intentId,
-      targetExecute.shares,
-      targetExecute.status
-    );
-
-    // Step 5: L2 finalize_deposit (user executes)
+    // Step 3: L2 finalize_deposit (user executes)
+    const shares = l1Execute.shares || params.amount; // MVP: shares = amount
     const l2Finalize = await this.executeL2Finalize(
       l2Contract,
       userWallet,
       l2Request.intentId,
       params.secret,
-      targetExecute.shares
+      shares
     );
 
     return {
       l2Request,
       l1Execute,
-      targetExecute,
-      l1Confirmation,
       l2Finalize,
-      privacyVerified: privacyCheckL1 && privacyCheckTarget,
+      privacyVerified: privacyCheckL1,
     };
   }
 
@@ -334,7 +299,12 @@ export class DepositFlowOrchestrator {
   }
 
   /**
-   * Step 2: Execute deposit on L1 portal.
+   * Step 2: Execute deposit on L1 portal with direct Aave supply.
+   *
+   * In L1-only architecture, the portal:
+   * 1. Consumes the L2→L1 message
+   * 2. Supplies tokens directly to Aave on L1
+   * 3. Sends L1→L2 confirmation message
    */
   private async executeL1Deposit(
     l1Relayer: WalletClient,
@@ -342,10 +312,13 @@ export class DepositFlowOrchestrator {
     params: DepositRequestParams,
     _userAddress: Address
   ): Promise<L1ExecuteResult> {
-    // In mock mode, we simulate the L1 portal execution
+    // In mock mode, we simulate the L1 portal execution with direct Aave supply
     if (this.useMock) {
       // For mock tests, we simulate successful execution
-      // The actual L1 portal would consume the outbox message and bridge via Wormhole
+      // The actual L1 portal would:
+      // 1. Consume the outbox message
+      // 2. Supply to Aave directly (no Wormhole bridging)
+      // 3. Send L1→L2 confirmation
       const mockTxHash = keccak256(
         encodeAbiParameters(
           parseAbiParameters("bytes32, uint256, uint256"),
@@ -353,72 +326,21 @@ export class DepositFlowOrchestrator {
         )
       );
 
+      // MVP: shares = amount (no yield accounting in mock)
       return {
         txHash: mockTxHash,
         success: true,
-        wormholeSequence: BigInt(Math.floor(Math.random() * 1000000)),
+        shares: params.amount,
       };
     }
 
-    // Real execution would call the L1 portal contract
+    // Real execution would call the L1 portal contract's executeDeposit function
     // This requires proper outbox proof generation from Aztec
     throw new Error("Real L1 execution not yet implemented - requires outbox proof generation");
   }
 
   /**
-   * Step 3: Execute deposit on target chain (Aave supply).
-   */
-  private async executeTargetDeposit(
-    targetRelayer: WalletClient,
-    intentId: bigint,
-    params: DepositRequestParams
-  ): Promise<TargetExecuteResult> {
-    // In mock mode, simulate the target execution
-    if (this.useMock) {
-      // Mock successful Aave supply
-      // In real execution, this would call consumeAndExecuteDeposit with VAA
-      const mockTxHash = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters("bytes32, uint256"),
-          [`0x${intentId.toString(16).padStart(64, "0")}`, params.amount]
-        )
-      );
-
-      // MVP: shares = amount (no yield accounting)
-      return {
-        txHash: mockTxHash,
-        success: true,
-        shares: params.amount,
-        status: ConfirmationStatus.Success,
-      };
-    }
-
-    // Real execution would call AaveExecutorTarget.consumeAndExecuteDeposit
-    throw new Error("Real target execution not yet implemented - requires VAA");
-  }
-
-  /**
-   * Step 4: Send confirmation from target back to L1.
-   */
-  private async sendConfirmationToL1(
-    intentId: bigint,
-    shares: bigint,
-    status: ConfirmationStatus
-  ): Promise<{ success: boolean; txHash?: Hex }> {
-    if (this.useMock && this.wormholeMock) {
-      const result = await this.wormholeMock.deliverDepositConfirmation(intentId, shares, status);
-      return {
-        success: result.success,
-        txHash: result.txHash,
-      };
-    }
-
-    // Real execution would wait for Wormhole VAA delivery
-    throw new Error("Real confirmation delivery not yet implemented");
-  }
-
-  /**
-   * Step 6: Finalize deposit on L2.
+   * Step 3: Finalize deposit on L2.
    */
   private async executeL2Finalize(
     l2Contract: unknown,
@@ -461,9 +383,8 @@ export class DepositFlowOrchestrator {
    * Reset the orchestrator state (for test isolation).
    */
   reset(): void {
-    if (this.wormholeMock) {
-      this.wormholeMock.reset();
-    }
+    // No state to reset in L1-only architecture
+    // (Wormhole mock was removed)
   }
 }
 
@@ -509,21 +430,27 @@ export async function computeSalt(caller: bigint, secretHash: bigint): Promise<b
 }
 
 /**
- * Verify that the relayer addresses are different from the user.
+ * Verify that the relayer address is different from the user.
  *
  * This is a key privacy property of the protocol.
+ *
+ * Note: In L1-only architecture, there is only one relayer (L1).
+ * The targetRelayerAddress parameter is kept for backward compatibility
+ * but should be the same as l1RelayerAddress.
  */
 export function verifyRelayerPrivacy(
   userAddress: Address,
   l1RelayerAddress: Address,
-  targetRelayerAddress: Address
+  targetRelayerAddress?: Address
 ): {
   l1PrivacyOk: boolean;
   targetPrivacyOk: boolean;
   allPrivacyOk: boolean;
 } {
   const l1PrivacyOk = userAddress.toLowerCase() !== l1RelayerAddress.toLowerCase();
-  const targetPrivacyOk = userAddress.toLowerCase() !== targetRelayerAddress.toLowerCase();
+  // In L1-only mode, targetRelayerAddress is optional or same as L1 relayer
+  const targetRelayer = targetRelayerAddress || l1RelayerAddress;
+  const targetPrivacyOk = userAddress.toLowerCase() !== targetRelayer.toLowerCase();
 
   return {
     l1PrivacyOk,
@@ -565,13 +492,12 @@ export async function waitForCondition(
  */
 export function createDepositOrchestrator(
   l1Client: ChainClient,
-  targetClient: ChainClient,
   addresses: {
     l1Portal: Address;
-    targetExecutor: Address;
+    aavePool: Address;
     l2Contract: Hex;
   },
   useMock: boolean = true
 ): DepositFlowOrchestrator {
-  return new DepositFlowOrchestrator(l1Client, targetClient, addresses, useMock);
+  return new DepositFlowOrchestrator(l1Client, addresses, useMock);
 }

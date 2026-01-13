@@ -4,29 +4,27 @@
  * This module provides helper functions for orchestrating the complete withdrawal flow
  * as specified in spec.md §4.2:
  *
- * Flow: L2 request → L1 bridge → Target Aave withdraw → Bridge back → L1 → L2 finalize
+ * Flow (L1-only architecture): L2 request → L1 portal → Aave withdraw → L1 confirm → L2 finalize
  *
- * The withdrawal flow consists of 5 steps:
+ * The withdrawal flow consists of 4 steps:
  * 1. User initiates on L2 (private) - request_withdraw consumes receipt, creates L2→L1 message
- * 2. L1 portal executes (public) - consumes message, sends Wormhole to target
- * 3. Target executor withdraws from Aave - receives message, calls pool.withdraw, bridges tokens back
- * 4. L1 portal receives tokens - bridges tokens to Aztec, sends L1→L2 message
- * 5. L2 finalizes (private) - consumes message, nullifies pending note, user gets tokens
+ * 2. L1 portal executes (public) - consumes message, withdraws from Aave directly
+ * 3. L1 portal sends tokens to Aztec - sends L1→L2 message
+ * 4. L2 finalizes (private) - consumes message, nullifies pending note, user gets tokens
  *
  * Privacy Property:
- * - The relayer executing L1/Target steps should be different from the user
+ * - The relayer executing L1 steps should be different from the user
  * - L2 owner address is NEVER included in cross-chain messages
  * - Authentication uses secret/secretHash mechanism
+ *
+ * Note: This is the simplified L1-only architecture where Aave operations
+ * happen directly on L1, eliminating the need for Wormhole bridging.
  */
 
 import type { Address, Hex, WalletClient } from "viem";
 import { keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
 import type { ChainClient } from "../setup";
-import {
-  WormholeMock,
-  ConfirmationStatus,
-} from "../utils/wormhole-mock";
-import type { RelayerConfig } from "./deposit";
+import { ConfirmationStatus, type RelayerConfig } from "./deposit";
 
 // =============================================================================
 // Type Definitions
@@ -80,43 +78,25 @@ export interface L1ExecuteWithdrawParams {
 }
 
 /**
- * Result of L1 portal execution for withdrawal
+ * Result of L1 portal execution for withdrawal (L1-only architecture)
  */
 export interface L1ExecuteWithdrawResult {
   /** Transaction hash on L1 */
   txHash: Hex;
   /** Whether execution succeeded */
   success: boolean;
-  /** Wormhole sequence number (for tracking) */
-  wormholeSequence?: bigint;
-}
-
-/**
- * Target executor withdrawal result
- */
-export interface TargetWithdrawResult {
-  /** Transaction hash on target chain */
-  txHash: Hex;
-  /** Whether execution succeeded */
-  success: boolean;
   /** Amount actually withdrawn from Aave */
-  withdrawnAmount: bigint;
-  /** Confirmation status */
-  status: ConfirmationStatus;
+  withdrawnAmount?: bigint;
 }
 
 /**
- * Full withdrawal flow result
+ * Full withdrawal flow result (L1-only architecture)
  */
 export interface FullWithdrawFlowResult {
   /** L2 request result */
   l2Request: WithdrawRequestResult;
-  /** L1 execution result */
+  /** L1 execution result (includes Aave withdrawal) */
   l1Execute: L1ExecuteWithdrawResult;
-  /** Target execution result */
-  targetExecute: TargetWithdrawResult;
-  /** L1 token bridge back result */
-  l1TokenBridge: { success: boolean; txHash?: Hex };
   /** L2 finalization result */
   l2Finalize: { success: boolean; txHash?: string };
   /** Privacy verification passed */
@@ -134,85 +114,85 @@ export type { RelayerConfig } from "./deposit";
 // =============================================================================
 
 /**
- * WithdrawFlowOrchestrator manages the complete withdrawal flow across all chains.
+ * WithdrawFlowOrchestrator manages the complete withdrawal flow for L1-only architecture.
  *
  * This class coordinates:
  * - L2 Aztec contract interactions
- * - L1 portal execution
- * - Wormhole message delivery (mock or testnet)
- * - Target chain Aave withdrawal
- * - Token bridge back to L1
+ * - L1 portal execution with direct Aave withdrawal
  * - Privacy verification
+ *
+ * Note: This is the simplified L1-only architecture. Aave operations happen
+ * directly on L1, eliminating the need for cross-chain Wormhole messaging.
  *
  * @example
  * ```ts
- * const orchestrator = new WithdrawFlowOrchestrator(harness);
+ * const orchestrator = new WithdrawFlowOrchestrator(l1Client, addresses);
  * await orchestrator.initialize();
  *
- * const result = await orchestrator.executeFullWithdraw({
- *   nonce: depositIntentId,
- *   amount: 1_000_000n,
- *   assetId: 1n,
- *   targetChainId: 23,
- *   deadline: deadlineFromOffset(3600),
- *   secretHash: secretHashValue,
- * }, relayerConfig);
+ * const result = await orchestrator.executeFullWithdraw(
+ *   l2Contract,
+ *   userWallet,
+ *   {
+ *     nonce: depositIntentId,
+ *     amount: 1_000_000n,
+ *     assetId: 1n,
+ *     deadline: deadlineFromOffset(3600),
+ *     secretHash: secretHashValue,
+ *   },
+ *   secret,
+ *   relayerConfig,
+ *   userAddress
+ * );
  *
  * expect(result.privacyVerified).toBe(true);
  * ```
  */
 export class WithdrawFlowOrchestrator {
   private l1Client: ChainClient;
-  private targetClient: ChainClient;
-  private wormholeMock: WormholeMock | null = null;
   private addresses: {
     l1Portal: Address;
-    targetExecutor: Address;
+    aavePool: Address;
     l2Contract: Hex;
   };
   private useMock: boolean;
 
   constructor(
     l1Client: ChainClient,
-    targetClient: ChainClient,
     addresses: {
       l1Portal: Address;
-      targetExecutor: Address;
+      aavePool: Address;
       l2Contract: Hex;
     },
     useMock: boolean = true
   ) {
     this.l1Client = l1Client;
-    this.targetClient = targetClient;
     this.addresses = addresses;
     this.useMock = useMock;
   }
 
   /**
-   * Initialize the orchestrator and set up Wormhole mock if needed.
+   * Initialize the orchestrator.
    */
   async initialize(): Promise<void> {
-    if (this.useMock) {
-      this.wormholeMock = new WormholeMock(this.l1Client, this.targetClient);
-      this.wormholeMock.initialize({
-        l1Portal: this.addresses.l1Portal,
-        targetExecutor: this.addresses.targetExecutor,
-      });
+    // No Wormhole mock needed in L1-only architecture
+    // Just verify we have the required addresses
+    if (!this.addresses.l1Portal || !this.addresses.aavePool) {
+      throw new Error("L1 portal and Aave pool addresses are required");
     }
   }
 
   /**
-   * Execute the full withdrawal flow from L2 to Target and back.
+   * Execute the full withdrawal flow from L2 to L1 Aave and back.
    *
-   * This implements the complete spec.md §4.2 withdrawal flow:
+   * This implements the L1-only withdrawal flow:
    * 1. L2 request_withdraw
-   * 2. L1 executeWithdraw
-   * 3. Target executeWithdraw (Aave pool.withdraw)
-   * 4. Target bridges tokens back to L1
-   * 5. L1 receives tokens, bridges to Aztec, sends L1->L2 message
-   * 6. L2 finalize_withdraw
+   * 2. L1 executeWithdraw (consumes message, withdraws from Aave, sends confirmation)
+   * 3. L2 finalize_withdraw
    *
+   * @param l2Contract L2 contract instance
+   * @param userWallet User's wallet
    * @param params Withdrawal parameters
+   * @param secret Secret for finalization
    * @param relayer Relayer configuration (must be different from user for privacy)
    * @param userAddress User's address (for privacy verification)
    * @returns Full flow result including privacy verification
@@ -228,7 +208,7 @@ export class WithdrawFlowOrchestrator {
     // Step 1: Execute L2 request_withdraw
     const l2Request = await this.executeL2Request(l2Contract, userWallet, params);
 
-    // Step 2: Execute L1 portal withdrawal (relayer executes, not user)
+    // Step 2: Execute L1 portal withdrawal with direct Aave withdrawal (relayer executes, not user)
     const l1Execute = await this.executeL1Withdraw(
       relayer.l1Relayer,
       l2Request,
@@ -239,41 +219,22 @@ export class WithdrawFlowOrchestrator {
     const l1ExecutorAddress = relayer.l1Relayer.account?.address;
     const privacyCheckL1 = l1ExecutorAddress?.toLowerCase() !== userAddress.toLowerCase();
 
-    // Step 3: Execute target chain Aave withdrawal (via Wormhole delivery)
-    const targetExecute = await this.executeTargetWithdraw(
-      relayer.targetRelayer,
-      l2Request.intentId,
-      params
-    );
-
-    // Privacy check: Target executor should not be the user
-    const targetExecutorAddress = relayer.targetRelayer.account?.address;
-    const privacyCheckTarget = targetExecutorAddress?.toLowerCase() !== userAddress.toLowerCase();
-
-    // Step 4: Bridge tokens back to L1 and then to Aztec
-    const l1TokenBridge = await this.bridgeTokensToL1(
-      l2Request.intentId,
-      targetExecute.withdrawnAmount,
-      params.assetId
-    );
-
-    // Step 5: L2 finalize_withdraw (user executes)
+    // Step 3: L2 finalize_withdraw (user executes)
+    const withdrawnAmount = l1Execute.withdrawnAmount || params.amount;
     const l2Finalize = await this.executeL2Finalize(
       l2Contract,
       userWallet,
       l2Request.intentId,
       params.assetId,
-      targetExecute.withdrawnAmount,
+      withdrawnAmount,
       secret
     );
 
     return {
       l2Request,
       l1Execute,
-      targetExecute,
-      l1TokenBridge,
       l2Finalize,
-      privacyVerified: privacyCheckL1 && privacyCheckTarget,
+      privacyVerified: privacyCheckL1,
     };
   }
 
@@ -322,17 +283,25 @@ export class WithdrawFlowOrchestrator {
   }
 
   /**
-   * Step 2: Execute withdrawal on L1 portal.
+   * Step 2: Execute withdrawal on L1 portal with direct Aave withdrawal.
+   *
+   * In L1-only architecture, the portal:
+   * 1. Consumes the L2→L1 message
+   * 2. Withdraws tokens directly from Aave on L1
+   * 3. Sends L1→L2 confirmation message
    */
   private async executeL1Withdraw(
     l1Relayer: WalletClient,
     l2Request: WithdrawRequestResult,
     params: WithdrawRequestParams
   ): Promise<L1ExecuteWithdrawResult> {
-    // In mock mode, we simulate the L1 portal execution
+    // In mock mode, we simulate the L1 portal execution with direct Aave withdrawal
     if (this.useMock) {
       // For mock tests, we simulate successful execution
-      // The actual L1 portal would consume the outbox message and bridge via Wormhole
+      // The actual L1 portal would:
+      // 1. Consume the outbox message
+      // 2. Withdraw from Aave directly (no Wormhole bridging)
+      // 3. Send L1→L2 confirmation
       const mockTxHash = keccak256(
         encodeAbiParameters(
           parseAbiParameters("bytes32, uint256, uint256"),
@@ -340,95 +309,21 @@ export class WithdrawFlowOrchestrator {
         )
       );
 
+      // MVP: withdrawnAmount = amount (no yield accounting in mock)
       return {
         txHash: mockTxHash,
         success: true,
-        wormholeSequence: BigInt(Math.floor(Math.random() * 1000000)),
+        withdrawnAmount: params.amount,
       };
     }
 
-    // Real execution would call the L1 portal contract
+    // Real execution would call the L1 portal contract's executeWithdraw function
     // This requires proper outbox proof generation from Aztec
     throw new Error("Real L1 execution not yet implemented - requires outbox proof generation");
   }
 
   /**
-   * Step 3: Execute withdrawal on target chain (Aave withdraw).
-   */
-  private async executeTargetWithdraw(
-    targetRelayer: WalletClient,
-    intentId: bigint,
-    params: WithdrawRequestParams
-  ): Promise<TargetWithdrawResult> {
-    // In mock mode, simulate the target execution
-    if (this.useMock) {
-      // Simulate Wormhole delivery to target
-      if (this.wormholeMock) {
-        const deliveryResult = await this.wormholeMock.deliverWithdrawToTarget(
-          intentId,
-          params.amount,
-          params.deadline
-        );
-
-        if (!deliveryResult.success) {
-          return {
-            txHash: "0x" as Hex,
-            success: false,
-            withdrawnAmount: 0n,
-            status: ConfirmationStatus.Failed,
-          };
-        }
-      }
-
-      // Mock successful Aave withdrawal
-      // In real execution, this would call consumeAndExecuteWithdraw with VAA
-      const mockTxHash = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters("bytes32, uint256"),
-          [`0x${intentId.toString(16).padStart(64, "0")}`, params.amount]
-        )
-      );
-
-      // MVP: withdrawnAmount = amount (no yield accounting)
-      return {
-        txHash: mockTxHash,
-        success: true,
-        withdrawnAmount: params.amount,
-        status: ConfirmationStatus.Success,
-      };
-    }
-
-    // Real execution would call AaveExecutorTarget.consumeAndExecuteWithdraw
-    throw new Error("Real target execution not yet implemented - requires VAA");
-  }
-
-  /**
-   * Step 4: Bridge tokens back from target to L1 and then to Aztec.
-   */
-  private async bridgeTokensToL1(
-    intentId: bigint,
-    amount: bigint,
-    assetId: bigint
-  ): Promise<{ success: boolean; txHash?: Hex }> {
-    if (this.useMock && this.wormholeMock) {
-      // Simulate token bridge back and confirmation to L1
-      const result = await this.wormholeMock.deliverWithdrawConfirmation(
-        intentId,
-        amount,
-        ConfirmationStatus.Success
-      );
-      return {
-        success: result.success,
-        txHash: result.txHash,
-      };
-    }
-
-    // Real execution would wait for Wormhole VAA delivery and token bridge
-    throw new Error("Real token bridge not yet implemented");
-  }
-
-  /**
-   * Step 5: Finalize withdrawal on L2.
+   * Step 3: Finalize withdrawal on L2.
    */
   private async executeL2Finalize(
     l2Contract: unknown,
@@ -477,9 +372,8 @@ export class WithdrawFlowOrchestrator {
    * Reset the orchestrator state (for test isolation).
    */
   reset(): void {
-    if (this.wormholeMock) {
-      this.wormholeMock.reset();
-    }
+    // No state to reset in L1-only architecture
+    // (Wormhole mock was removed)
   }
 }
 
@@ -488,21 +382,27 @@ export class WithdrawFlowOrchestrator {
 // =============================================================================
 
 /**
- * Verify that the relayer addresses are different from the user.
+ * Verify that the relayer address is different from the user.
  *
  * This is a key privacy property of the protocol.
+ *
+ * Note: In L1-only architecture, there is only one relayer (L1).
+ * The targetRelayerAddress parameter is kept for backward compatibility
+ * but should be the same as l1RelayerAddress.
  */
 export function verifyWithdrawRelayerPrivacy(
   userAddress: Address,
   l1RelayerAddress: Address,
-  targetRelayerAddress: Address
+  targetRelayerAddress?: Address
 ): {
   l1PrivacyOk: boolean;
   targetPrivacyOk: boolean;
   allPrivacyOk: boolean;
 } {
   const l1PrivacyOk = userAddress.toLowerCase() !== l1RelayerAddress.toLowerCase();
-  const targetPrivacyOk = userAddress.toLowerCase() !== targetRelayerAddress.toLowerCase();
+  // In L1-only mode, targetRelayerAddress is optional or same as L1 relayer
+  const targetRelayer = targetRelayerAddress || l1RelayerAddress;
+  const targetPrivacyOk = userAddress.toLowerCase() !== targetRelayer.toLowerCase();
 
   return {
     l1PrivacyOk,
@@ -516,13 +416,12 @@ export function verifyWithdrawRelayerPrivacy(
  */
 export function createWithdrawOrchestrator(
   l1Client: ChainClient,
-  targetClient: ChainClient,
   addresses: {
     l1Portal: Address;
-    targetExecutor: Address;
+    aavePool: Address;
     l2Contract: Hex;
   },
   useMock: boolean = true
 ): WithdrawFlowOrchestrator {
-  return new WithdrawFlowOrchestrator(l1Client, targetClient, addresses, useMock);
+  return new WithdrawFlowOrchestrator(l1Client, addresses, useMock);
 }

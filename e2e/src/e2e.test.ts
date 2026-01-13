@@ -21,21 +21,12 @@ import { TestHarness, type ChainClient } from "./setup";
 import { getConfig } from "./config";
 import { verifyRelayerPrivacy } from "./flows/deposit";
 import { verifyWithdrawRelayerPrivacy } from "./flows/withdraw";
-import { WormholeMock, ConfirmationStatus } from "./utils/wormhole-mock";
 import { deadlineFromOffset, AztecHelper } from "./utils/aztec";
 import {
   assertIntentIdNonZero,
   assertDeadlineInFuture,
 } from "./helpers/assertions";
 import { logger } from "./helpers/logger";
-
-// Stub for WormholeMock - L1-only architecture uses L1 for Aave operations
-// TODO: Refactor tests to use L1-only flow instead of cross-chain mock
-const createStubChainClient = (): ChainClient => ({
-  public: null as any,
-  wallet: null as any,
-  chain: { id: 31337, name: "Stub" } as any,
-});
 
 // Import addresses configuration
 import addresses from "./config/addresses.json" with { type: "json" };
@@ -114,14 +105,8 @@ describe("Aztec Aave Wrapper E2E", () => {
   // L1 chain client
   let l1Client: ChainClient;
 
-  // Stub target client for WormholeMock compatibility (L1-only architecture)
-  // TODO: Refactor tests to remove cross-chain mock dependency
-  const targetClient = createStubChainClient();
-
   // Relayer wallets (different from user for privacy)
   let l1RelayerWallet: ReturnType<typeof createWalletClient>;
-  // Stub relayer for target chain tests (uses L1 relayer in L1-only mode)
-  let targetRelayerWallet: ReturnType<typeof createWalletClient>;
 
   // Contract instance
   let aaveWrapper: ContractInstance;
@@ -196,8 +181,6 @@ describe("Aztec Aave Wrapper E2E", () => {
         chain: l1Client.chain,
         transport: http(config.chains.l1.rpcUrl),
       });
-      // In L1-only mode, use L1 relayer for both L1 and "target" operations
-      targetRelayerWallet = l1RelayerWallet;
     }
 
     // Initialize Aztec helper
@@ -231,18 +214,15 @@ describe("Aztec Aave Wrapper E2E", () => {
 
   describe("Deposit Flow", () => {
     /**
-     * Full deposit cycle test as specified in spec.md §4.1:
+     * Full deposit cycle test (L1-only architecture) as specified in spec.md §4.1:
      * 1. Aztec account creation
      * 2. Token minting via token portal
      * 3. request_deposit on L2
-     * 4. executeDeposit on L1 portal
-     * 5. Wormhole delivery to target
-     * 6. Aave supply verification
-     * 7. Wormhole callback confirmation
-     * 8. finalize_deposit on L2
-     * 9. PositionReceiptNote verification
+     * 4. executeDeposit on L1 portal (direct Aave supply)
+     * 5. finalize_deposit on L2
+     * 6. PositionReceiptNote verification
      *
-     * Privacy Property: Different relayer executes L1/Target steps
+     * Privacy Property: Different relayer executes L1 steps
      */
     it("should complete full deposit flow with privacy verification", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
@@ -311,79 +291,45 @@ describe("Aztec Aave Wrapper E2E", () => {
       // In a real test, we would verify the outbox message exists
       // For mock mode, we proceed with simulated L1 execution
 
-      // Step 5: Simulate L1 portal execution (relayer executes, not user)
-      logger.step(3, "L1 Portal consumes message (executed by relayer, not user)");
+      // Step 5: Simulate L1 portal execution with direct Aave supply (relayer executes, not user)
+      logger.step(3, "L1 Portal consumes message and supplies to Aave (executed by relayer)");
       const l1RelayerAccount = l1RelayerWallet.account;
       expect(l1RelayerAccount?.address).toBeDefined();
 
-      logger.l1("Portal processing deposit intent", {
+      logger.l1("Portal processing deposit intent with direct Aave supply", {
         relayer: l1RelayerAccount?.address,
+        aavePool: addresses.local.l1.mockLendingPool,
       });
       logger.privacy("Relayer executes without knowing user identity");
 
-      // Step 6: Simulate target chain execution and Aave supply
-      // Note: In simplified L1-only mode, this uses mock addresses
-      logger.step(4, "Bridge tokens to target chain via Wormhole");
-      const wormholeMock = new WormholeMock(l1Client, targetClient);
-      wormholeMock.initialize({
-        l1Portal: (addresses.local.l1.portal ||
-          "0x1234567890123456789012345678901234567890") as Address,
-        // Target executor not available in L1-only mode, use placeholder
-        targetExecutor: "0x1234567890123456789012345678901234567890" as Address,
-      });
-
-      logger.bridge("Sending deposit payload to target chain", "L1->Target");
-
-      // Simulate deposit to target
-      const depositToTargetResult = await wormholeMock.deliverDepositToTarget(
-        BigInt(intentId.toString()),
-        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address, // USDC address
-        TEST_CONFIG.depositAmount,
-        deadline
-      );
-      expect(depositToTargetResult.success).toBe(true);
-
-      logger.step(5, "Execute Aave supply on target chain");
-      logger.target("Aave supply executed", {
-        pool: "Aave V3",
-        asset: "USDC",
-      });
-
-      // Step 7: Simulate confirmation back to L1
+      // In L1-only architecture, the portal directly supplies to Aave
+      // No cross-chain Wormhole bridging needed
       // MVP: shares = amount (no yield accounting)
       const shares = TEST_CONFIG.depositAmount;
 
-      logger.step(6, "Send confirmation back to L1");
-      logger.bridge("Returning deposit confirmation with shares", "Target->L1");
+      logger.l1("Direct Aave supply executed", {
+        amount: TEST_CONFIG.depositAmount.toString(),
+        shares: shares.toString(),
+      });
 
-      const confirmationResult = await wormholeMock.deliverDepositConfirmation(
-        BigInt(intentId.toString()),
-        shares,
-        ConfirmationStatus.Success
-      );
-      expect(confirmationResult.success).toBe(true);
-
-      logger.l1("Confirmation received", { shares: shares.toString() });
-
-      // Step 8: Verify privacy property - relayer ≠ user
+      // Step 6: Verify privacy property - relayer ≠ user
       // NOTE: We cannot directly compare Aztec addresses to Ethereum addresses,
-      // but we verify the L1/Target relayers are different from any user-controlled address.
+      // but we verify the L1 relayer is different from any user-controlled address.
       // For this test, we use a placeholder Ethereum address derived from the user's context.
       // In production, Aztec addresses are not convertible to Ethereum addresses.
       const userPlaceholderAddress = "0x0000000000000000000000000000000000000001" as Address;
       const privacyCheck = verifyRelayerPrivacy(
         userPlaceholderAddress,
         l1RelayerAccount?.address as Address,
-        targetRelayerWallet.account?.address as Address
+        l1RelayerAccount?.address as Address // Same relayer for L1-only
       );
 
-      // The relayers should be different from the user's address
+      // The relayer should be different from the user's address
       expect(privacyCheck.l1PrivacyOk).toBe(true);
-      expect(privacyCheck.targetPrivacyOk).toBe(true);
       expect(privacyCheck.allPrivacyOk).toBe(true);
 
-      // Step 9: Attempt L2 finalization (will fail without real L1→L2 message)
-      logger.step(7, "Finalize deposit on L2 (creates private receipt note)");
+      // Step 7: Attempt L2 finalization (will fail without real L1→L2 message)
+      logger.step(4, "Finalize deposit on L2 (creates private receipt note)");
       try {
         const finalizeCall = methods.finalize_deposit(
           intentId,
@@ -397,9 +343,9 @@ describe("Aztec Aave Wrapper E2E", () => {
         logger.mockMode("L2 finalization skipped - no real L1→L2 message in mock");
       }
 
-      // Step 10: Verify the full flow completed (mock mode verification)
+      // Step 8: Verify the full flow completed (mock mode verification)
       logger.depositComplete(intentId.toString(), shares);
-      logger.privacy("Full flow completed: user never revealed on L1 or target chain");
+      logger.privacy("Full flow completed: user never revealed on L1");
     });
 
     /**
@@ -542,17 +488,15 @@ describe("Aztec Aave Wrapper E2E", () => {
 
   describe("Withdraw Flow", () => {
     /**
-     * Full withdrawal cycle as specified in spec.md §4.2:
+     * Full withdrawal cycle (L1-only architecture) as specified in spec.md §4.2:
      * 1. Existing position from completed deposit (setup)
      * 2. request_withdraw on L2 with receipt
-     * 3. executeWithdraw on L1 portal
-     * 4. Wormhole delivery for Aave withdrawal
-     * 5. Token bridge back to L1
-     * 6. Portal L1→L2 message
-     * 7. finalize_withdraw on L2
-     * 8. Private balance verification
+     * 3. executeWithdraw on L1 portal (direct Aave withdrawal)
+     * 4. Portal L1→L2 message
+     * 5. finalize_withdraw on L2
+     * 6. Private balance verification
      *
-     * Privacy Property: Different relayer executes L1/Target steps
+     * Privacy Property: Different relayer executes L1 steps
      */
     it("should complete full withdrawal flow with privacy verification", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
@@ -596,31 +540,14 @@ describe("Aztec Aave Wrapper E2E", () => {
         intentId: depositIntentId.toString(),
       });
 
-      // Simulate deposit flow completion (mock mode)
-      // Note: In simplified L1-only mode, this uses mock addresses
-      const wormholeMock = new WormholeMock(l1Client, targetClient);
-      wormholeMock.initialize({
-        l1Portal: (addresses.local.l1.portal ||
-          "0x1234567890123456789012345678901234567890") as Address,
-        // Target executor not available in L1-only mode, use placeholder
-        targetExecutor: "0x1234567890123456789012345678901234567890" as Address,
+      // In L1-only architecture, simulate the L1 portal directly supplying to Aave
+      // MVP: shares = amount (no yield accounting)
+      const shares = TEST_CONFIG.depositAmount;
+
+      logger.l1("L1 portal directly supplied to Aave", {
+        amount: TEST_CONFIG.depositAmount.toString(),
+        shares: shares.toString(),
       });
-
-      // Simulate deposit to target
-      await wormholeMock.deliverDepositToTarget(
-        BigInt(depositIntentId.toString()),
-        "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address,
-        TEST_CONFIG.depositAmount,
-        depositDeadline
-      );
-
-      // Simulate confirmation back to L1
-      const shares = TEST_CONFIG.depositAmount; // MVP: shares = amount
-      await wormholeMock.deliverDepositConfirmation(
-        BigInt(depositIntentId.toString()),
-        shares,
-        ConfirmationStatus.Success
-      );
 
       // Note: In mock mode, finalize_deposit will fail without real L1→L2 message
       // For this test, we'll proceed with withdrawal request which will also
@@ -681,58 +608,35 @@ describe("Aztec Aave Wrapper E2E", () => {
         expect(withdrawTx.txHash).toBeDefined();
 
         // Step 4: Verify L2→L1 message was created (conceptually)
-        logger.step(3, "L1 Portal processes withdrawal (relayer executes)");
+        logger.step(3, "L1 Portal processes withdrawal with direct Aave withdrawal (relayer executes)");
 
         // Step 5: Simulate L1 portal execution (relayer executes, not user)
         const l1RelayerAccount = l1RelayerWallet.account;
         expect(l1RelayerAccount?.address).toBeDefined();
 
-        logger.l1("Portal processing withdrawal", {
+        logger.l1("Portal processing withdrawal with direct Aave withdrawal", {
           relayer: l1RelayerAccount?.address,
+          aavePool: addresses.local.l1.mockLendingPool,
         });
 
-        // Step 6: Simulate target chain execution and Aave withdrawal
-        logger.step(4, "Bridge to target chain and withdraw from Aave");
-        logger.bridge("Sending withdrawal request to target", "L1->Target");
-
-        const withdrawToTargetResult = await wormholeMock.deliverWithdrawToTarget(
-          BigInt(withdrawIntentId.toString()),
-          TEST_CONFIG.withdrawAmount,
-          withdrawDeadline
-        );
-        expect(withdrawToTargetResult.success).toBe(true);
-
-        logger.target("Aave withdrawal executed", {
+        // In L1-only architecture, the portal directly withdraws from Aave
+        logger.l1("Direct Aave withdrawal executed", {
           amount: TEST_CONFIG.withdrawAmount.toString(),
         });
 
-        // Step 7: Simulate token bridge back to L1 and confirmation
-        logger.step(5, "Bridge tokens back to L1");
-        logger.bridge("Returning withdrawn tokens to L1", "Target->L1");
-
-        const withdrawConfirmResult = await wormholeMock.deliverWithdrawConfirmation(
-          BigInt(withdrawIntentId.toString()),
-          TEST_CONFIG.withdrawAmount,
-          ConfirmationStatus.Success
-        );
-        expect(withdrawConfirmResult.success).toBe(true);
-
-        logger.l1("Withdrawal confirmation received");
-
-        // Step 8: Verify privacy property - relayer ≠ user
+        // Step 6: Verify privacy property - relayer ≠ user
         const userPlaceholderAddress = "0x0000000000000000000000000000000000000001" as Address;
         const privacyCheck = verifyWithdrawRelayerPrivacy(
           userPlaceholderAddress,
           l1RelayerAccount?.address as Address,
-          targetRelayerWallet.account?.address as Address
+          l1RelayerAccount?.address as Address // Same relayer for L1-only
         );
 
         expect(privacyCheck.l1PrivacyOk).toBe(true);
-        expect(privacyCheck.targetPrivacyOk).toBe(true);
         expect(privacyCheck.allPrivacyOk).toBe(true);
 
-        // Step 9: Attempt L2 finalization (will fail without real L1→L2 message)
-        logger.step(6, "Finalize withdrawal on L2 (nullifies receipt note)");
+        // Step 7: Attempt L2 finalization (will fail without real L1→L2 message)
+        logger.step(4, "Finalize withdrawal on L2 (nullifies receipt note)");
         try {
           const finalizeCall = methods.finalize_withdraw(
             withdrawIntentId,
@@ -749,7 +653,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         }
 
         logger.withdrawComplete(withdrawIntentId.toString(), TEST_CONFIG.withdrawAmount);
-        logger.privacy("Full withdrawal completed: user never revealed on L1 or target");
+        logger.privacy("Full withdrawal completed: user never revealed on L1");
       } catch (error) {
         // In mock mode, request_withdraw may fail because:
         // 1. The deposit was never finalized (no L1→L2 message)
@@ -1322,34 +1226,29 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Note: Using module-level address since TestWallet doesn't have getAddress()
       const userAztecAddress = userAddress!;
 
-      // Get relayer addresses (L1 and Target)
+      // Get relayer address (L1-only architecture)
       const l1RelayerAddress = l1RelayerWallet?.account?.address;
-      const targetRelayerAddress = targetRelayerWallet?.account?.address;
 
-      if (!l1RelayerAddress || !targetRelayerAddress) {
-        logger.skip("Relayer wallets not configured");
+      if (!l1RelayerAddress) {
+        logger.skip("L1 relayer wallet not configured");
         ctx.skip();
         return;
       }
 
-      // The relayer addresses should be different from any Ethereum representation
+      // The relayer address should be different from any Ethereum representation
       // of the user's address. In practice, Aztec addresses are not directly
       // convertible to Ethereum addresses, providing inherent privacy.
-
-      // Verify L1 and Target relayers are the same account (consistency)
-      expect(l1RelayerAddress.toLowerCase()).toBe(targetRelayerAddress.toLowerCase());
 
       logger.info("Key actors in the privacy model:");
       logger.l2("User (private)", { address: userAztecAddress.toString() });
       logger.l1("Relayer (public)", { address: l1RelayerAddress });
-      logger.target("Relayer (public)", { address: targetRelayerAddress });
 
-      logger.privacy("User address is NEVER revealed on L1 or target chain");
+      logger.privacy("User address is NEVER revealed on L1");
       logger.info("Privacy properties:");
       logger.info("  1. L2 owner address not in cross-chain messages");
       logger.info("  2. ownerHash (one-way) used instead");
       logger.info("  3. secret/secretHash for authentication");
-      logger.info("  4. Anyone can execute L1/Target steps");
+      logger.info("  4. Anyone can execute L1 steps");
     });
 
     /**
@@ -1675,25 +1574,25 @@ describe("Aztec Aave Wrapper E2E", () => {
       logger.info(`Chain client verified - L1: ${l1ChainId}`);
     });
 
-    it("should have Wormhole mock initialized", (ctx) => {
+    it("should have L1 portal address configured", (ctx) => {
       if (!harness?.status.l1Connected) {
         logger.skip("L1 chain client not connected");
         ctx.skip();
         return;
       }
 
-      // Using stub targetClient for WormholeMock in L1-only mode
-      const mock = new WormholeMock(l1Client, targetClient);
-      mock.initialize({
-        l1Portal: "0x1234567890123456789012345678901234567890" as Address,
-        targetExecutor: "0x1234567890123456789012345678901234567890" as Address,
-      });
+      // Verify L1 portal address is configured in addresses.json
+      const portalAddress = addresses.local.l1.portal;
+      expect(portalAddress).toBeDefined();
+      expect(portalAddress).not.toBe("0x0000000000000000000000000000000000000000");
 
-      // Verify mock is ready
-      expect(mock).toBeDefined();
+      // Verify Aave pool mock address is configured
+      const aavePoolAddress = addresses.local.l1.mockLendingPool;
+      expect(aavePoolAddress).toBeDefined();
+      expect(aavePoolAddress).not.toBe("0x0000000000000000000000000000000000000000");
 
-      // Reset mock
-      mock.reset();
+      logger.info(`L1 Portal: ${portalAddress}`);
+      logger.info(`Aave Pool (mock): ${aavePoolAddress}`);
     });
   });
 });
