@@ -1,0 +1,25 @@
+{
+  "l1": {
+    "wormholeCore": "0x519b05b3655F4b89731B677d64CEcf761f4076f6",
+    "wormholeTokenBridge": "0x057cD3082EfED32d5C907801BF3628B27D88fD80",
+    "wormholeRelayer": "0xb6057e08a11da09a998985874FE2119e98dB3D5D",
+    "mockUsdc": "0xad203b3144f8c09a20532957174fc0366291643c",
+    "portal": "0x31403b1e52051883f2Ce1B1b4C89f36034e1221D"
+  },
+  "target": {
+    "wormholeCore": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+    "mockLendingPool": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
+    "mockUsdc": "0x9A676e781A523b5d0C0e43731313A708CB607508",
+    "executor": "0x0B306BF915C4d645ff596e518fAf3F9669b97016"
+  },
+  "l2": {
+    "aaveWrapper": "0x29919ab4ee833d37369d95715d8ab6f70bf062e5d2beee7187a715e1cea18f82"
+  },
+  "config": {
+    "l1ChainId": 31337,
+    "targetChainId": 31338,
+    "l1WormholeChainId": 2,
+    "targetWormholeChainId": 23,
+    "deployedAt": "2026-01-13T10:45:08.356Z"
+  }
+}

@@ -37,6 +37,7 @@ import {
   assertIntentIdNonZero,
   assertDeadlineInFuture,
 } from "./helpers/assertions";
+import { logger } from "./helpers/logger";
 
 // Import addresses configuration
 import addresses from "./config/addresses.json" with { type: "json" };
@@ -245,7 +246,14 @@ describe("Aztec Aave Wrapper E2E", () => {
       await aztecHelper.initialize();
     }
 
-    console.log(harness.getSummary());
+    // Log suite setup for visibility
+    logger.suiteSetup({
+      pxe: status.pxeConnected,
+      l1: status.l1Connected,
+      target: status.targetConnected,
+      accounts: status.accountsCreated,
+      contracts: status.contractsDeployed,
+    });
   });
 
   afterAll(async () => {
@@ -285,11 +293,20 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should complete full deposit flow with privacy verification", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
 
+      // Log deposit flow start
+      logger.depositStart({
+        amount: TEST_CONFIG.depositAmount,
+        asset: "USDC",
+        deadline: deadlineFromOffset(TEST_CONFIG.deadlineOffset),
+      });
+
       // Step 1: Prepare deposit parameters
+      logger.step(1, "Generate secret and compute secret hash for authorization");
       const secret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
       const secretHash = await computeSecretHash(secret);
@@ -307,6 +324,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(localUserAddress.equals(localRelayerAddress)).toBe(false);
 
       // Step 3: Execute L2 request_deposit
+      logger.step(2, "Submit deposit request on Aztec L2");
       const userContract = aaveWrapper.withWallet(userWallet);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const methods = userContract.methods as any;
@@ -331,27 +349,28 @@ describe("Aztec Aave Wrapper E2E", () => {
       const tx = await depositCall.send({ from: userAddress! }).wait();
       expect(tx.txHash).toBeDefined();
 
-      console.log("L2 deposit request:", {
+      logger.l2("Deposit request created", {
         intentId: intentId.toString(),
         txHash: tx.txHash?.toString(),
-        amount: TEST_CONFIG.depositAmount.toString(),
       });
+      logger.privacy("User identity hidden behind ownerHash in L2→L1 message");
 
       // Step 4: Verify L2→L1 message was created
       // In a real test, we would verify the outbox message exists
       // For mock mode, we proceed with simulated L1 execution
 
       // Step 5: Simulate L1 portal execution (relayer executes, not user)
-      // This demonstrates the privacy property - the L1 executor doesn't know the user
+      logger.step(3, "L1 Portal consumes message (executed by relayer, not user)");
       const l1RelayerAccount = l1RelayerWallet.account;
       expect(l1RelayerAccount?.address).toBeDefined();
 
-      // Verify L1 relayer is different from any identifiable user address
-      // In production, the L1 executor would be a random relayer
-      console.log("L1 relayer (privacy):", l1RelayerAccount?.address);
+      logger.l1("Portal processing deposit intent", {
+        relayer: l1RelayerAccount?.address,
+      });
+      logger.privacy("Relayer executes without knowing user identity");
 
       // Step 6: Simulate target chain execution and Aave supply
-      // In mock mode, this simulates the full target chain flow
+      logger.step(4, "Bridge tokens to target chain via Wormhole");
       const wormholeMock = new WormholeMock(l1Client, targetClient);
       wormholeMock.initialize({
         l1Portal: (addresses.local.l1.portal ||
@@ -359,6 +378,8 @@ describe("Aztec Aave Wrapper E2E", () => {
         targetExecutor: (addresses.local.target.executor ||
           "0x1234567890123456789012345678901234567890") as Address,
       });
+
+      logger.bridge("Sending deposit payload to target chain", "L1->Target");
 
       // Simulate deposit to target
       const depositToTargetResult = await wormholeMock.deliverDepositToTarget(
@@ -369,9 +390,18 @@ describe("Aztec Aave Wrapper E2E", () => {
       );
       expect(depositToTargetResult.success).toBe(true);
 
+      logger.step(5, "Execute Aave supply on target chain");
+      logger.target("Aave supply executed", {
+        pool: "Aave V3",
+        asset: "USDC",
+      });
+
       // Step 7: Simulate confirmation back to L1
       // MVP: shares = amount (no yield accounting)
       const shares = TEST_CONFIG.depositAmount;
+
+      logger.step(6, "Send confirmation back to L1");
+      logger.bridge("Returning deposit confirmation with shares", "Target->L1");
 
       const confirmationResult = await wormholeMock.deliverDepositConfirmation(
         BigInt(intentId.toString()),
@@ -380,11 +410,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       );
       expect(confirmationResult.success).toBe(true);
 
-      console.log("Wormhole flow completed:", {
-        depositToTarget: depositToTargetResult.txHash,
-        confirmation: confirmationResult.txHash,
-        shares: shares.toString(),
-      });
+      logger.l1("Confirmation received", { shares: shares.toString() });
 
       // Step 8: Verify privacy property - relayer ≠ user
       // NOTE: We cannot directly compare Aztec addresses to Ethereum addresses,
@@ -404,7 +430,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(privacyCheck.allPrivacyOk).toBe(true);
 
       // Step 9: Attempt L2 finalization (will fail without real L1→L2 message)
-      // This is expected in mock mode - demonstrates the flow structure
+      logger.step(7, "Finalize deposit on L2 (creates private receipt note)");
       try {
         const finalizeCall = methods.finalize_deposit(
           intentId,
@@ -412,21 +438,15 @@ describe("Aztec Aave Wrapper E2E", () => {
           secret
         );
         await finalizeCall.send({ from: userAddress! }).wait();
+        logger.l2("Position receipt note created", { status: "Active" });
       } catch (error) {
         // Expected in mock mode - no real L1→L2 message exists
-        console.log(
-          "L2 finalization skipped (expected in mock mode - no L1→L2 message)"
-        );
+        logger.mockMode("L2 finalization skipped - no real L1→L2 message in mock");
       }
 
       // Step 10: Verify the full flow completed (mock mode verification)
-      // In a real E2E test with full infrastructure, we would verify:
-      // - PositionReceiptNote was created
-      // - Note status is ACTIVE
-      // - Shares match expected amount
-
-      console.log("Full deposit flow test completed successfully");
-      console.log("Privacy verification passed: relayer ≠ user");
+      logger.depositComplete(intentId.toString(), shares);
+      logger.privacy("Full flow completed: user never revealed on L1 or target chain");
     });
 
     /**
@@ -442,9 +462,13 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should accept deposit with expired deadline at L2 (validated at L1)", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.section("Deadline Validation Architecture");
+      logger.info("Testing: L2 accepts expired deadlines (enforcement happens at L1)");
 
       const secret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
@@ -474,11 +498,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       const tx = await depositCall.send({ from: userAddress! }).wait();
       expect(tx.txHash).toBeDefined();
 
-      console.log("L2 accepted deposit with expired deadline (will be rejected at L1):", {
+      logger.l2("Deposit accepted with expired deadline", {
         intentId: intentId.toString(),
-        deadline: expiredDeadline.toString(),
-        note: "Deadline enforcement happens at L1 portal",
+        deadline: "expired",
       });
+      logger.info("Note: L2 has no block.timestamp - deadline enforced at L1 portal");
     });
 
     /**
@@ -501,9 +525,13 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should prevent setting already-pending intent as pending again", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.section("Replay Protection (State Machine)");
+      logger.info("Testing: Cannot re-use pending intent ID");
 
       const secret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
@@ -528,7 +556,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       const intentId = await depositCall.simulate({ from: userAddress! });
       await depositCall.send({ from: userAddress! }).wait();
 
-      console.log("First deposit created with intent ID:", intentId.toString());
+      logger.l2("First deposit created", { intentId: intentId.toString() });
 
       // Verify the intent was created - state should now be PENDING_DEPOSIT
       // Note: consumed_intents is NOT set until finalization
@@ -546,12 +574,12 @@ describe("Aztec Aave Wrapper E2E", () => {
           .wait();
         // If it succeeds, the contract doesn't prevent pre-finalization replay
         // at the _set_intent_pending_deposit level (only consumed_intents check)
-        console.log("Note: _set_intent_pending_deposit succeeded (intent not yet finalized)");
-        console.log("Full replay protection is only enforced after finalization");
+        logger.info("Note: Pre-finalization replay allowed at this layer");
+        logger.info("Full replay protection enforced after finalization");
       } catch (error) {
         // If it fails, the contract has state machine protection
         const errorMsg = error instanceof Error ? error.message : String(error);
-        console.log("State machine prevented re-setting pending intent:", errorMsg);
+        logger.l2("State machine prevented re-use of pending intent");
         expect(errorMsg).toMatch(/Intent already|app_logic_reverted/);
       }
     });
@@ -577,6 +605,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should complete full withdrawal flow with privacy verification", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
@@ -584,6 +613,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       // =========================================================================
       // Setup: First complete a deposit to have a position to withdraw from
       // =========================================================================
+
+      logger.section("Setup: Creating deposit position first");
 
       const depositSecret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
@@ -611,10 +642,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       const depositTx = await depositCall.send({ from: userAddress! }).wait();
       expect(depositTx.txHash).toBeDefined();
 
-      console.log("Setup - Deposit request:", {
+      logger.l2("Deposit position created for withdrawal test", {
         intentId: depositIntentId.toString(),
-        txHash: depositTx.txHash?.toString(),
-        amount: TEST_CONFIG.depositAmount.toString(),
       });
 
       // Simulate deposit flow completion (mock mode)
@@ -646,13 +675,20 @@ describe("Aztec Aave Wrapper E2E", () => {
       // For this test, we'll proceed with withdrawal request which will also
       // fail at finalization in mock mode, but demonstrates the flow structure
 
-      console.log("Setup - Deposit simulation complete");
+      logger.mockMode("Deposit simulation complete - proceeding to withdrawal");
 
       // =========================================================================
       // Withdrawal Flow Test
       // =========================================================================
 
+      logger.withdrawStart({
+        amount: TEST_CONFIG.withdrawAmount,
+        nonce: depositIntentId.toString(),
+        deadline: deadlineFromOffset(TEST_CONFIG.deadlineOffset),
+      });
+
       // Step 2: Prepare withdrawal parameters
+      logger.step(1, "Generate withdrawal secret and compute hash");
       const withdrawSecret = Fr.random();
       // Reuse computeSecretHash from earlier import
       const withdrawSecretHash = await computeSecretHash(withdrawSecret);
@@ -669,15 +705,10 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify relayer is different from user (privacy property)
       expect(localUserAddress.equals(localRelayerAddress)).toBe(false);
 
-      console.log("Withdrawal - Requesting withdrawal:", {
-        nonce: depositIntentId.toString(),
-        amount: TEST_CONFIG.withdrawAmount.toString(),
-        deadline: withdrawDeadline.toString(),
-      });
-
       // Step 3: Execute L2 request_withdraw
       // Note: This will fail in mock mode because we don't have a real finalized deposit
       // The intent status won't be CONFIRMED. This demonstrates the flow structure.
+      logger.step(2, "Submit withdrawal request on Aztec L2");
       try {
         const withdrawCall = methods.request_withdraw(
           depositIntentId, // nonce = intent_id from deposit
@@ -689,26 +720,30 @@ describe("Aztec Aave Wrapper E2E", () => {
         // Simulate to get intent ID
         const withdrawIntentId = await withdrawCall.simulate({ from: userAddress! });
 
-        // In a real scenario, this would succeed if the deposit was finalized
-        console.log("Withdrawal - Intent created:", withdrawIntentId.toString());
+        logger.l2("Withdrawal request created", {
+          intentId: withdrawIntentId.toString(),
+        });
+        logger.privacy("User's receipt note proves ownership without revealing identity");
 
         // Send the transaction
         const withdrawTx = await withdrawCall.send({ from: userAddress! }).wait();
         expect(withdrawTx.txHash).toBeDefined();
 
         // Step 4: Verify L2→L1 message was created (conceptually)
-        console.log("Withdrawal - L2 request complete:", {
-          intentId: withdrawIntentId.toString(),
-          txHash: withdrawTx.txHash?.toString(),
-        });
+        logger.step(3, "L1 Portal processes withdrawal (relayer executes)");
 
         // Step 5: Simulate L1 portal execution (relayer executes, not user)
         const l1RelayerAccount = l1RelayerWallet.account;
         expect(l1RelayerAccount?.address).toBeDefined();
 
-        console.log("Withdrawal - L1 relayer (privacy):", l1RelayerAccount?.address);
+        logger.l1("Portal processing withdrawal", {
+          relayer: l1RelayerAccount?.address,
+        });
 
         // Step 6: Simulate target chain execution and Aave withdrawal
+        logger.step(4, "Bridge to target chain and withdraw from Aave");
+        logger.bridge("Sending withdrawal request to target", "L1->Target");
+
         const withdrawToTargetResult = await wormholeMock.deliverWithdrawToTarget(
           BigInt(withdrawIntentId.toString()),
           TEST_CONFIG.withdrawAmount,
@@ -716,7 +751,14 @@ describe("Aztec Aave Wrapper E2E", () => {
         );
         expect(withdrawToTargetResult.success).toBe(true);
 
+        logger.target("Aave withdrawal executed", {
+          amount: TEST_CONFIG.withdrawAmount.toString(),
+        });
+
         // Step 7: Simulate token bridge back to L1 and confirmation
+        logger.step(5, "Bridge tokens back to L1");
+        logger.bridge("Returning withdrawn tokens to L1", "Target->L1");
+
         const withdrawConfirmResult = await wormholeMock.deliverWithdrawConfirmation(
           BigInt(withdrawIntentId.toString()),
           TEST_CONFIG.withdrawAmount,
@@ -724,11 +766,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         );
         expect(withdrawConfirmResult.success).toBe(true);
 
-        console.log("Withdrawal - Wormhole flow completed:", {
-          withdrawToTarget: withdrawToTargetResult.txHash,
-          confirmation: withdrawConfirmResult.txHash,
-          amount: TEST_CONFIG.withdrawAmount.toString(),
-        });
+        logger.l1("Withdrawal confirmation received");
 
         // Step 8: Verify privacy property - relayer ≠ user
         const userPlaceholderAddress = "0x0000000000000000000000000000000000000001" as Address;
@@ -743,6 +781,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         expect(privacyCheck.allPrivacyOk).toBe(true);
 
         // Step 9: Attempt L2 finalization (will fail without real L1→L2 message)
+        logger.step(6, "Finalize withdrawal on L2 (nullifies receipt note)");
         try {
           const finalizeCall = methods.finalize_withdraw(
             withdrawIntentId,
@@ -753,15 +792,14 @@ describe("Aztec Aave Wrapper E2E", () => {
             0n // message_leaf_index
           );
           await finalizeCall.send({ from: userAddress! }).wait();
+          logger.l2("Receipt note consumed, tokens credited");
         } catch (error) {
           // Expected in mock mode - no real L1→L2 message exists
-          console.log(
-            "Withdrawal - L2 finalization skipped (expected in mock mode - no L1→L2 message)"
-          );
+          logger.mockMode("L2 finalization skipped - no real L1→L2 message");
         }
 
-        console.log("Full withdrawal flow test completed successfully");
-        console.log("Privacy verification passed: relayer ≠ user");
+        logger.withdrawComplete(withdrawIntentId.toString(), TEST_CONFIG.withdrawAmount);
+        logger.privacy("Full withdrawal completed: user never revealed on L1 or target");
       } catch (error) {
         // In mock mode, request_withdraw may fail because:
         // 1. The deposit was never finalized (no L1→L2 message)
@@ -775,11 +813,8 @@ describe("Aztec Aave Wrapper E2E", () => {
           errorMessage.includes("Position receipt note not found") ||
           errorMessage.includes("Receipt status must be Active")
         ) {
-          console.log(
-            "Withdrawal - Expected failure in mock mode (deposit not finalized):",
-            errorMessage
-          );
-          console.log("Withdrawal flow structure verified (mock mode limitation)");
+          logger.expectedFailure("Deposit not finalized in mock mode - withdrawal blocked");
+          logger.info("Flow structure verified (mock mode limitation)");
         } else {
           // Re-throw unexpected errors
           throw error;
@@ -793,6 +828,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should reject withdrawal with expired deadline", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
@@ -825,6 +861,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should reject withdrawal without valid receipt", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
@@ -886,9 +923,13 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should generate unique intent IDs for concurrent deposits from different users", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.multiUser(2, "Concurrent deposits from different users");
+      logger.info("Testing: Each user gets unique intent ID for their deposit");
 
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
 
@@ -952,10 +993,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(userTx.txHash).toBeDefined();
       expect(user2Tx.txHash).toBeDefined();
 
-      console.log("Multi-user concurrent deposits:");
-      console.log("  User intent ID:", userIntentId.toString());
-      console.log("  User2 intent ID:", user2IntentId.toString());
-      console.log("  Intent IDs are unique:", BigInt(userIntentId.toString()) !== BigInt(user2IntentId.toString()));
+      logger.intentIds(
+        [userIntentId.toString(), user2IntentId.toString()],
+        BigInt(userIntentId.toString()) !== BigInt(user2IntentId.toString())
+      );
+      logger.privacy("Each user's position tracked separately via unique intent ID");
     });
 
     /**
@@ -969,9 +1011,13 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should generate unique intent IDs for multiple concurrent deposits from same user", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.section("Same User Multiple Deposits");
+      logger.info("Testing: One user can have multiple separate positions");
 
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
 
@@ -1047,11 +1093,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(tx2.txHash).toBeDefined();
       expect(tx3.txHash).toBeDefined();
 
-      console.log("Same user concurrent deposits:");
-      console.log("  Intent ID 1:", intentId1.toString());
-      console.log("  Intent ID 2:", intentId2.toString());
-      console.log("  Intent ID 3:", intentId3.toString());
-      console.log("  All unique:", uniqueIntentIds.size === 3);
+      logger.intentIds(
+        [intentId1.toString(), intentId2.toString(), intentId3.toString()],
+        uniqueIntentIds.size === 3
+      );
+      logger.info("User can manage multiple independent positions");
     });
 
     /**
@@ -1064,9 +1110,13 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should maintain position isolation between users", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.section("Position Isolation (Privacy)");
+      logger.info("Testing: Users cannot access each other's private positions");
 
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
       const userSecret = Fr.random();
@@ -1093,7 +1143,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       const userIntentId = await depositCall.simulate({ from: userAddress! });
       await depositCall.send({ from: userAddress! }).wait();
 
-      console.log("User created deposit with intent ID:", userIntentId.toString());
+      logger.l2("User1 created deposit", { intentId: userIntentId.toString() });
 
       // User2 (relayerWallet) attempts to interact with user's position
       const user2Contract = aaveWrapper.withWallet(relayerWallet);
@@ -1102,6 +1152,8 @@ describe("Aztec Aave Wrapper E2E", () => {
 
       const user2Secret = Fr.random();
       const user2SecretHash = await computeSecretHash(user2Secret);
+
+      logger.l2("User2 attempting to withdraw User1's position...");
 
       // User2 should NOT be able to request withdrawal on user's position
       // because user2's wallet won't find the PositionReceiptNote
@@ -1112,7 +1164,7 @@ describe("Aztec Aave Wrapper E2E", () => {
           .wait()
       ).rejects.toThrow(/Position receipt note not found|app_logic_reverted/);
 
-      console.log("Position isolation verified: User2 cannot access User's position");
+      logger.privacy("Position isolation enforced: private notes only visible to owner");
     });
 
     /**
@@ -1125,6 +1177,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should maintain state consistency during concurrent multi-user operations", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
@@ -1201,7 +1254,6 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify all transactions succeeded
       allTxs.forEach((tx, i) => {
         expect(tx.txHash).toBeDefined();
-        console.log(`Transaction ${i + 1} succeeded: ${tx.txHash?.toString().slice(0, 20)}...`);
       });
 
       // Note on replay protection:
@@ -1212,10 +1264,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       // For post-finalization replay protection, see integration.test.ts.
       // Here we verify that multiple concurrent deposits create unique intent IDs.
 
-      console.log("State consistency verification:");
-      console.log("  Total unique intent IDs:", intentIdSet.size);
-      console.log("  All transactions succeeded: true");
-      console.log("  Note: Full replay protection is verified post-finalization in integration tests");
+      logger.info(`State consistency: ${intentIdSet.size} unique intent IDs created`);
+      logger.info(`All ${allTxs.length} transactions succeeded concurrently`);
     });
 
     /**
@@ -1228,6 +1278,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should isolate share tracking between users", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
@@ -1302,13 +1353,10 @@ describe("Aztec Aave Wrapper E2E", () => {
       // (via salt = poseidon(caller, secret_hash))
       expect(BigInt(userIntentId.toString())).not.toBe(BigInt(user2IntentId.toString()));
 
-      console.log("Share tracking isolation verification:");
-      console.log("  User owner hash:", userOwnerHash.toString().slice(0, 20) + "...");
-      console.log("  User2 owner hash:", user2OwnerHash.toString().slice(0, 20) + "...");
-      console.log("  User deposit amount:", userAmount.toString());
-      console.log("  User2 deposit amount:", user2Amount.toString());
-      console.log("  Intent IDs are isolated: true");
-      console.log("  Owner hashes are unique: true");
+      logger.section("Share Tracking Isolation");
+      logger.info(`User1 deposited ${userAmount.toString()} (ownerHash: ${userOwnerHash.toString().slice(0, 12)}...)`);
+      logger.info(`User2 deposited ${user2Amount.toString()} (ownerHash: ${user2OwnerHash.toString().slice(0, 12)}...)`);
+      logger.privacy("Each user's shares tracked independently via unique owner hash");
     });
   });
 
@@ -1323,9 +1371,12 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should verify relayer privacy property", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.section("Relayer Privacy Model");
 
       // Get user's Aztec address
       // Note: Using module-level address since TestWallet doesn't have getAddress()
@@ -1336,6 +1387,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       const targetRelayerAddress = targetRelayerWallet?.account?.address;
 
       if (!l1RelayerAddress || !targetRelayerAddress) {
+        logger.skip("Relayer wallets not configured");
         ctx.skip();
         return;
       }
@@ -1347,17 +1399,17 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify L1 and Target relayers are the same account (consistency)
       expect(l1RelayerAddress.toLowerCase()).toBe(targetRelayerAddress.toLowerCase());
 
-      // Log for verification
-      console.log("Privacy verification:");
-      console.log("  User Aztec address:", userAztecAddress.toString());
-      console.log("  L1 Relayer address:", l1RelayerAddress);
-      console.log("  Target Relayer address:", targetRelayerAddress);
+      logger.info("Key actors in the privacy model:");
+      logger.l2("User (private)", { address: userAztecAddress.toString() });
+      logger.l1("Relayer (public)", { address: l1RelayerAddress });
+      logger.target("Relayer (public)", { address: targetRelayerAddress });
 
-      // The privacy model relies on:
-      // 1. L2 owner address is NEVER included in cross-chain messages
-      // 2. ownerHash is used instead (one-way hash)
-      // 3. Authentication uses secret/secretHash mechanism
-      // 4. Anyone can execute L1/Target steps without knowing the user
+      logger.privacy("User address is NEVER revealed on L1 or target chain");
+      logger.info("Privacy properties:");
+      logger.info("  1. L2 owner address not in cross-chain messages");
+      logger.info("  2. ownerHash (one-way) used instead");
+      logger.info("  3. secret/secretHash for authentication");
+      logger.info("  4. Anyone can execute L1/Target steps");
     });
 
     /**
@@ -1365,9 +1417,13 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should use ownerHash in cross-chain message encoding", async (ctx) => {
       if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
         ctx.skip();
         return;
       }
+
+      logger.section("Owner Hash Privacy Encoding");
+      logger.info("Testing: User address replaced with one-way hash in messages");
 
       const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
 
@@ -1386,9 +1442,9 @@ describe("Aztec Aave Wrapper E2E", () => {
 
       // The ownerHash is what gets sent in cross-chain messages,
       // not the actual owner address
-      console.log("Privacy encoding verification:");
-      console.log("  Owner address (never sent):", userAddress!.toString());
-      console.log("  Owner hash (sent in messages):", ownerHash.toString());
+      logger.l2("Original address (kept private)", { address: userAddress!.toString() });
+      logger.l1("Owner hash (sent in messages)", { hash: ownerHash.toString() });
+      logger.privacy("One-way hash: cannot recover original address from hash");
     });
   });
 
@@ -1407,6 +1463,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should reject refund claim before deadline expires", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
@@ -1430,9 +1487,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         methods.claim_refund(mockNonce, currentTimeBeforeDeadline).send({ from: userAddress! }).wait()
       ).rejects.toThrow(/Pending withdraw receipt note not found|Deadline has not expired yet|app_logic_reverted/);
 
-      console.log(
-        "Refund correctly rejected: either no note found or deadline not expired"
-      );
+      logger.info("Refund correctly rejected (deadline not expired or note not found)");
     });
 
     /**
@@ -1445,6 +1500,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should verify refund claim code path with future timestamp", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
@@ -1465,12 +1521,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         methods.claim_refund(mockNonce, futureTime).send({ from: userAddress! }).wait()
       ).rejects.toThrow(/Pending withdraw receipt note not found|app_logic_reverted/);
 
-      console.log(
-        "Refund claim code path verified (rejected due to missing note in mock mode)"
-      );
-      console.log(
-        "Note: Full refund success flow requires real L1→L2 message processing"
-      );
+      logger.mockMode("Refund path verified - note not found (expected in mock)");
     });
 
     /**
@@ -1481,6 +1532,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should generate new nonce for refunded note", async (ctx) => {
       if (!aztecAvailable || !userWallet || !relayerWallet) {
+        logger.skip("Wallets not initialized");
         ctx.skip();
         return;
       }
@@ -1509,10 +1561,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       const otherNonce = (await poseidon2Hash([originalNonce, otherOwner])).toBigInt();
       expect(newNonce).not.toBe(otherNonce);
 
-      console.log("Nonce generation verification:");
-      console.log("  Original nonce:", originalNonce.toString().slice(0, 20) + "...");
-      console.log("  Refund nonce:  ", newNonce.toString().slice(0, 20) + "...");
-      console.log("  Nonces differ: true");
+      logger.info("Nonce generation ensures unique nullifiers for refunds");
+      logger.info(`Original: ${originalNonce.toString().slice(0, 16)}... → Refund: ${newNonce.toString().slice(0, 16)}...`);
     });
 
     /**
@@ -1528,6 +1578,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should reject repeated refund claims with same nonce", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
@@ -1551,9 +1602,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         methods.claim_refund(mockNonce, futureTime).send({ from: userAddress! }).wait()
       ).rejects.toThrow(/Pending withdraw receipt note not found|app_logic_reverted/);
 
-      console.log(
-        "Repeated refund claims rejected (note not found in mock mode)"
-      );
+      logger.info("Repeated refund claims correctly rejected");
     });
 
     /**
@@ -1562,6 +1611,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should reject refund with zero current_time", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
@@ -1578,7 +1628,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         methods.claim_refund(mockNonce, zeroTime).send({ from: userAddress! }).wait()
       ).rejects.toThrow(/Current time must be greater than zero|app_logic_reverted/);
 
-      console.log("Zero current_time correctly rejected");
+      logger.info("Zero current_time correctly rejected");
     });
 
     /**
@@ -1587,6 +1637,7 @@ describe("Aztec Aave Wrapper E2E", () => {
      */
     it("should reject refund for non-PendingWithdraw note", async (ctx) => {
       if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
         ctx.skip();
         return;
       }
@@ -1612,9 +1663,7 @@ describe("Aztec Aave Wrapper E2E", () => {
         /Pending withdraw receipt note not found|Position is not pending withdrawal|app_logic_reverted/
       );
 
-      console.log(
-        "Status validation: correctly rejects notes that are not PendingWithdraw"
-      );
+      logger.info("Status validation: only PendingWithdraw notes can be refunded");
     });
   });
 
@@ -1659,12 +1708,13 @@ describe("Aztec Aave Wrapper E2E", () => {
   describe("Test Infrastructure", () => {
     it("should have valid test harness", (ctx) => {
       if (!harness) {
+        logger.skip("No harness available");
         ctx.skip();
         return;
       }
 
       const status = harness.status;
-      console.log("Harness status:", status);
+      logger.info("Test harness initialized");
 
       // At minimum, we should have Aztec available
       if (aztecAvailable) {
@@ -1674,6 +1724,7 @@ describe("Aztec Aave Wrapper E2E", () => {
 
     it("should have chain clients initialized", async (ctx) => {
       if (!harness?.status.l1Connected || !harness?.status.targetConnected) {
+        logger.skip("Chain clients not connected");
         ctx.skip();
         return;
       }
@@ -1686,14 +1737,12 @@ describe("Aztec Aave Wrapper E2E", () => {
       const targetChainId = await targetClient.public.getChainId();
       expect(targetChainId).toBe(config.chains.target.chainId);
 
-      console.log("Chain clients verified:", {
-        l1: l1ChainId,
-        target: targetChainId,
-      });
+      logger.info(`Chain clients verified - L1: ${l1ChainId}, Target: ${targetChainId}`);
     });
 
     it("should have Wormhole mock initialized", (ctx) => {
       if (!harness?.status.l1Connected || !harness?.status.targetConnected) {
+        logger.skip("Chain clients not connected");
         ctx.skip();
         return;
       }

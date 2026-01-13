@@ -44,41 +44,10 @@ services:
     restart: unless-stopped
 
   # ============================================================================
-  # Anvil Target - Simulates Arbitrum or other target chain
-  # This is where the Aave executor contract and Aave V3 Pool mock live
+  # NOTE: anvil-target removed for MVP simplification
+  # MVP uses direct L2→L1 Aave deposits without cross-chain bridging
+  # See docs/MVP_RESEARCH.md for details
   # ============================================================================
-  anvil-target:
-    image: ghcr.io/foundry-rs/foundry:latest
-    container_name: aztec-aave-anvil-target
-    ports:
-      - "${ANVIL_TARGET_PORT:-8546}:8546"
-    entrypoint: anvil
-    command:
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "8546"
-      - "--chain-id"
-      - "${ANVIL_TARGET_CHAIN_ID:-31338}"
-      - "--accounts"
-      - "10"
-      - "--balance"
-      - "10000"
-      - "--block-time"
-      - "${ANVIL_TARGET_BLOCK_TIME:-1}"
-      - "--gas-limit"
-      - "30000000"
-      - "--code-size-limit"
-      - "100000"
-    healthcheck:
-      test: ["CMD-SHELL", "cast block-number --rpc-url http://localhost:8546 || exit 1"]
-      interval: 5s
-      timeout: 10s
-      retries: 30
-      start_period: 10s
-    networks:
-      - aztec-aave-net
-    restart: unless-stopped
 
   # ============================================================================
   # Aztec Sandbox - Full Aztec development environment

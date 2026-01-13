@@ -6,3 +6,4 @@
 
 export * from "./test-utils";
 export * from "./assertions";
+export { logger } from "./logger";
