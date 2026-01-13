@@ -41,7 +41,7 @@ Aztec Aave Wrapper enables users on Aztec L2 to deposit into Aave V3 on Ethereum
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                           ETHEREUM L1                                    │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
-│  │  AztecAavePortalL1Simple Contract (Solidity)                    │    │
+│  │  AztecAavePortalL1 Contract (Solidity)                          │    │
 │  │  - executeDeposit()    → Consumes L2 msg, deposits to Aave      │    │
 │  │  - executeWithdraw()   → Withdraws from Aave, sends to L2       │    │
 │  │  - Tracks per-intent shares for privacy                         │    │
@@ -195,7 +195,7 @@ aztec-aave-wrapper/
 │
 ├── l1/                        # L1 Portal contracts
 │   ├── contracts/
-│   │   ├── AztecAavePortalL1Simple.sol
+│   │   ├── AztecAavePortalL1.sol
 │   │   ├── interfaces/        # IAztecOutbox, IAavePool, etc.
 │   │   ├── types/             # Intent.sol, Confirmation.sol
 │   │   └── mocks/             # MockAavePool contracts
@@ -303,7 +303,7 @@ E2E tests cover:
 
 ### Contract Configuration
 
-L1 Portal (`AztecAavePortalL1Simple.sol`):
+L1 Portal (`AztecAavePortalL1.sol`):
 - `MIN_DEADLINE`: 5 minutes
 - `MAX_DEADLINE`: 24 hours
 

@@ -2,11 +2,11 @@
 pragma solidity ^0.8.33;
 
 import { Script, console2 } from "forge-std/Script.sol";
-import { AztecAavePortalL1Simple } from "../contracts/AztecAavePortalL1Simple.sol";
+import { AztecAavePortalL1 } from "../contracts/AztecAavePortalL1.sol";
 
 /**
  * @title DeployPortal
- * @notice Deployment script for AztecAavePortalL1Simple contract
+ * @notice Deployment script for AztecAavePortalL1 contract
  * @dev Usage: forge script script/Deploy.s.sol --rpc-url $RPC_URL --broadcast
  */
 contract DeployPortal is Script {
@@ -21,11 +21,11 @@ contract DeployPortal is Script {
 
         vm.startBroadcast();
 
-        AztecAavePortalL1Simple portal = new AztecAavePortalL1Simple(
+        AztecAavePortalL1 portal = new AztecAavePortalL1(
             aztecOutbox, aztecInbox, tokenPortal, aavePool, l2ContractAddress, initialOwner
         );
 
-        console2.log("AztecAavePortalL1Simple deployed at:", address(portal));
+        console2.log("AztecAavePortalL1 deployed at:", address(portal));
         console2.log("Aave Pool:", aavePool);
         console2.log("Initial owner:", initialOwner);
 

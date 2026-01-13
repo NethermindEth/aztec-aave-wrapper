@@ -54,7 +54,7 @@ make install         # bun install + forge install for l1
 - `aztec_contracts/src/types/intent.nr` - DepositIntent, WithdrawIntent structs
 
 **L1 Portal (Solidity)**:
-- `l1/contracts/AztecAavePortalL1Simple.sol` - Consumes L2 messages, executes Aave operations directly
+- `l1/contracts/AztecAavePortalL1.sol` - Consumes L2 messages, executes Aave operations directly
 
 **Tests**:
 - `e2e/src/e2e.test.ts` - Full deposit/withdraw flow tests

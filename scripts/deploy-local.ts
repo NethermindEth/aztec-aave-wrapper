@@ -322,7 +322,7 @@ async function main() {
   );
 
   // ---------------------------------------------------------------------------
-  // Deploy AztecAavePortalL1Simple
+  // Deploy AztecAavePortalL1
   // ---------------------------------------------------------------------------
 
   // For local dev, use placeholder addresses for Aztec inbox/outbox
@@ -335,7 +335,7 @@ async function main() {
   const l2ContractPlaceholder = "0x" + "00".repeat(32);
 
   addresses.l1.portal = deployWithForge(
-    "contracts/AztecAavePortalL1Simple.sol:AztecAavePortalL1Simple",
+    "contracts/AztecAavePortalL1.sol:AztecAavePortalL1",
     [
       aztecOutbox,
       aztecInbox,
@@ -394,7 +394,7 @@ async function main() {
   console.log("\nL1 Contracts (Anvil :8545):");
   console.log(`  MockUSDC:              ${addresses.l1.mockUsdc}`);
   console.log(`  MockLendingPool:       ${addresses.l1.mockLendingPool}`);
-  console.log(`  AztecAavePortalSimple: ${addresses.l1.portal}`);
+  console.log(`  AztecAavePortal:       ${addresses.l1.portal}`);
 
   console.log("\nL2 Contracts (Aztec :8081):");
   console.log(`  AaveWrapper:         ${addresses.l2.aaveWrapper || "(not deployed)"}`);
