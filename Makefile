@@ -24,7 +24,6 @@ NC := \033[0m
 # Project directories
 L1_DIR := l1
 L2_DIR := aztec_contracts
-TARGET_DIR := target
 E2E_DIR := e2e
 
 # Docker compose configuration
@@ -33,7 +32,6 @@ DOCKER_COMPOSE_FILE := docker-compose.yml
 
 # Anvil ports (from docker-compose.yml defaults)
 ANVIL_L1_PORT ?= 8545
-ANVIL_TARGET_PORT ?= 8546
 PXE_PORT ?= 8080
 
 # ==============================================================================
@@ -41,8 +39,8 @@ PXE_PORT ?= 8080
 # ==============================================================================
 .PHONY: help check-tooling check-tool-docker check-tool-foundry check-tool-bun \
         check-tool-aztec check-tool-aztec devnet-up devnet-down devnet-health \
-        devnet-logs build build-l1 build-l2 build-target test test-l1 test-l2 \
-        test-target deploy-local e2e clean
+        devnet-logs build build-l1 build-l2 test test-l1 test-l2 \
+        deploy-local e2e clean
 
 # ==============================================================================
 # Help
@@ -182,7 +180,7 @@ check-tooling:
 # Devnet Management
 # ==============================================================================
 
-## devnet-up: Start local development network (Anvil L1, Anvil Target, Aztec Sandbox)
+## devnet-up: Start local development network (Anvil L1, Aztec Sandbox)
 devnet-up:
 	@echo ""
 	@echo "Starting local devnet..."
@@ -190,7 +188,6 @@ devnet-up:
 	@echo ""
 	@echo "Services:"
 	@echo "  - Anvil L1 (Ethereum):    http://localhost:$(ANVIL_L1_PORT)"
-	@echo "  - Anvil Target (Arbitrum): http://localhost:$(ANVIL_TARGET_PORT)"
 	@echo "  - Aztec Sandbox (PXE):    http://localhost:$(PXE_PORT)"
 	@echo ""
 	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up -d
@@ -234,8 +231,8 @@ devnet-clean:
 # Build Targets
 # ==============================================================================
 
-## build: Build all contracts (L1, L2, Target)
-build: build-l1 build-l2 build-target
+## build: Build all contracts (L1, L2)
+build: build-l1 build-l2
 	@echo ""
 	@echo -e "$(GREEN)All contracts built successfully!$(NC)"
 	@echo ""
@@ -256,20 +253,12 @@ build-l2:
 	cd $(L2_DIR) && aztec compile
 	@echo ""
 
-## build-target: Build Target chain Solidity contracts (Executor)
-build-target:
-	@echo ""
-	@echo "Building Target chain contracts..."
-	@echo "==================================="
-	cd $(TARGET_DIR) && forge build
-	@echo ""
-
 # ==============================================================================
 # Test Targets
 # ==============================================================================
 
 ## test: Run all unit tests
-test: test-l1 test-l2 test-target
+test: test-l1 test-l2
 	@echo ""
 	@echo -e "$(GREEN)All tests passed!$(NC)"
 	@echo ""
@@ -288,14 +277,6 @@ test-l2:
 	@echo "Running L2 contract tests..."
 	@echo "============================"
 	cd $(L2_DIR) && aztec test
-	@echo ""
-
-## test-target: Run Target chain contract tests
-test-target:
-	@echo ""
-	@echo "Running Target chain contract tests..."
-	@echo "======================================"
-	cd $(TARGET_DIR) && forge test -vv
 	@echo ""
 
 # ==============================================================================
@@ -356,8 +337,6 @@ clean:
 	cd $(L1_DIR) && forge clean 2>/dev/null || true
 	@echo "Cleaning L2 artifacts..."
 	rm -rf $(L2_DIR)/target 2>/dev/null || true
-	@echo "Cleaning Target chain artifacts..."
-	cd $(TARGET_DIR) && forge clean 2>/dev/null || true
 	@echo "Cleaning node_modules caches..."
 	rm -rf $(E2E_DIR)/node_modules/.cache 2>/dev/null || true
 	@echo ""
@@ -375,9 +354,6 @@ install:
 	@echo "Installing L1 Foundry dependencies..."
 	cd $(L1_DIR) && forge install
 	@echo ""
-	@echo "Installing Target chain Foundry dependencies..."
-	cd $(TARGET_DIR) && forge install
-	@echo ""
 	@echo -e "$(GREEN)All dependencies installed!$(NC)"
 	@echo ""
 
@@ -388,7 +364,6 @@ fmt:
 	@echo "=================="
 	@echo ""
 	cd $(L1_DIR) && forge fmt
-	cd $(TARGET_DIR) && forge fmt
 	cd $(L2_DIR) && aztec fmt
 	@echo ""
 	@echo -e "$(GREEN)Formatting complete!$(NC)"
@@ -401,5 +376,4 @@ lint:
 	@echo "==============="
 	@echo ""
 	cd $(L1_DIR) && forge fmt --check
-	cd $(TARGET_DIR) && forge fmt --check
 	@echo ""
