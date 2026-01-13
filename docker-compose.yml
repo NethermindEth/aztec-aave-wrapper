@@ -1,7 +1,6 @@
 # Docker Compose configuration for Aztec Aave Wrapper local development
 # This configuration runs:
 # - anvil-l1: Ethereum L1 simulation (port 8545)
-# - anvil-target: Target chain simulation (port 8546)
 # - aztec-sandbox: Full Aztec sandbox with PXE (port 8081)
 
 services:
