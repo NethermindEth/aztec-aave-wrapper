@@ -6,9 +6,3 @@
 
 // Aztec PXE helpers
 export * from "./aztec";
-
-// Wormhole mock utilities (for unit/local tests)
-export * from "./wormhole-mock";
-
-// Wormhole testnet utilities (for integration tests)
-export * from "./wormhole-testnet";

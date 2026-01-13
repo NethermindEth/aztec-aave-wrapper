@@ -23,7 +23,7 @@ const CHAIN_LABELS = {
   L2: `${COLORS.magenta}[Aztec L2]${COLORS.reset}`,
   L1: `${COLORS.blue}[Ethereum L1]${COLORS.reset}`,
   TARGET: `${COLORS.cyan}[Target Chain]${COLORS.reset}`,
-  BRIDGE: `${COLORS.yellow}[Wormhole]${COLORS.reset}`,
+  BRIDGE: `${COLORS.yellow}[Bridge]${COLORS.reset}`,
 };
 
 /**
@@ -131,7 +131,7 @@ export const logger = {
   },
 
   /**
-   * Log bridge (Wormhole) operation (used by mock tests)
+   * Log bridge operation (used by mock tests)
    */
   bridge(action: string, direction: "L1->Target" | "Target->L1") {
     const arrow = direction === "L1->Target" ? "→" : "←";

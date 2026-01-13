@@ -2,8 +2,7 @@
  * End-to-end tests for Aztec Aave Wrapper
  *
  * These tests validate the complete flow for deposit and withdrawal operations.
- * In simplified L1-only mode: L2 → L1 → L2 (Aave on L1)
- * In cross-chain mode: L2 → L1 → Target → L1 → L2 (Aave on target chain via Wormhole)
+ * Architecture: L2 → L1 → L2 (Aave operations directly on L1)
  *
  * Prerequisites:
  * - Local devnet running (docker compose up)

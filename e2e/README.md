@@ -6,7 +6,7 @@ This test suite validates the complete Aztec Aave Wrapper flow: privacy-preservi
 
 **Boundaries:**
 - **In scope**: L2 contract behavior, cross-chain message flow simulation, privacy properties, security assertions
-- **Out of scope**: Real Wormhole guardian signatures, real Aave pool interactions (mocked), L1 contract execution (simulated)
+- **Out of scope**: Real Aave pool interactions (mocked), L1 contract execution (simulated)
 
 **Entry points:**
 - `src/e2e.test.ts:86` - Main E2E test suite
@@ -23,7 +23,6 @@ This test suite validates the complete Aztec Aave Wrapper flow: privacy-preservi
 | Test Harness | `src/setup.ts:136-609` | Environment setup, accounts, contracts |
 | Deposit Flow | `src/flows/deposit.ts:172-468` | Deposit orchestration (6 steps) |
 | Withdraw Flow | `src/flows/withdraw.ts:167-488` | Withdraw orchestration (5 steps) |
-| Wormhole Mock | `src/utils/wormhole-mock.ts:344-577` | Cross-chain message simulation |
 | Aztec Helpers | `src/utils/aztec.ts:89-200` | PXE interaction utilities |
 | Assertions | `src/helpers/assertions.ts:1-231` | Custom security assertions |
 | Configuration | `src/config.ts:1-256` | Environment/chain configuration |
@@ -40,7 +39,7 @@ Step 2: Verify user ≠ relayer (privacy property)
 Step 3: L2 request_deposit() → creates DepositIntent, L2→L1 message
 Step 4: Verify L2→L1 message created
 Step 5: L1 portal execution (relayer, not user)
-Step 6: Target chain Aave supply (via Wormhole mock)
+Step 6: L1 Aave supply (direct)
 Step 7: Confirmation back to L1
 Step 8: Privacy verification (relayer ≠ user)
 Step 9: L2 finalize_deposit() → creates PositionReceiptNote
@@ -61,7 +60,7 @@ Step 2: User prepares withdrawal (secret, deadline)
 Step 3: L2 request_withdraw() → consumes receipt, creates L2→L1 message
 Step 4: Verify L2→L1 message created
 Step 5: L1 portal execution (relayer)
-Step 6: Target chain Aave withdrawal (via Wormhole mock)
+Step 6: L1 Aave withdrawal (direct)
 Step 7: Token bridge back to L1, confirmation
 Step 8: Privacy verification
 Step 9: L2 finalize_withdraw() → nullifies pending note
@@ -147,10 +146,9 @@ Step 9: L2 finalize_withdraw() → nullifies pending note
 ### Not Currently Testable in Mock Mode
 
 1. **Real L1→L2 message consumption**: Mock mode cannot create real Aztec inbox messages
-2. **Real Wormhole VAA validation**: Uses mock VAAs without guardian signatures
-3. **Real Aave pool interaction**: Target executor uses simulated pool
-4. **L1 contract deadline enforcement**: Would require deployed L1 contracts
-5. **Gas estimation accuracy**: Mock transactions don't have real gas costs
+2. **Real Aave pool interaction**: Uses simulated Aave pool
+3. **L1 contract deadline enforcement**: Would require deployed L1 contracts
+4. **Gas estimation accuracy**: Mock transactions don't have real gas costs
 
 ## Invariants Enforced
 
@@ -208,10 +206,10 @@ bun run test
 # Unit tests only (no devnet required)
 bun run test:unit
 
-# Mock tests (local devnet with mock Wormhole)
+# Mock tests (local devnet with simulated Aave)
 bun run test:mock
 
-# Integration tests (real Wormhole testnet)
+# Integration tests (real L1 execution)
 bun run test:integration
 
 # Setup infrastructure tests
@@ -274,16 +272,12 @@ bun run test:watch
 
 ### Priority 4: Testnet Integration
 
-1. **Wormhole testnet VAA validation**
-   - Use real Wormhole testnet guardians
-   - Verify actual VAA structure and signatures
-
-2. **Aave testnet integration**
-   - Deploy to Sepolia/Arbitrum Sepolia
+1. **Aave testnet integration**
+   - Deploy to Sepolia
    - Test real Aave pool supply/withdraw
 
-3. **End-to-end testnet flow**
-   - Complete flow with real cross-chain messages
+2. **End-to-end testnet flow**
+   - Complete flow with real L2→L1 messages
    - Measure actual latency and costs
 
 ## Open Questions

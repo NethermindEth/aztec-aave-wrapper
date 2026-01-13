@@ -42,7 +42,7 @@ export type TestMode = "mock" | "integration";
 export interface TestConfig {
   /** Environment (local devnet or testnet) */
   environment: TestEnvironment;
-  /** Test mode (mock Wormhole or real integration) */
+  /** Test mode (mock L1 execution or real integration) */
   mode: TestMode;
   /** Chain configurations */
   chains: {

@@ -7,8 +7,8 @@ import { resolve } from "path";
  * Supports multiple test modes:
  * - `bun run test` - All tests (default)
  * - `bun run test:unit` - Unit tests only (helpers, no external dependencies)
- * - `bun run test:mock` - Mock tests (local devnet with mock Wormhole)
- * - `bun run test:integration` - Integration tests (real Wormhole testnet)
+ * - `bun run test:mock` - Mock tests (local devnet with simulated Aave)
+ * - `bun run test:integration` - Integration tests (real L1 execution)
  *
  * Environment variables:
  * - TEST_ENVIRONMENT: 'local' | 'testnet'
