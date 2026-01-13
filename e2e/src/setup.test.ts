@@ -46,10 +46,10 @@ describe("E2E Setup Infrastructure", () => {
     });
 
     it("should detect undeployed addresses", () => {
-      const localConfig = getConfig("local");
+      const testnetConfig = getConfig("testnet");
 
-      // Default addresses.json has zero addresses, so should return false
-      const deployed = areAddressesDeployed(localConfig);
+      // Testnet addresses.json has zero addresses, so should return false
+      const deployed = areAddressesDeployed(testnetConfig);
       expect(deployed).toBe(false);
     });
 

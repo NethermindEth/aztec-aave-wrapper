@@ -26,7 +26,6 @@ NC='\033[0m' # No Color
 
 # Service configuration
 ANVIL_L1_PORT=${ANVIL_L1_PORT:-8545}
-ANVIL_TARGET_PORT=${ANVIL_TARGET_PORT:-8546}
 PXE_PORT=${PXE_PORT:-8081}
 
 # =============================================================================
@@ -76,19 +75,6 @@ check_docker() {
 check_anvil_l1() {
     local response
     response=$(curl -s -X POST "http://localhost:${ANVIL_L1_PORT}" \
-        -H "Content-Type: application/json" \
-        -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null || echo "")
-
-    if echo "$response" | grep -q '"result"'; then
-        return 0
-    fi
-    return 1
-}
-
-# Check if anvil target is healthy
-check_anvil_target() {
-    local response
-    response=$(curl -s -X POST "http://localhost:${ANVIL_TARGET_PORT}" \
         -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' 2>/dev/null || echo "")
 
@@ -183,11 +169,6 @@ main() {
         all_healthy=false
     fi
 
-    # Check Anvil Target
-    if ! wait_for_service "Anvil Target (port ${ANVIL_TARGET_PORT})" check_anvil_target; then
-        all_healthy=false
-    fi
-
     # Check PXE (Aztec Sandbox)
     if ! wait_for_service "PXE/Aztec Sandbox (port ${PXE_PORT})" check_pxe; then
         all_healthy=false
@@ -200,9 +181,8 @@ main() {
         log_success "All services are healthy!"
         echo ""
         echo "Service endpoints:"
-        echo "  - Anvil L1:     http://localhost:${ANVIL_L1_PORT}"
-        echo "  - Anvil Target: http://localhost:${ANVIL_TARGET_PORT}"
-        echo "  - PXE:          http://localhost:${PXE_PORT}"
+        echo "  - Anvil L1: http://localhost:${ANVIL_L1_PORT}"
+        echo "  - PXE:      http://localhost:${PXE_PORT}"
         echo ""
         exit 0
     else
@@ -211,7 +191,7 @@ main() {
         echo "Troubleshooting:"
         echo "  1. Check Docker logs: docker compose logs"
         echo "  2. Restart services:  docker compose down && docker compose up -d"
-        echo "  3. Check port conflicts: lsof -i :8545 -i :8546 -i :8080"
+        echo "  3. Check port conflicts: lsof -i :8545 -i :8080"
         echo ""
         exit 1
     fi
