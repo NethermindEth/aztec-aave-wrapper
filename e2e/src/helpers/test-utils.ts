@@ -9,9 +9,11 @@
  * - Note field extraction from PXE
  */
 
-import type { Fr, AztecAddress, Note } from "@aztec/aztec.js";
-import { poseidon2Hash } from "@aztec/foundation/crypto";
-import { computeSecretHash as aztecComputeSecretHash } from "@aztec/circuits.js/hash";
+import type { Fr } from "@aztec/aztec.js/fields";
+import type { AztecAddress } from "@aztec/aztec.js/addresses";
+import type { Note } from "@aztec/aztec.js/note";
+import { poseidon2Hash } from "@aztec/foundation/crypto/poseidon";
+import { computeSecretHash as aztecComputeSecretHash } from "@aztec/stdlib/hash";
 
 /**
  * Compute the expected intent_id for a deposit request.
@@ -51,7 +53,7 @@ import { computeSecretHash as aztecComputeSecretHash } from "@aztec/circuits.js/
  * @param salt - The salt value (Field element)
  * @returns The computed intent_id as a Field element
  */
-export function computeExpectedIntentId(
+export async function computeExpectedIntentId(
   caller: AztecAddress,
   asset: bigint,
   amount: bigint,
@@ -59,12 +61,12 @@ export function computeExpectedIntentId(
   targetChainId: number,
   deadline: bigint,
   salt: bigint
-): ReturnType<typeof poseidon2Hash> {
+): Promise<ReturnType<typeof poseidon2Hash>> {
   // Convert AztecAddress to Field
   const callerField = caller.toBigInt();
 
   // Pack inputs into array for hashing, matching main.nr:38-46
-  return poseidon2Hash([
+  return await poseidon2Hash([
     callerField,
     asset,
     amount,
@@ -87,8 +89,8 @@ export function computeExpectedIntentId(
  * @param secret - The secret value (Field element)
  * @returns The computed secret hash
  */
-export function computeSecretHash(secret: Fr): ReturnType<typeof aztecComputeSecretHash> {
-  return aztecComputeSecretHash(secret);
+export async function computeSecretHash(secret: Fr): Promise<ReturnType<typeof aztecComputeSecretHash>> {
+  return await aztecComputeSecretHash(secret);
 }
 
 /**
@@ -103,9 +105,9 @@ export function computeSecretHash(secret: Fr): ReturnType<typeof aztecComputeSec
  * @param secretHash - The hash of the secret
  * @returns The computed salt as a Field element
  */
-export function computeSalt(caller: AztecAddress, secretHash: bigint): ReturnType<typeof poseidon2Hash> {
+export async function computeSalt(caller: AztecAddress, secretHash: bigint): Promise<ReturnType<typeof poseidon2Hash>> {
   const callerField = caller.toBigInt();
-  return poseidon2Hash([callerField, secretHash]);
+  return await poseidon2Hash([callerField, secretHash]);
 }
 
 /**
@@ -119,9 +121,9 @@ export function computeSalt(caller: AztecAddress, secretHash: bigint): ReturnTyp
  * @param owner - The Aztec address of the owner
  * @returns The computed owner hash as a Field element
  */
-export function computeOwnerHash(owner: AztecAddress): ReturnType<typeof poseidon2Hash> {
+export async function computeOwnerHash(owner: AztecAddress): Promise<ReturnType<typeof poseidon2Hash>> {
   const ownerField = owner.toBigInt();
-  return poseidon2Hash([ownerField]);
+  return await poseidon2Hash([ownerField]);
 }
 
 /**

@@ -106,7 +106,7 @@ services:
       # PXE configuration
       PXE_PROVER_ENABLED: ${PXE_PROVER_ENABLED:-false}
     # Override entrypoint to start local network
-    # In newer Aztec versions, use "start --local-network" instead of "start --sandbox"
+    # For 3.0.0+ use "start --local-network", for 0.65.x use "start --sandbox"
     entrypoint: ["/bin/bash", "-c", "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js start --local-network"]
     depends_on:
       anvil-l1:

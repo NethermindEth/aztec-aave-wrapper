@@ -313,10 +313,10 @@ export class WithdrawFlowOrchestrator {
     const tx = await withdrawCall.send().wait();
 
     // Compute owner hash using same logic as contract
-    const { poseidon2Hash } = await import("@aztec/foundation/crypto");
+    const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
 
     const ownerAddress = wallet.getAddress().toBigInt();
-    const ownerHash = poseidon2Hash([ownerAddress]).toBigInt();
+    const ownerHash = (await poseidon2Hash([ownerAddress])).toBigInt();
 
     return {
       intentId: intentId.toBigInt(),

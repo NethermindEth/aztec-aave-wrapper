@@ -317,13 +317,13 @@ export class DepositFlowOrchestrator {
     const tx = await depositCall.send().wait();
 
     // Compute secret hash and owner hash using same logic as contract
-    const { poseidon2Hash } = await import("@aztec/foundation/crypto");
-    const { computeSecretHash } = await import("@aztec/circuits.js/hash");
-    const { Fr } = await import("@aztec/aztec.js");
+    const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
+    const { computeSecretHash } = await import("@aztec/stdlib/hash");
+    const { Fr } = await import("@aztec/aztec.js/fields");
 
-    const secretHash = computeSecretHash(Fr.fromString(params.secret.toString())).toBigInt();
+    const secretHash = (await computeSecretHash(new Fr(params.secret))).toBigInt();
     const ownerAddress = wallet.getAddress().toBigInt();
-    const ownerHash = poseidon2Hash([ownerAddress]).toBigInt();
+    const ownerHash = (await poseidon2Hash([ownerAddress])).toBigInt();
 
     return {
       intentId: intentId.toBigInt(),
@@ -485,9 +485,9 @@ export async function computeExpectedIntentId(
   deadline: bigint,
   salt: bigint
 ): Promise<bigint> {
-  const { poseidon2Hash } = await import("@aztec/foundation/crypto");
+  const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
 
-  return poseidon2Hash([
+  const hash = await poseidon2Hash([
     caller,
     asset,
     amount,
@@ -495,7 +495,8 @@ export async function computeExpectedIntentId(
     BigInt(targetChainId),
     deadline,
     salt,
-  ]).toBigInt();
+  ]);
+  return hash.toBigInt();
 }
 
 /**
@@ -504,8 +505,9 @@ export async function computeExpectedIntentId(
  * Matches main.nr:367.
  */
 export async function computeSalt(caller: bigint, secretHash: bigint): Promise<bigint> {
-  const { poseidon2Hash } = await import("@aztec/foundation/crypto");
-  return poseidon2Hash([caller, secretHash]).toBigInt();
+  const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
+  const hash = await poseidon2Hash([caller, secretHash]);
+  return hash.toBigInt();
 }
 
 /**

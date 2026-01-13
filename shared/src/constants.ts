@@ -47,7 +47,7 @@ export const WORMHOLE_CHAIN_IDS = {
 
 export const AZTEC_CONFIG = {
   // Local sandbox defaults
-  LOCAL_PXE_URL: "http://localhost:8080",
+  LOCAL_PXE_URL: "http://localhost:8081",
   LOCAL_ETHEREUM_RPC: "http://localhost:8545",
 
   // Testnet (devnet) - placeholder, update when available
@@ -173,7 +173,7 @@ export const ERROR_CODES = {
 export const LOCAL_RPC_URLS = {
   L1: "http://localhost:8545",
   TARGET: "http://localhost:8546",
-  PXE: "http://localhost:8080",
+  PXE: "http://localhost:8081",
 } as const;
 
 export const LOCAL_PRIVATE_KEYS = {

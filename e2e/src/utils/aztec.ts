@@ -16,16 +16,21 @@
 import type { TestConfig } from "../config";
 
 // =============================================================================
-// Type Definitions
+// Type Definitions (3.0.0 SDK uses subpath exports)
 // =============================================================================
 
-type PXE = import("@aztec/aztec.js").PXE;
-type Fr = import("@aztec/aztec.js").Fr;
-type AztecAddress = import("@aztec/aztec.js").AztecAddress;
-type EthAddress = import("@aztec/aztec.js").EthAddress;
-type AccountWallet = import("@aztec/aztec.js").AccountWallet;
-type ContractInstance = import("@aztec/aztec.js").Contract;
-type Note = import("@aztec/aztec.js").Note;
+type AztecNode = import("@aztec/stdlib/interfaces/client").AztecNode;
+type Fr = import("@aztec/aztec.js/fields").Fr;
+type AztecAddress = import("@aztec/aztec.js/addresses").AztecAddress;
+type EthAddress = import("@aztec/foundation/eth-address").EthAddress;
+type AccountWithSecretKey = import("@aztec/aztec.js/account").AccountWithSecretKey;
+type ContractInstance = import("@aztec/aztec.js/contracts").Contract;
+type Note = import("@aztec/aztec.js/note").Note;
+
+// Backwards compatibility alias
+type PXE = AztecNode;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AccountWallet = any;
 
 /**
  * Position status values from the Noir contract
@@ -89,8 +94,8 @@ export interface L2ToL1Message {
 export class AztecHelper {
   private pxe: PXE;
   private aztec: {
-    Fr: typeof import("@aztec/aztec.js").Fr;
-    AztecAddress: typeof import("@aztec/aztec.js").AztecAddress;
+    Fr: typeof import("@aztec/aztec.js/fields").Fr;
+    AztecAddress: typeof import("@aztec/aztec.js/addresses").AztecAddress;
   } | null = null;
 
   constructor(pxe: PXE) {
@@ -101,10 +106,11 @@ export class AztecHelper {
    * Initialize Aztec modules (required before use).
    */
   async initialize(): Promise<void> {
-    const aztecJs = await import("@aztec/aztec.js");
+    const fieldsModule = await import("@aztec/aztec.js/fields");
+    const addressesModule = await import("@aztec/aztec.js/addresses");
     this.aztec = {
-      Fr: aztecJs.Fr,
-      AztecAddress: aztecJs.AztecAddress,
+      Fr: fieldsModule.Fr,
+      AztecAddress: addressesModule.AztecAddress,
     };
   }
 
@@ -138,7 +144,7 @@ export class AztecHelper {
         return [];
       }
 
-      const { Fr } = await import("@aztec/aztec.js");
+      const { Fr } = await import("@aztec/aztec.js/fields");
       const notes = await pxeAny.getNotes({
         contractAddress: contract.address,
         storageSlot: Fr.fromString(POSITIONS_STORAGE_SLOT.toString()),
@@ -383,7 +389,7 @@ export class AztecHelper {
  * @returns Random Fr value as bigint
  */
 export async function generateSecret(): Promise<bigint> {
-  const { Fr } = await import("@aztec/aztec.js");
+  const { Fr } = await import("@aztec/aztec.js/fields");
   return Fr.random().toBigInt();
 }
 
@@ -395,11 +401,12 @@ export async function generateSecret(): Promise<bigint> {
  */
 export async function computeSecretHash(secret: bigint): Promise<bigint> {
   const { computeSecretHash: aztecComputeSecretHash } = await import(
-    "@aztec/circuits.js/hash"
+    "@aztec/stdlib/hash"
   );
-  const { Fr } = await import("@aztec/aztec.js");
-  // Fr.fromString handles bigint conversion
-  const hash = aztecComputeSecretHash(Fr.fromString(secret.toString()));
+  const { Fr } = await import("@aztec/aztec.js/fields");
+  // Use Fr constructor directly with bigint - fromString doesn't handle decimal strings properly
+  // In 3.0.0, computeSecretHash is async
+  const hash = await aztecComputeSecretHash(new Fr(secret));
   return hash.toBigInt();
 }
 
@@ -418,9 +425,9 @@ export async function computeIntentId(params: {
   deadline: bigint;
   salt: bigint;
 }): Promise<bigint> {
-  const { poseidon2Hash } = await import("@aztec/foundation/crypto");
+  const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
 
-  return poseidon2Hash([
+  const hash = await poseidon2Hash([
     params.caller,
     params.asset,
     params.amount,
@@ -428,7 +435,8 @@ export async function computeIntentId(params: {
     BigInt(params.targetChainId),
     params.deadline,
     params.salt,
-  ]).toBigInt();
+  ]);
+  return hash.toBigInt();
 }
 
 /**
@@ -442,8 +450,9 @@ export async function computeSalt(
   caller: bigint,
   secretHash: bigint
 ): Promise<bigint> {
-  const { poseidon2Hash } = await import("@aztec/foundation/crypto");
-  return poseidon2Hash([caller, secretHash]).toBigInt();
+  const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
+  const hash = await poseidon2Hash([caller, secretHash]);
+  return hash.toBigInt();
 }
 
 /**

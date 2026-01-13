@@ -2,7 +2,7 @@
  * E2E Test Setup and Deployment Utilities
  *
  * This module provides the test harness for E2E tests:
- * - PXE client initialization
+ * - Node client initialization (3.0.0+ SDK)
  * - Account creation and management
  * - Contract deployment
  * - L1/Target chain setup
@@ -26,36 +26,45 @@ import { LOCAL_PRIVATE_KEYS } from "@aztec-aave-wrapper/shared";
 // =============================================================================
 
 /**
- * Aztec imports - dynamically loaded to handle Node.js version compatibility
+ * Aztec imports for 3.0.0 SDK - dynamically loaded to handle Node.js version compatibility
  */
 interface AztecModules {
-  createPXEClient: typeof import("@aztec/aztec.js").createPXEClient;
-  AccountWallet: typeof import("@aztec/aztec.js").AccountWallet;
-  Fr: typeof import("@aztec/aztec.js").Fr;
-  AztecAddress: typeof import("@aztec/aztec.js").AztecAddress;
-  EthAddress: typeof import("@aztec/aztec.js").EthAddress;
-  Contract: typeof import("@aztec/aztec.js").Contract;
-  GrumpkinScalar: typeof import("@aztec/aztec.js").GrumpkinScalar;
-  getSchnorrAccount: typeof import("@aztec/accounts/schnorr").getSchnorrAccount;
+  // From @aztec/aztec.js/node
+  createAztecNodeClient: (url: string) => AztecNode;
+  waitForNode: (node: AztecNode) => Promise<void>;
+  // From @aztec/aztec.js/fields
+  Fr: typeof import("@aztec/aztec.js/fields").Fr;
+  GrumpkinScalar: typeof import("@aztec/aztec.js/fields").GrumpkinScalar;
+  // From @aztec/aztec.js/addresses
+  AztecAddress: typeof import("@aztec/aztec.js/addresses").AztecAddress;
+  EthAddress: typeof import("@aztec/foundation/eth-address").EthAddress;
+  // From @aztec/aztec.js/contracts
+  Contract: typeof import("@aztec/aztec.js/contracts").Contract;
+  // From @aztec/aztec.js/wallet
+  AccountManager: typeof import("@aztec/aztec.js/wallet").AccountManager;
+  // From @aztec/accounts/schnorr
+  SchnorrAccountContract: typeof import("@aztec/accounts/schnorr").SchnorrAccountContract;
+  // From @aztec/accounts/testing
+  getInitialTestAccountsData: typeof import("@aztec/accounts/testing").getInitialTestAccountsData;
 }
 
-type PXE = import("@aztec/aztec.js").PXE;
-type ContractArtifact = import("@aztec/aztec.js").ContractArtifact;
-type AccountWalletInstance = InstanceType<
-  typeof import("@aztec/aztec.js").AccountWallet
->;
-type ContractInstance = import("@aztec/aztec.js").Contract;
+// AztecNode type from stdlib
+type AztecNode = import("@aztec/stdlib/interfaces/client").AztecNode;
+type ContractArtifact = import("@aztec/stdlib/abi").ContractArtifact;
+type AccountWithSecretKey = import("@aztec/aztec.js/account").AccountWithSecretKey;
+type ContractInstance = import("@aztec/aztec.js/contracts").Contract;
+type FrType = import("@aztec/aztec.js/fields").Fr;
 
 /**
  * Test account with wallet and metadata
  */
 export interface TestAccount {
-  /** Account wallet for signing transactions */
-  wallet: AccountWalletInstance;
+  /** Account (implements Wallet interface) */
+  wallet: AccountWithSecretKey;
   /** Aztec address */
-  address: ReturnType<AccountWalletInstance["getAddress"]>;
+  address: import("@aztec/aztec.js/addresses").AztecAddress;
   /** Secret key (for reference) */
-  secretKey: ReturnType<typeof import("@aztec/aztec.js").Fr.random>;
+  secretKey: FrType;
 }
 
 /**
@@ -136,7 +145,7 @@ export interface InitializationStatus {
 export class TestHarness {
   private config: TestConfig;
   private aztec: AztecModules | null = null;
-  private _pxe: PXE | null = null;
+  private _node: AztecNode | null = null;
   private _artifact: ContractArtifact | null = null;
 
   // Chain clients
@@ -179,9 +188,9 @@ export class TestHarness {
   // Public Getters
   // ===========================================================================
 
-  get pxe(): PXE {
-    if (!this._pxe) throw new Error("PXE not initialized. Call initialize() first.");
-    return this._pxe;
+  get pxe(): AztecNode {
+    if (!this._node) throw new Error("Node not initialized. Call initialize() first.");
+    return this._node;
   }
 
   get l1Client(): ChainClient {
@@ -226,7 +235,7 @@ export class TestHarness {
 
   /**
    * Initialize the test harness.
-   * Sets up PXE, chain clients, accounts, and optionally deploys contracts.
+   * Sets up node client, chain clients, accounts, and optionally deploys contracts.
    *
    * @param options - Initialization options
    * @returns Initialization status
@@ -249,9 +258,9 @@ export class TestHarness {
     // Step 1: Load Aztec modules
     await this.loadAztecModules();
 
-    // Step 2: Connect to PXE
+    // Step 2: Connect to Node
     if (this._status.aztecAvailable) {
-      await this.connectPXE();
+      await this.connectNode();
     }
 
     // Step 3: Load contract artifact
@@ -278,7 +287,7 @@ export class TestHarness {
    */
   async teardown(): Promise<void> {
     // Reset state
-    this._pxe = null;
+    this._node = null;
     this._l1Client = null;
     this._targetClient = null;
     this._accounts = { admin: null, user: null, user2: null };
@@ -298,51 +307,68 @@ export class TestHarness {
   // ===========================================================================
 
   /**
-   * Dynamically load Aztec modules.
+   * Dynamically load Aztec modules (3.0.0 SDK).
    * This handles Node.js version compatibility issues.
    */
   private async loadAztecModules(): Promise<void> {
     try {
-      const aztecJs = await import("@aztec/aztec.js");
-      const accounts = await import("@aztec/accounts/schnorr");
+      // 3.0.0 SDK uses subpath exports
+      const nodeModule = await import("@aztec/aztec.js/node");
+      const fieldsModule = await import("@aztec/aztec.js/fields");
+      const addressesModule = await import("@aztec/aztec.js/addresses");
+      const contractsModule = await import("@aztec/aztec.js/contracts");
+      const walletModule = await import("@aztec/aztec.js/wallet");
+      const accountsSchnorr = await import("@aztec/accounts/schnorr");
+      const accountsTesting = await import("@aztec/accounts/testing");
+      const foundationEth = await import("@aztec/foundation/eth-address");
 
       this.aztec = {
-        createPXEClient: aztecJs.createPXEClient,
-        AccountWallet: aztecJs.AccountWallet,
-        Fr: aztecJs.Fr,
-        AztecAddress: aztecJs.AztecAddress,
-        EthAddress: aztecJs.EthAddress,
-        Contract: aztecJs.Contract,
-        GrumpkinScalar: aztecJs.GrumpkinScalar,
-        getSchnorrAccount: accounts.getSchnorrAccount,
+        createAztecNodeClient: nodeModule.createAztecNodeClient,
+        waitForNode: nodeModule.waitForNode,
+        Fr: fieldsModule.Fr,
+        GrumpkinScalar: fieldsModule.GrumpkinScalar,
+        AztecAddress: addressesModule.AztecAddress,
+        EthAddress: foundationEth.EthAddress,
+        Contract: contractsModule.Contract,
+        AccountManager: walletModule.AccountManager,
+        SchnorrAccountContract: accountsSchnorr.SchnorrAccountContract,
+        getInitialTestAccountsData: accountsTesting.getInitialTestAccountsData,
       };
 
       this._status.aztecAvailable = true;
     } catch (error) {
       console.warn(
         `Aztec modules not available (Node.js ${process.version}).`,
-        "Some tests will be skipped."
+        "Some tests will be skipped.",
+        error instanceof Error ? error.message : error
       );
       this._status.aztecAvailable = false;
     }
   }
 
   /**
-   * Connect to the PXE client.
+   * Connect to the Aztec node (3.0.0+ uses createAztecNodeClient instead of createPXEClient).
    */
-  private async connectPXE(): Promise<void> {
+  private async connectNode(): Promise<void> {
     if (!this.aztec) return;
 
     try {
-      this._pxe = this.aztec.createPXEClient(this.config.chains.l2.rpcUrl);
+      this._node = this.aztec.createAztecNodeClient(this.config.chains.l2.rpcUrl);
+
+      // Wait for node to be ready
       await Promise.race([
-        this._pxe.getNodeInfo(),
-        this.timeout(this.config.timeouts.pxeConnection, "PXE connection"),
+        this.aztec.waitForNode(this._node),
+        this.timeout(this.config.timeouts.pxeConnection, "Node connection"),
       ]);
+
+      // Verify connection by getting node info
+      const nodeInfo = await this._node.getNodeInfo();
+      console.log(`Connected to Aztec node version ${nodeInfo.nodeVersion}`);
+
       this._status.pxeConnected = true;
     } catch (error) {
       console.warn(
-        `PXE not available at ${this.config.chains.l2.rpcUrl}:`,
+        `Aztec node not available at ${this.config.chains.l2.rpcUrl}:`,
         error instanceof Error ? error.message : error
       );
       this._status.pxeConnected = false;
@@ -448,48 +474,82 @@ export class TestHarness {
   }
 
   /**
-   * Create test accounts on Aztec.
+   * Create test accounts on Aztec (3.0.0 SDK).
+   *
+   * Uses TestWallet with pre-funded sandbox accounts from @aztec/accounts/testing.
+   * Each account gets its own TestWallet for independent transactions.
    */
   private async createAccounts(): Promise<void> {
-    if (!this.aztec || !this._pxe) return;
+    if (!this.aztec || !this._node) return;
 
     try {
-      const { Fr, GrumpkinScalar, getSchnorrAccount } = this.aztec;
+      // Import TestWallet and pre-funded account keys
+      const { TestWallet } = await import("@aztec/test-wallet/server");
+      const {
+        INITIAL_TEST_SECRET_KEYS,
+        INITIAL_TEST_SIGNING_KEYS,
+        INITIAL_TEST_ACCOUNT_SALTS,
+      } = await import("@aztec/accounts/testing");
 
-      // Admin account
-      const adminSecretKey = Fr.random();
-      const adminSigningKey = GrumpkinScalar.random();
-      const adminAccount = getSchnorrAccount(this._pxe, adminSecretKey, adminSigningKey);
-      const adminWallet = await adminAccount.waitSetup();
+      // Verify we have enough pre-funded accounts
+      if (
+        INITIAL_TEST_SECRET_KEYS.length < 3 ||
+        INITIAL_TEST_SIGNING_KEYS.length < 3 ||
+        INITIAL_TEST_ACCOUNT_SALTS.length < 3
+      ) {
+        console.warn("Not enough pre-configured test accounts available");
+        this._status.accountsCreated = false;
+        return;
+      }
+
+      // Create TestWallet for admin
+      const adminWallet = await TestWallet.create(this._node!, { proverEnabled: false });
+      const adminAccountManager = await adminWallet.createSchnorrAccount(
+        INITIAL_TEST_SECRET_KEYS[0]!,
+        INITIAL_TEST_ACCOUNT_SALTS[0]!,
+        INITIAL_TEST_SIGNING_KEYS[0]!
+      );
+
       this._accounts.admin = {
-        wallet: adminWallet,
-        address: adminWallet.getAddress(),
-        secretKey: adminSecretKey,
+        wallet: adminWallet as unknown as AccountWithSecretKey,
+        address: adminAccountManager.address,
+        secretKey: INITIAL_TEST_SECRET_KEYS[0]!,
       };
 
-      // User account
-      const userSecretKey = Fr.random();
-      const userSigningKey = GrumpkinScalar.random();
-      const userAccount = getSchnorrAccount(this._pxe, userSecretKey, userSigningKey);
-      const userWallet = await userAccount.waitSetup();
+      // Create TestWallet for user
+      const userWallet = await TestWallet.create(this._node!, { proverEnabled: false });
+      const userAccountManager = await userWallet.createSchnorrAccount(
+        INITIAL_TEST_SECRET_KEYS[1]!,
+        INITIAL_TEST_ACCOUNT_SALTS[1]!,
+        INITIAL_TEST_SIGNING_KEYS[1]!
+      );
+
       this._accounts.user = {
-        wallet: userWallet,
-        address: userWallet.getAddress(),
-        secretKey: userSecretKey,
+        wallet: userWallet as unknown as AccountWithSecretKey,
+        address: userAccountManager.address,
+        secretKey: INITIAL_TEST_SECRET_KEYS[1]!,
       };
 
-      // User2 account (for authorization tests)
-      const user2SecretKey = Fr.random();
-      const user2SigningKey = GrumpkinScalar.random();
-      const user2Account = getSchnorrAccount(this._pxe, user2SecretKey, user2SigningKey);
-      const user2Wallet = await user2Account.waitSetup();
+      // Create TestWallet for user2 (relayer)
+      const user2Wallet = await TestWallet.create(this._node!, { proverEnabled: false });
+      const user2AccountManager = await user2Wallet.createSchnorrAccount(
+        INITIAL_TEST_SECRET_KEYS[2]!,
+        INITIAL_TEST_ACCOUNT_SALTS[2]!,
+        INITIAL_TEST_SIGNING_KEYS[2]!
+      );
+
       this._accounts.user2 = {
-        wallet: user2Wallet,
-        address: user2Wallet.getAddress(),
-        secretKey: user2SecretKey,
+        wallet: user2Wallet as unknown as AccountWithSecretKey,
+        address: user2AccountManager.address,
+        secretKey: INITIAL_TEST_SECRET_KEYS[2]!,
       };
 
       this._status.accountsCreated = true;
+
+      console.log("Using pre-funded sandbox accounts:");
+      console.log("  Admin:", this._accounts.admin.address.toString());
+      console.log("  User:", this._accounts.user.address.toString());
+      console.log("  User2/Relayer:", this._accounts.user2.address.toString());
     } catch (error) {
       console.warn(
         "Failed to create accounts:",
@@ -508,29 +568,50 @@ export class TestHarness {
     if (!this.aztec || !this._artifact || !this._accounts.admin) return;
 
     try {
-      const { Contract, EthAddress } = this.aztec;
+      // Import the generated contract wrapper
+      const { AaveWrapperContract, AaveWrapperContractArtifact } = await import(
+        "../../aztec_contracts/generated/AaveWrapper"
+      );
+      const { EthAddress } = await import("@aztec/foundation/eth-address");
+
+      const adminWallet = this._accounts.admin.wallet;
+      const adminAddress = this._accounts.admin.address;
 
       // Use a mock portal address for testing
-      const portalAddress = EthAddress.fromString(
-        this.config.addresses.l1.portal ||
-          "0x1234567890123456789012345678901234567890"
-      );
+      const portalAddress = EthAddress.fromString("0x1234567890123456789012345678901234567890");
 
-      // Deploy AaveWrapper contract
-      const deployedContract = await Contract.deploy(
-        this._accounts.admin.wallet,
-        this._artifact,
-        [this._accounts.admin.address, portalAddress]
+      console.log("Deploying AaveWrapper contract...");
+
+      // Deploy using the generated type-safe contract
+      const deployedContract = await AaveWrapperContract.deploy(
+        adminWallet,
+        adminAddress,
+        portalAddress
       )
-        .send()
+        .send({ from: adminAddress })
         .deployed();
 
-      this._contracts.aaveWrapper = deployedContract;
+      // Store the deployed contract
+      this._contracts.aaveWrapper = deployedContract as unknown as ContractInstance;
+
+      // Register the contract with other wallets
+      const contractInstance = await this._node!.getContract(deployedContract.address);
+      if (contractInstance && this._accounts.user?.wallet && this._accounts.user2?.wallet) {
+        await (this._accounts.user.wallet as any).registerContract(
+          contractInstance,
+          AaveWrapperContractArtifact
+        );
+        await (this._accounts.user2.wallet as any).registerContract(
+          contractInstance,
+          AaveWrapperContractArtifact
+        );
+      }
+
       this._status.contractsDeployed = true;
+      console.log("AaveWrapper deployed at:", deployedContract.address.toString());
 
       // TODO: Deploy mock Wormhole contracts if needed
       if (deployWormholeMocks && this._status.l1Connected) {
-        // This will be implemented when mock contracts are available
         console.log("Mock Wormhole deployment not yet implemented");
       }
     } catch (error) {
@@ -594,10 +675,10 @@ export class TestHarness {
       `  Contracts Deployed: ${this._status.contractsDeployed}`,
     ];
 
-    if (this._accounts.admin) {
+    if (this._accounts.admin?.address) {
       lines.push(`  Admin: ${this._accounts.admin.address.toString()}`);
     }
-    if (this._accounts.user) {
+    if (this._accounts.user?.address) {
       lines.push(`  User: ${this._accounts.user.address.toString()}`);
     }
     if (this._contracts.aaveWrapper) {
@@ -613,14 +694,14 @@ export class TestHarness {
 // =============================================================================
 
 /**
- * Wait for PXE to be ready (sandbox synced).
+ * Wait for Aztec node to be ready (3.0.0 SDK).
  *
- * @param pxeUrl - PXE endpoint URL
+ * @param nodeUrl - Node endpoint URL
  * @param timeoutMs - Maximum wait time
- * @returns true if PXE is ready, false otherwise
+ * @returns true if node is ready, false otherwise
  */
 export async function waitForPXE(
-  pxeUrl: string,
+  nodeUrl: string,
   timeoutMs: number = 60_000
 ): Promise<boolean> {
   const startTime = Date.now();
@@ -628,15 +709,12 @@ export async function waitForPXE(
 
   while (Date.now() - startTime < timeoutMs) {
     try {
-      const { createPXEClient } = await import("@aztec/aztec.js");
-      const pxe = createPXEClient(pxeUrl);
-      const info = await pxe.getNodeInfo();
-      // Check if synced (block number > 0)
-      if (info.nodeVersion) {
-        return true;
-      }
+      const { createAztecNodeClient, waitForNode } = await import("@aztec/aztec.js/node");
+      const node = createAztecNodeClient(nodeUrl);
+      await waitForNode(node);
+      return true;
     } catch {
-      // PXE not ready yet
+      // Node not ready yet
     }
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
   }

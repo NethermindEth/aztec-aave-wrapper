@@ -30,24 +30,25 @@ import {
 
 // Dynamic imports for aztec.js (same pattern as integration.test.ts)
 let aztecAvailable = false;
-let Fr: typeof import("@aztec/aztec.js").Fr;
-let AztecAddress: typeof import("@aztec/aztec.js").AztecAddress;
+let Fr: typeof import("@aztec/aztec.js/fields").Fr;
+let AztecAddress: typeof import("@aztec/aztec.js/addresses").AztecAddress;
 
 describe("Helper Functions Tests", () => {
-  // Try to load aztec.js (may fail on Node.js v23+)
+  // Try to load aztec.js (3.0.0 uses subpath exports)
   beforeAll(async () => {
     try {
-      const aztecJs = await import("@aztec/aztec.js");
-      Fr = aztecJs.Fr;
-      AztecAddress = aztecJs.AztecAddress;
+      const fieldsModule = await import("@aztec/aztec.js/fields");
+      const addressesModule = await import("@aztec/aztec.js/addresses");
+      Fr = fieldsModule.Fr;
+      AztecAddress = addressesModule.AztecAddress;
       aztecAvailable = true;
     } catch (error) {
-      console.warn("aztec.js not available - skipping tests that require it");
+      console.warn("aztec.js not available - skipping tests that require it:", error);
     }
   });
 
   describe("computeExpectedIntentId", () => {
-    it("should compute intent_id matching Noir implementation", () => {
+    it("should compute intent_id matching Noir implementation", async () => {
       if (!aztecAvailable) return;
 
       const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
@@ -58,7 +59,7 @@ describe("Helper Functions Tests", () => {
       const deadline = 1700000000n;
       const salt = 42n;
 
-      const intentId = computeExpectedIntentId(
+      const intentId = await computeExpectedIntentId(
         caller,
         asset,
         amount,
@@ -76,7 +77,7 @@ describe("Helper Functions Tests", () => {
       expect(intentId.toBigInt()).not.toBe(0n);
     });
 
-    it("should produce different intent_ids for different callers", () => {
+    it("should produce different intent_ids for different callers", async () => {
       if (!aztecAvailable) return;
 
       const caller1 = AztecAddress.fromString("0x1111111111111111111111111111111111111111111111111111111111111111");
@@ -88,7 +89,7 @@ describe("Helper Functions Tests", () => {
       const deadline = 1700000000n;
       const salt = 42n;
 
-      const intentId1 = computeExpectedIntentId(
+      const intentId1 = await computeExpectedIntentId(
         caller1,
         asset,
         amount,
@@ -98,7 +99,7 @@ describe("Helper Functions Tests", () => {
         salt
       );
 
-      const intentId2 = computeExpectedIntentId(
+      const intentId2 = await computeExpectedIntentId(
         caller2,
         asset,
         amount,
@@ -111,7 +112,7 @@ describe("Helper Functions Tests", () => {
       expect(intentId1.toBigInt()).not.toBe(intentId2.toBigInt());
     });
 
-    it("should produce different intent_ids for different amounts", () => {
+    it("should produce different intent_ids for different amounts", async () => {
       if (!aztecAvailable) return;
 
       const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
@@ -121,7 +122,7 @@ describe("Helper Functions Tests", () => {
       const deadline = 1700000000n;
       const salt = 42n;
 
-      const intentId1 = computeExpectedIntentId(
+      const intentId1 = await computeExpectedIntentId(
         caller,
         asset,
         1000n,
@@ -131,7 +132,7 @@ describe("Helper Functions Tests", () => {
         salt
       );
 
-      const intentId2 = computeExpectedIntentId(
+      const intentId2 = await computeExpectedIntentId(
         caller,
         asset,
         2000n,
@@ -146,11 +147,11 @@ describe("Helper Functions Tests", () => {
   });
 
   describe("computeSecretHash", () => {
-    it("should compute secret hash using Aztec standard function", () => {
+    it("should compute secret hash using Aztec standard function", async () => {
       if (!aztecAvailable) return;
 
       const secret = Fr.random();
-      const secretHash = computeSecretHash(secret);
+      const secretHash = await computeSecretHash(secret);
 
       // Verify it returns a valid Field element
       expect(secretHash).toBeDefined();
@@ -158,79 +159,79 @@ describe("Helper Functions Tests", () => {
       expect(secretHash.toBigInt()).not.toBe(0n);
     });
 
-    it("should produce different hashes for different secrets", () => {
+    it("should produce different hashes for different secrets", async () => {
       if (!aztecAvailable) return;
 
       const secret1 = Fr.random();
       const secret2 = Fr.random();
 
-      const hash1 = computeSecretHash(secret1);
-      const hash2 = computeSecretHash(secret2);
+      const hash1 = await computeSecretHash(secret1);
+      const hash2 = await computeSecretHash(secret2);
 
       expect(hash1.toBigInt()).not.toBe(hash2.toBigInt());
     });
 
-    it("should be deterministic for same secret", () => {
+    it("should be deterministic for same secret", async () => {
       if (!aztecAvailable) return;
 
       const secret = new Fr(12345n);
 
-      const hash1 = computeSecretHash(secret);
-      const hash2 = computeSecretHash(secret);
+      const hash1 = await computeSecretHash(secret);
+      const hash2 = await computeSecretHash(secret);
 
       expect(hash1.toBigInt()).toBe(hash2.toBigInt());
     });
   });
 
   describe("computeSalt", () => {
-    it("should compute salt matching Noir implementation", () => {
+    it("should compute salt matching Noir implementation", async () => {
       if (!aztecAvailable) return;
 
       const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
       const secretHash = 999n;
 
-      const salt = computeSalt(caller, secretHash);
+      const salt = await computeSalt(caller, secretHash);
 
       expect(salt).toBeDefined();
       expect(typeof salt.toBigInt()).toBe("bigint");
       expect(salt.toBigInt()).not.toBe(0n);
     });
 
-    it("should produce different salts for different callers", () => {
+    it("should produce different salts for different callers", async () => {
       if (!aztecAvailable) return;
 
       const caller1 = AztecAddress.fromString("0x1111111111111111111111111111111111111111111111111111111111111111");
       const caller2 = AztecAddress.fromString("0x2222222222222222222222222222222222222222222222222222222222222222");
       const secretHash = 999n;
 
-      const salt1 = computeSalt(caller1, secretHash);
-      const salt2 = computeSalt(caller2, secretHash);
+      const salt1 = await computeSalt(caller1, secretHash);
+      const salt2 = await computeSalt(caller2, secretHash);
 
       expect(salt1.toBigInt()).not.toBe(salt2.toBigInt());
     });
   });
 
   describe("computeOwnerHash", () => {
-    it("should compute owner hash matching Noir implementation", () => {
+    it("should compute owner hash matching Noir implementation", async () => {
       if (!aztecAvailable) return;
 
       const owner = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
 
-      const ownerHash = computeOwnerHash(owner);
+      const ownerHash = await computeOwnerHash(owner);
 
       expect(ownerHash).toBeDefined();
       expect(typeof ownerHash.toBigInt()).toBe("bigint");
       expect(ownerHash.toBigInt()).not.toBe(0n);
     });
 
-    it("should produce different hashes for different owners", () => {
+    it("should produce different hashes for different owners", async () => {
       if (!aztecAvailable) return;
 
       const owner1 = AztecAddress.fromString("0x1111111111111111111111111111111111111111111111111111111111111111");
       const owner2 = AztecAddress.fromString("0x2222222222222222222222222222222222222222222222222222222222222222");
 
-      const hash1 = computeOwnerHash(owner1);
-      const hash2 = computeOwnerHash(owner2);
+      const hash1 = await computeOwnerHash(owner1);
+      const hash2 = await computeOwnerHash(owner2);
 
       expect(hash1.toBigInt()).not.toBe(hash2.toBigInt());
     });
