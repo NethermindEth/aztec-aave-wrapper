@@ -289,7 +289,6 @@ contract ExecutorRetryTest is Test {
             asset: asset,
             amount: amount,
             originalDecimals: originalDecimals,
-            targetChainId: 23, // Arbitrum
             deadline: uint64(block.timestamp + 1 hours),
             salt: keccak256("random.salt")
         });

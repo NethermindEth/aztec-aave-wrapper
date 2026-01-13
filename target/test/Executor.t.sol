@@ -630,7 +630,6 @@ contract ExecutorTest is Test {
             asset: address(token),
             amount: 1000e6,
             originalDecimals: 6,
-            targetChainId: 23, // Arbitrum
             deadline: uint64(block.timestamp + 1 hours),
             salt: keccak256("random.salt")
         });

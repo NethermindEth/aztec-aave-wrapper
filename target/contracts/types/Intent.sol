@@ -23,8 +23,6 @@ struct DepositIntent {
     /// @notice Original token decimals for Wormhole denormalization
     /// @dev Wormhole normalizes to 8 decimals; this allows reconstruction on target
     uint8 originalDecimals;
-    /// @notice Wormhole chain ID of the target chain for deposit
-    uint32 targetChainId;
     /// @notice Unix timestamp after which this intent expires
     uint64 deadline;
     /// @notice Random salt for intent uniqueness and replay protection
@@ -61,7 +59,6 @@ library IntentLib {
                 intent.asset,
                 intent.amount,
                 intent.originalDecimals,
-                intent.targetChainId,
                 intent.deadline,
                 intent.salt
             )
@@ -86,7 +83,6 @@ library IntentLib {
             intent.asset,
             intent.amount,
             intent.originalDecimals,
-            intent.targetChainId,
             intent.deadline,
             intent.salt
         );
@@ -94,18 +90,9 @@ library IntentLib {
 
     /// @notice Decode DepositIntent from Wormhole payload
     /// @param payload The encoded intent payload
-    /// @return intent The decoded deposit intent
-    function decodeDepositIntent(bytes memory payload) internal pure returns (DepositIntent memory intent) {
-        (
-            intent.intentId,
-            intent.ownerHash,
-            intent.asset,
-            intent.amount,
-            intent.originalDecimals,
-            intent.targetChainId,
-            intent.deadline,
-            intent.salt
-        ) = abi.decode(payload, (bytes32, bytes32, address, uint128, uint8, uint32, uint64, bytes32));
+    /// @return The decoded deposit intent
+    function decodeDepositIntent(bytes memory payload) internal pure returns (DepositIntent memory) {
+        return abi.decode(payload, (DepositIntent));
     }
 
     /// @notice Encode WithdrawIntent for Wormhole payload

@@ -84,7 +84,6 @@ contract PortalAdminTest is Test {
             asset: address(token),
             amount: 1000e18,
             originalDecimals: 18,
-            targetChainId: uint32(targetChainId),
             deadline: uint64(block.timestamp + 1 hours),
             salt: keccak256("salt_1")
         });

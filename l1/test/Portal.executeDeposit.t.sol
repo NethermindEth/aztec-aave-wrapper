@@ -70,7 +70,6 @@ contract PortalExecuteDepositTest is Test {
             asset: address(token),
             amount: 1000e18,
             originalDecimals: 18,
-            targetChainId: uint32(targetChainId),
             deadline: uint64(block.timestamp + 1 hours),
             salt: keccak256("salt_1")
         });
@@ -126,7 +125,7 @@ contract PortalExecuteDepositTest is Test {
             validIntent.intentId,
             validIntent.asset,
             validIntent.amount,
-            uint16(validIntent.targetChainId)
+            targetChainId
         );
 
         portal.executeDeposit{ value: 0.1 ether }(
@@ -410,7 +409,7 @@ contract PortalExecuteDepositTest is Test {
         MockWormholeTokenBridge.TransferCall memory call = wormholeTokenBridge.getLastTransfer();
         assertEq(call.token, validIntent.asset);
         assertEq(call.amount, validIntent.amount);
-        assertEq(call.recipientChain, uint16(validIntent.targetChainId));
+        assertEq(call.recipientChain, targetChainId);
         assertEq(call.recipient, targetExecutor);
 
         // Verify payload encodes the intent correctly

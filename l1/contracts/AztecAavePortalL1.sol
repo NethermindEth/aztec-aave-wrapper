@@ -246,15 +246,13 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         IWormholeTokenBridge(wormholeTokenBridge).transferTokensWithPayload{ value: msg.value }(
             intent.asset,
             intent.amount,
-            uint16(intent.targetChainId),
+            targetChainId,
             targetExecutor,
             uint32(uint256(intent.intentId)), // Use intentId as nonce
             payload
         );
 
-        emit DepositInitiated(
-            intent.intentId, intent.asset, intent.amount, uint16(intent.targetChainId)
-        );
+        emit DepositInitiated(intent.intentId, intent.asset, intent.amount, targetChainId);
     }
 
     /**

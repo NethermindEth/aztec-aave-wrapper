@@ -60,7 +60,6 @@ contract PortalTest is Test {
             asset: address(0x1234567890123456789012345678901234567890),
             amount: 1_000_000,
             originalDecimals: 18,
-            targetChainId: 23,
             deadline: 1_700_000_000,
             salt: bytes32(uint256(0xabcdef1234567890))
         });
@@ -77,7 +76,6 @@ contract PortalTest is Test {
         assertEq(decoded.asset, intent.asset);
         assertEq(decoded.amount, intent.amount);
         assertEq(decoded.originalDecimals, intent.originalDecimals);
-        assertEq(decoded.targetChainId, intent.targetChainId);
         assertEq(decoded.deadline, intent.deadline);
         assertEq(decoded.salt, intent.salt);
     }
@@ -112,7 +110,6 @@ contract PortalTest is Test {
             asset: address(0x456),
             amount: 1000,
             originalDecimals: 18,
-            targetChainId: 23,
             deadline: 1_700_000_000,
             salt: bytes32(uint256(42))
         });
