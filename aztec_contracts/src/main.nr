@@ -423,7 +423,6 @@ pub(crate) contract AaveWrapper {
     /// * `intent_id` - The unique identifier of the deposit intent to finalize
     /// * `asset_id` - The asset identifier (validated via L1->L2 message hash)
     /// * `shares` - Number of aToken shares received from Aave (validated via L1->L2 message hash)
-    /// * `target_chain_id` - Target chain ID (stored in receipt note for future withdrawals)
     /// * `secret` - Pre-image of the secretHash used when sending the L1->L2 message
     /// * `message_leaf_index` - Index to locate the message in the L1->L2 message tree
     ///
@@ -437,7 +436,6 @@ pub(crate) contract AaveWrapper {
         intent_id: Field,
         asset_id: Field,
         shares: u128,
-        target_chain_id: u32,
         secret: Field,
         message_leaf_index: Field,
     ) {
@@ -465,12 +463,13 @@ pub(crate) contract AaveWrapper {
         let note_nonce = intent_id;
 
         // Create the position receipt note with Active status
+        // Note: target_chain_id is set to 0 as it's no longer used in the protocol
         let receipt = PositionReceiptNote {
             owner,
             nonce: note_nonce,
             asset_id,
             shares,
-            target_chain_id,
+            target_chain_id: 0,
             aave_market_id: 0,
             status: PositionStatus::ACTIVE,
         };
@@ -691,7 +690,6 @@ pub(crate) contract AaveWrapper {
     /// * `intent_id` - The unique identifier of the withdrawal intent to finalize
     /// * `asset_id` - The asset identifier (must match the original position)
     /// * `amount` - Amount that was withdrawn (reported by L1)
-    /// * `target_chain_id` - Target chain ID (must match the original position)
     /// * `secret` - Pre-image of the secretHash used when sending the L1->L2 message
     /// * `message_leaf_index` - Index to locate the message in the L1->L2 message tree
     ///
@@ -704,7 +702,6 @@ pub(crate) contract AaveWrapper {
         intent_id: Field,
         asset_id: Field,
         amount: u128,
-        target_chain_id: u32,
         secret: Field,
         message_leaf_index: Field,
     ) {
@@ -749,9 +746,8 @@ pub(crate) contract AaveWrapper {
             "Position is not pending withdrawal",
         );
 
-        // Verify the asset and chain match
+        // Verify the asset matches
         assert(receipt.asset_id == asset_id, "Asset ID mismatch");
-        assert(receipt.target_chain_id == target_chain_id, "Target chain ID mismatch");
 
         // Verify the withdrawal amount matches what was requested
         // The PendingWithdraw note stores the withdrawal amount in the shares field
