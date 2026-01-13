@@ -49,7 +49,7 @@ unconstrained fn test_compute_deposit_message_content_zero_values() {
 /// Test that zero values produce valid hashes for deposit confirmation.
 #[test]
 unconstrained fn test_compute_deposit_confirmation_content_zero_values() {
-    let hash = compute_deposit_confirmation_content(0, 0, 0, 0);
+    let hash = compute_deposit_confirmation_content(0, 0, 0);
 
     assert(hash != 0, "Deposit confirmation hash computation must handle zero inputs");
 }
@@ -81,10 +81,8 @@ unconstrained fn test_compute_deposit_confirmation_content_max_shares() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let max_shares: u128 = 0xffffffffffffffffffffffffffffffff; // Max u128
-    let target_chain_id: u32 = 23;
 
-    let hash =
-        compute_deposit_confirmation_content(intent_id, asset_id, max_shares, target_chain_id);
+    let hash = compute_deposit_confirmation_content(intent_id, asset_id, max_shares);
 
     assert(hash != 0, "Hash computation must handle maximum u128 values");
 }
@@ -280,20 +278,17 @@ unconstrained fn test_withdraw_vs_deposit_confirmation_design_issue() {
     let amount: u128 = 1000000;
     let target_chain_id: u32 = 23;
 
-    let deposit_hash =
-        compute_deposit_confirmation_content(intent_id, asset_id, amount, target_chain_id);
+    let deposit_hash = compute_deposit_confirmation_content(intent_id, asset_id, amount);
 
     let withdraw_hash =
         compute_withdraw_confirmation_content(intent_id, asset_id, amount, target_chain_id);
 
-    // CURRENT BEHAVIOR: Hashes are identical (this is the design issue)
+    // After removing target_chain_id from deposit confirmation, the hashes will differ
+    // (deposit has 3 fields, withdraw has 4 fields)
     assert(
-        deposit_hash == withdraw_hash,
-        "DESIGN ISSUE: Deposit and withdraw confirmations produce identical hashes - consider including operation type in hash",
+        deposit_hash != withdraw_hash,
+        "Deposit and withdraw confirmations should produce different hashes due to different field counts",
     );
-
-    // EXPECTED BEHAVIOR (after fix):
-    // assert(deposit_hash != withdraw_hash, "Different operations should produce different hashes");
 }
 
 /// Test that deposit message hash differs from deposit confirmation hash.
@@ -304,15 +299,13 @@ unconstrained fn test_deposit_message_vs_confirmation_different() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let amount: u128 = 1000000;
-    let target_chain_id: u32 = 23;
     let deadline: u64 = 1700000000;
     let salt: Field = 12345;
 
     let intent = DepositIntent::new(intent_id, 0xabcd1234, asset_id, amount, 6, deadline, salt);
 
     let message_hash = compute_deposit_message_content(intent, secret_hash);
-    let confirmation_hash =
-        compute_deposit_confirmation_content(intent_id, asset_id, amount, target_chain_id);
+    let confirmation_hash = compute_deposit_confirmation_content(intent_id, asset_id, amount);
 
     assert(
         message_hash != confirmation_hash,

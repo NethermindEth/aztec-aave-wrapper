@@ -88,7 +88,6 @@ pub fn compute_deposit_message_content(intent: DepositIntent, secret_hash: Field
 /// * `intent_id` - The unique identifier of the deposit intent
 /// * `asset_id` - Identifier for the deposited asset
 /// * `shares` - Number of aToken shares received from the Aave deposit
-/// * `target_chain_id` - Wormhole chain ID where the deposit was executed
 ///
 /// # Returns
 /// * `Field` - The message content hash for L1->L2 verification
@@ -96,14 +95,11 @@ pub fn compute_deposit_confirmation_content(
     intent_id: Field,
     asset_id: Field,
     shares: u128,
-    target_chain_id: u32,
 ) -> Field {
     // Hash confirmation data for L1 to L2 message verification
     // This must match the encoding used by the L1 portal when sending the message
     // Owner is authenticated via secret, not included in hash
-    poseidon2_hash(
-        [intent_id, asset_id, shares as Field, target_chain_id as Field],
-    )
+    poseidon2_hash([intent_id, asset_id, shares as Field])
 }
 
 /// Computes the message content hash for L1 to L2 withdrawal confirmation messages.
@@ -432,9 +428,9 @@ pub(crate) contract AaveWrapper {
     ///
     /// # Arguments
     /// * `intent_id` - The unique identifier of the deposit intent to finalize
-    /// * `asset_id` - The asset identifier (must match the original deposit)
-    /// * `shares` - Number of aToken shares received from Aave (reported by L1)
-    /// * `target_chain_id` - Target chain ID (must match the original deposit)
+    /// * `asset_id` - The asset identifier (validated via L1->L2 message hash)
+    /// * `shares` - Number of aToken shares received from Aave (validated via L1->L2 message hash)
+    /// * `target_chain_id` - Target chain ID (stored in receipt note for future withdrawals)
     /// * `secret` - Pre-image of the secretHash used when sending the L1->L2 message
     /// * `message_leaf_index` - Index to locate the message in the L1->L2 message tree
     ///
@@ -458,8 +454,7 @@ pub(crate) contract AaveWrapper {
         // Compute the expected message content hash
         // This must match exactly what the L1 portal sent
         // Note: owner is NOT in the hash - authentication is via the secret
-        let content =
-            compute_deposit_confirmation_content(intent_id, asset_id, shares, target_chain_id);
+        let content = compute_deposit_confirmation_content(intent_id, asset_id, shares);
 
         // Get the portal address for message verification
         let portal = self.storage.portal_address.read();

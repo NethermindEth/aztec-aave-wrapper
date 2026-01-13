@@ -336,11 +336,10 @@ unconstrained fn test_compute_deposit_confirmation_content_deterministic() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let shares: u128 = 1000000;
-    let target_chain_id: u32 = 23;
 
     // Compute hash twice
-    let hash1 = compute_deposit_confirmation_content(intent_id, asset_id, shares, target_chain_id);
-    let hash2 = compute_deposit_confirmation_content(intent_id, asset_id, shares, target_chain_id);
+    let hash1 = compute_deposit_confirmation_content(intent_id, asset_id, shares);
+    let hash2 = compute_deposit_confirmation_content(intent_id, asset_id, shares);
 
     // Should produce identical hashes
     assert(hash1 == hash2, "Content hash should be deterministic");
@@ -353,16 +352,14 @@ unconstrained fn test_compute_deposit_confirmation_content_different_inputs() {
     let intent_id: Field = 0x1234567890abcdef;
     let asset_id: Field = 1;
     let shares: u128 = 1000000;
-    let target_chain_id: u32 = 23;
 
-    let hash1 = compute_deposit_confirmation_content(intent_id, asset_id, shares, target_chain_id);
+    let hash1 = compute_deposit_confirmation_content(intent_id, asset_id, shares);
 
     // Change intent_id
     let hash2 = compute_deposit_confirmation_content(
         0x9999999999999999, // Different intent_id
         asset_id,
         shares,
-        target_chain_id,
     );
 
     // Change shares
@@ -370,7 +367,6 @@ unconstrained fn test_compute_deposit_confirmation_content_different_inputs() {
         intent_id,
         asset_id,
         2000000, // Different shares
-        target_chain_id,
     );
 
     // Change asset_id
@@ -378,22 +374,12 @@ unconstrained fn test_compute_deposit_confirmation_content_different_inputs() {
         intent_id,
         2, // Different asset_id
         shares,
-        target_chain_id,
-    );
-
-    // Change target_chain_id
-    let hash5 = compute_deposit_confirmation_content(
-        intent_id,
-        asset_id,
-        shares,
-        42, // Different chain_id
     );
 
     // All hashes should be different
     assert(hash1 != hash2, "Different intent_id should produce different hash");
     assert(hash1 != hash3, "Different shares should produce different hash");
     assert(hash1 != hash4, "Different asset_id should produce different hash");
-    assert(hash1 != hash5, "Different target_chain_id should produce different hash");
     assert(hash2 != hash3, "Hashes should be unique for each input combination");
 }
 
@@ -408,14 +394,8 @@ unconstrained fn test_compute_deposit_confirmation_realistic_shares() {
     let usdc_asset_id: Field = 0x1;
     // Shares might be slightly different from deposit due to aToken index
     let atoken_shares: u128 = 99_980_000; // ~99.98 aUSDC for 100 USDC deposit
-    let arbitrum_chain_id: u32 = 23;
 
-    let hash = compute_deposit_confirmation_content(
-        intent_id,
-        usdc_asset_id,
-        atoken_shares,
-        arbitrum_chain_id,
-    );
+    let hash = compute_deposit_confirmation_content(intent_id, usdc_asset_id, atoken_shares);
 
     // Verify realistic aToken share amounts are handled correctly
     assert(hash != 0, "Confirmation hash computation must succeed for realistic aToken shares");
