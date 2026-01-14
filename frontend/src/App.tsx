@@ -2,12 +2,11 @@
  * Main Application Component
  *
  * Assembles all components into main application layout.
- * Provides the AppProvider context at the root level.
+ * AppProvider context is provided at the entry point (index.tsx).
  */
 
 import type { Component } from "solid-js";
 import { createSignal } from "solid-js";
-import { AppProvider } from "./store/context";
 import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
 import { WalletInfo } from "./components/WalletInfo";
 import { ContractDeployment } from "./components/ContractDeployment";
@@ -18,9 +17,9 @@ import type { Position } from "./components/PositionCard";
 import { PositionStatus } from "./components/PositionCard";
 
 /**
- * Main application content inside the provider
+ * Main application component
  */
-const AppContent: Component = () => {
+const App: Component = () => {
   // Positions state - would typically come from store or data fetching
   const [positions, setPositions] = createSignal<Position[]>([]);
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
@@ -126,17 +125,6 @@ const AppContent: Component = () => {
         maxHeight={300}
       />
     </div>
-  );
-};
-
-/**
- * Main App component with provider wrapping
- */
-const App: Component = () => {
-  return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
   );
 };
 
