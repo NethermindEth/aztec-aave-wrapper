@@ -2,7 +2,7 @@
  * Application store exports
  *
  * Main entry point for the SolidJS store.
- * Re-exports state, setState, and all action functions.
+ * Re-exports state, setState, actions, context, and hooks.
  */
 
 // =============================================================================
@@ -11,6 +11,19 @@
 
 export { state, setState } from "./state.js";
 export type { SetAppState } from "./state.js";
+
+// =============================================================================
+// Context and Provider
+// =============================================================================
+
+export { AppContext, AppProvider } from "./context.js";
+export type { AppContextValue, AppActions, AppProviderProps } from "./context.js";
+
+// =============================================================================
+// Hooks
+// =============================================================================
+
+export { useApp, useAppState, useAppActions } from "./hooks.js";
 
 // =============================================================================
 // Actions
