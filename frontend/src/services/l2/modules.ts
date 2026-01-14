@@ -68,3 +68,56 @@ export function clearModuleCache(): void {
 export function isAztecLoaded(): boolean {
   return cachedModules !== null;
 }
+
+// =============================================================================
+// Contract Artifact Loading
+// =============================================================================
+
+/**
+ * Type for the AaveWrapper contract artifact
+ */
+export type ContractArtifact = Awaited<
+  typeof import("@generated/AaveWrapper").AaveWrapperContractArtifact
+>;
+
+let cachedArtifact: ContractArtifact | null = null;
+
+/**
+ * Dynamically loads the AaveWrapper contract artifact.
+ *
+ * Uses dynamic import to load the contract artifact at runtime,
+ * allowing Vite to properly resolve the @generated path alias.
+ * Results are cached to avoid repeated loading.
+ *
+ * @returns Promise resolving to the contract artifact
+ * @throws Error if the contract artifact cannot be loaded
+ */
+export async function loadContractArtifact(): Promise<ContractArtifact> {
+  if (cachedArtifact) {
+    return cachedArtifact;
+  }
+
+  try {
+    const { AaveWrapperContractArtifact } = await import("@generated/AaveWrapper");
+    cachedArtifact = AaveWrapperContractArtifact;
+    return cachedArtifact;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    throw new Error(`Failed to load AaveWrapper contract artifact: ${message}`);
+  }
+}
+
+/**
+ * Clears the cached contract artifact.
+ * Useful for testing or when artifact reload is needed.
+ */
+export function clearArtifactCache(): void {
+  cachedArtifact = null;
+}
+
+/**
+ * Checks if the contract artifact has been loaded.
+ */
+export function isArtifactLoaded(): boolean {
+  return cachedArtifact !== null;
+}
