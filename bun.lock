@@ -31,6 +31,7 @@
       "name": "@aztec-aave-wrapper/frontend",
       "version": "0.0.1",
       "dependencies": {
+        "@azguardwallet/aztec-wallet": "3.0.0-devnet.20251212",
         "@aztec-aave-wrapper/shared": "workspace:*",
         "@aztec/accounts": "3.0.1",
         "@aztec/aztec.js": "3.0.1",
@@ -154,6 +155,12 @@
     "@aws-sdk/xml-builder": ["@aws-sdk/xml-builder@3.965.0", "", { "dependencies": { "@smithy/types": "^4.11.0", "fast-xml-parser": "5.2.5", "tslib": "^2.6.2" } }, "sha512-Tcod25/BTupraQwtb+Q+GX8bmEZfxIFjjJ/AvkhUZsZlkPeVluzq1uu3Oeqf145DCdMjzLIN6vab5MrykbDP+g=="],
 
     "@aws/lambda-invoke-store": ["@aws/lambda-invoke-store@0.2.3", "", {}, "sha512-oLvsaPMTBejkkmHhjf09xTgk71mOqyr/409NKhRIL08If7AhVfUsJhVsx386uJaqNd42v9kWamQ9lFbkoC2dYw=="],
+
+    "@azguardwallet/aztec-wallet": ["@azguardwallet/aztec-wallet@3.0.0-devnet.20251212", "", { "dependencies": { "@azguardwallet/client": "0.7.0", "@azguardwallet/types": "0.7.0", "@aztec/aztec.js": "3.0.0-devnet.20251212", "@aztec/entrypoints": "3.0.0-devnet.20251212", "@aztec/foundation": "3.0.0-devnet.20251212", "@aztec/stdlib": "3.0.0-devnet.20251212", "zod": "^3.23.8" } }, "sha512-ebihwqshU/AoY/EW+OtcMaY6or97QWYUvfO4wTTZTD+5/WvGAUz866Rled5b7FtS9UWSRE6puyMeRD9GqZaqJQ=="],
+
+    "@azguardwallet/client": ["@azguardwallet/client@0.7.0", "", {}, "sha512-AIuVG8IxsWe1KtH/Q5hGAFh2brzbT/YDBjNVd5Cz2lqzkafb29j7bv2CCNBjK9Bi3gVOYJgAp0ZfZXURbsuowg=="],
+
+    "@azguardwallet/types": ["@azguardwallet/types@0.7.0", "", {}, "sha512-b2y6HJB5PQZ3tqKJ26vYnoMNMlWpNnFNTTdjCa1gsxLm0y1gDnr9n2d+eYe/c3sVsLwYUJVOlSgA+1A68octCg=="],
 
     "@aztec-aave-wrapper/e2e": ["@aztec-aave-wrapper/e2e@workspace:e2e"],
 
