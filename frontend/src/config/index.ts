@@ -59,3 +59,12 @@ export {
 } from "./chains.js";
 
 export type { AztecChainConfig } from "./chains.js";
+
+// Export artifact loading utilities
+export {
+  loadArtifact,
+  preloadArtifacts,
+  clearArtifactCache,
+} from "./artifacts.js";
+
+export type { ContractArtifact, ContractName } from "./artifacts.js";
