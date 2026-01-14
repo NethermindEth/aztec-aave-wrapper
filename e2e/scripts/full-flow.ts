@@ -136,12 +136,14 @@ function logBalanceTable(
 async function getAllBalances(
   publicClient: PublicClient,
   addresses: L1Addresses,
-  erc20Abi: any
+  erc20Abi: any,
+  userAddress?: Address
 ): Promise<{
+  user: { usdc: bigint; aToken: bigint };
   portal: { usdc: bigint; aToken: bigint };
   lendingPool: { usdc: bigint; aToken: bigint };
 }> {
-  const [portalUsdc, portalAToken, poolUsdc, poolAToken] = await Promise.all([
+  const queries = [
     publicClient.readContract({
       address: addresses.mockUsdc,
       abi: erc20Abi,
@@ -166,9 +168,31 @@ async function getAllBalances(
       functionName: "balanceOf",
       args: [addresses.mockLendingPool],
     }) as Promise<bigint>,
-  ]);
+  ];
+
+  // Add user balance queries if user address provided
+  if (userAddress) {
+    queries.push(
+      publicClient.readContract({
+        address: addresses.mockUsdc,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [userAddress],
+      }) as Promise<bigint>,
+      publicClient.readContract({
+        address: addresses.mockAToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [userAddress],
+      }) as Promise<bigint>
+    );
+  }
+
+  const results = await Promise.all(queries);
+  const [portalUsdc, portalAToken, poolUsdc, poolAToken, userUsdc, userAToken] = results;
 
   return {
+    user: { usdc: userUsdc ?? 0n, aToken: userAToken ?? 0n },
     portal: { usdc: portalUsdc, aToken: portalAToken },
     lendingPool: { usdc: poolUsdc, aToken: poolAToken },
   };
@@ -527,7 +551,16 @@ async function executeDepositFlow(
 
   const secret = aztec.Fr.random();
   const secretHash = await aztec.computeSecretHash(secret);
-  const deadline = deadlineFromNow(CONFIG.deadlineOffset);
+
+  // Get L1 block timestamp to compute deadline (Anvil may be ahead/behind real time)
+  const l1Block = await l1.publicClient.getBlock();
+  const l1Timestamp = Number(l1Block.timestamp);
+  const deadline = BigInt(l1Timestamp + CONFIG.deadlineOffset);
+  log("L1", "Using L1 timestamp for deadline", {
+    l1Timestamp,
+    deadlineOffset: CONFIG.deadlineOffset,
+    deadline: deadline.toString()
+  });
 
   log("Deposit", "Parameters generated", {
     deadline: deadline.toString(),
@@ -571,42 +604,84 @@ async function executeDepositFlow(
   log("L2", "L2→L1 message should now be in outbox");
 
   // -------------------------------------------------------------------------
-  logStep(4, 6, "DEPOSIT - Fund portal and execute deposit on L1");
+  logStep(4, 6, "DEPOSIT - User funds portal, relayer executes on L1");
 
   // Load artifacts for ABI
   const mockERC20Artifact = loadArtifact("MockERC20.sol", "MockERC20");
   const mockOutboxArtifact = loadArtifact("Portal.t.sol", "MockAztecOutbox");
   const portalArtifact = loadArtifact("AztecAavePortalL1.sol", "AztecAavePortalL1");
 
-  // Log initial balances (all should be zero)
+  const userL1Address = ACCOUNTS.user.address;
+
+  // Step 4a: Show initial state (all balances zero)
   log("L1", "Checking initial balances...");
-  let balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi);
-  logBalanceTable("INITIAL STATE (before mint)", [
+  let balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi, userL1Address);
+  logBalanceTable("INITIAL STATE (all empty)", [
+    { label: "User (L1)", token: "USDC", balance: balances.user.usdc },
     { label: "Portal", token: "USDC", balance: balances.portal.usdc },
     { label: "Portal", token: "aUSDC", balance: balances.portal.aToken },
     { label: "Aave Pool", token: "USDC", balance: balances.lendingPool.usdc },
-    { label: "Aave Pool", token: "aUSDC", balance: balances.lendingPool.aToken },
   ]);
 
-  // Mint tokens to portal
-  const mintAmount = CONFIG.depositAmount * 10n;
-  log("L1", `Minting ${formatBalance(mintAmount)} USDC to portal...`);
-  const mintTx = await l1.deployerWallet.writeContract({
+  // Step 4b: User receives USDC on L1 (simulating user already has funds)
+  const userFundAmount = CONFIG.depositAmount * 10n;
+  log("L1", `User receives ${formatBalance(userFundAmount)} USDC on L1...`);
+  const mintToUserTx = await l1.deployerWallet.writeContract({
     address: l1Addresses.mockUsdc,
     abi: mockERC20Artifact.abi,
     functionName: "mint",
-    args: [l1Addresses.portal, mintAmount],
+    args: [userL1Address, userFundAmount],
   });
-  await l1.publicClient.waitForTransactionReceipt({ hash: mintTx });
+  await l1.publicClient.waitForTransactionReceipt({ hash: mintToUserTx });
 
-  // Log balances after mint
-  balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi);
-  logBalanceTable("AFTER MINT (portal funded)", [
+  balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi, userL1Address);
+  logBalanceTable("USER HAS USDC (starting point)", [
+    { label: "User (L1)", token: "USDC", balance: balances.user.usdc },
     { label: "Portal", token: "USDC", balance: balances.portal.usdc },
     { label: "Portal", token: "aUSDC", balance: balances.portal.aToken },
     { label: "Aave Pool", token: "USDC", balance: balances.lendingPool.usdc },
-    { label: "Aave Pool", token: "aUSDC", balance: balances.lendingPool.aToken },
   ]);
+
+  // Step 4c: User approves portal to spend USDC
+  log("L1", `User approves portal to spend ${formatBalance(CONFIG.depositAmount)} USDC...`);
+  const approveTx = await l1.userWallet.writeContract({
+    address: l1Addresses.mockUsdc,
+    abi: mockERC20Artifact.abi,
+    functionName: "approve",
+    args: [l1Addresses.portal, CONFIG.depositAmount],
+  });
+  await l1.publicClient.waitForTransactionReceipt({ hash: approveTx });
+
+  // Step 4d: User transfers USDC to portal (funding the deposit)
+  log("L1", `User transfers ${formatBalance(CONFIG.depositAmount)} USDC to portal...`);
+  const transferTx = await l1.userWallet.writeContract({
+    address: l1Addresses.mockUsdc,
+    abi: mockERC20Artifact.abi,
+    functionName: "transfer",
+    args: [l1Addresses.portal, CONFIG.depositAmount],
+  });
+  await l1.publicClient.waitForTransactionReceipt({ hash: transferTx });
+
+  balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi, userL1Address);
+  logBalanceTable("AFTER USER FUNDS PORTAL", [
+    { label: "User (L1)", token: "USDC", balance: balances.user.usdc },
+    { label: "Portal", token: "USDC", balance: balances.portal.usdc },
+    { label: "Portal", token: "aUSDC", balance: balances.portal.aToken },
+    { label: "Aave Pool", token: "USDC", balance: balances.lendingPool.usdc },
+  ]);
+
+  console.log("\n  💰 User deposited USDC to portal:");
+  console.log(`     User USDC:   -${formatBalance(CONFIG.depositAmount)} (sent to portal)`);
+  console.log(`     Portal USDC: +${formatBalance(CONFIG.depositAmount)} (received from user)`);
+
+  // Verify deadline is still valid from L1's perspective
+  const currentBlock = await l1.publicClient.getBlock();
+  const timeUntilDeadline = Number(deadline) - Number(currentBlock.timestamp);
+  log("L1", "Deadline check", {
+    currentL1Timestamp: Number(currentBlock.timestamp),
+    deadline: deadline.toString(),
+    timeUntilDeadline: `${timeUntilDeadline}s (${Math.floor(timeUntilDeadline / 60)}m)`
+  });
 
   // Create deposit intent for L1
   const salt = keccak256(encodePacked(["uint256"], [BigInt(Date.now())]));
@@ -654,12 +729,12 @@ async function executeDepositFlow(
     log("L1", "executeDeposit succeeded", { txHash: executeDepositTx });
 
     // Log balances after deposit - USDC should move to pool, aTokens to portal
-    balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi);
-    logBalanceTable("AFTER DEPOSIT (USDC → Aave, aUSDC → Portal)", [
+    balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi, userL1Address);
+    logBalanceTable("AFTER RELAYER EXECUTES DEPOSIT (USDC → Aave)", [
+      { label: "User (L1)", token: "USDC", balance: balances.user.usdc },
       { label: "Portal", token: "USDC", balance: balances.portal.usdc },
       { label: "Portal", token: "aUSDC", balance: balances.portal.aToken },
       { label: "Aave Pool", token: "USDC", balance: balances.lendingPool.usdc },
-      { label: "Aave Pool", token: "aUSDC", balance: balances.lendingPool.aToken },
     ]);
 
     // Log the expected fund movement
@@ -682,12 +757,12 @@ async function executeDepositFlow(
     });
 
     // Still log balances to see the state
-    balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi);
+    balances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi, userL1Address);
     logBalanceTable("AFTER FAILED DEPOSIT", [
+      { label: "User (L1)", token: "USDC", balance: balances.user.usdc },
       { label: "Portal", token: "USDC", balance: balances.portal.usdc },
       { label: "Portal", token: "aUSDC", balance: balances.portal.aToken },
       { label: "Aave Pool", token: "USDC", balance: balances.lendingPool.usdc },
-      { label: "Aave Pool", token: "aUSDC", balance: balances.lendingPool.aToken },
     ]);
   }
 
@@ -735,15 +810,15 @@ async function executeDepositFlow(
   );
 
   // Final balance snapshot
-  const finalBalances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi);
+  const finalBalances = await getAllBalances(l1.publicClient, l1Addresses, mockERC20Artifact.abi, userL1Address);
   logBalanceTable("FINAL L1 STATE", [
+    { label: "User (L1)", token: "USDC", balance: finalBalances.user.usdc },
     { label: "Portal", token: "USDC", balance: finalBalances.portal.usdc },
     { label: "Portal", token: "aUSDC", balance: finalBalances.portal.aToken },
     { label: "Aave Pool", token: "USDC", balance: finalBalances.lendingPool.usdc },
-    { label: "Aave Pool", token: "aUSDC", balance: finalBalances.lendingPool.aToken },
   ]);
 
-  return { intentId, secret, secretHash, shares: mockShares, mockERC20Artifact };
+  return { intentId, secret, secretHash, shares: mockShares, mockERC20Artifact, userL1Address };
 }
 
 // ============================================================================
@@ -760,18 +835,18 @@ async function executeWithdrawFlow(
     address: Awaited<ReturnType<typeof setupL2Wallet>>["address"];
     contract: Awaited<ReturnType<typeof deployL2Contract>>;
   },
-  depositResult: { intentId: any; secret: any; shares: bigint; mockERC20Artifact: any }
+  depositResult: { intentId: any; secret: any; shares: bigint; mockERC20Artifact: any; userL1Address: Address }
 ) {
   console.log("\n\n");
   logStep(1, 4, "WITHDRAW - Generate secret and prepare parameters");
 
   // Show current L1 state before withdrawal
-  const balances = await getAllBalances(l1.publicClient, l1Addresses, depositResult.mockERC20Artifact.abi);
+  const balances = await getAllBalances(l1.publicClient, l1Addresses, depositResult.mockERC20Artifact.abi, depositResult.userL1Address);
   logBalanceTable("CURRENT L1 STATE (before withdraw)", [
+    { label: "User (L1)", token: "USDC", balance: balances.user.usdc },
     { label: "Portal", token: "USDC", balance: balances.portal.usdc },
     { label: "Portal", token: "aUSDC", balance: balances.portal.aToken },
     { label: "Aave Pool", token: "USDC", balance: balances.lendingPool.usdc },
-    { label: "Aave Pool", token: "aUSDC", balance: balances.lendingPool.aToken },
   ]);
 
   const withdrawSecret = aztec.Fr.random();
