@@ -77,12 +77,14 @@ export interface DepositL1Addresses extends L1AddressesForBalances {
 }
 
 /**
- * L2 context for deposit operations
+ * L2 context for deposit operations.
+ * Note: AzguardWallet doesn't expose address directly - callers must
+ * construct this wrapper using wallet.getAccounts() (see useFlowClients).
  */
 export interface DepositL2Context {
   /** Aztec node client */
   node: AztecNodeClient;
-  /** User wallet */
+  /** User wallet wrapper with address accessor */
   wallet: { address: AztecAddress };
   /** AaveWrapper contract instance */
   contract: AaveWrapperContract;
