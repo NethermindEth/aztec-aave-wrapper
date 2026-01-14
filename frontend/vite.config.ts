@@ -42,5 +42,25 @@ export default defineConfig({
   },
   build: {
     target: 'esnext',
+    rollupOptions: {
+      // Aztec SDK uses dynamic imports and WASM that need special handling
+      // These packages are loaded dynamically at runtime, not bundled
+      external: (id) => {
+        // Externalize all Aztec packages
+        if (id.startsWith('@aztec/')) return true;
+        // Externalize generated Aztec contract code (depends on Aztec SDK)
+        // Match paths like 'aztec/generated/' or 'src/generated/AaveWrapper'
+        if (/\/(aztec|src)\/generated\//.test(id)) return true;
+        return false;
+      },
+      output: {
+        // Manual chunks for better code splitting
+        manualChunks: {
+          vendor: ['solid-js', 'viem'],
+        },
+      },
+    },
+    // Increase chunk size warning limit for SDK-heavy apps
+    chunkSizeWarningLimit: 1000,
   },
 });
