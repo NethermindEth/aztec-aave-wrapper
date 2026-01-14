@@ -26,7 +26,7 @@
 
 ## System Overview
 
-Build a minimal SolidJS frontend that replicates the workflow in `e2e/scripts/full-flow.ts:920-994`.
+Build a minimal SolidJS frontend that replicates the workflow in `e2e/scripts/full-flow.ts`.
 
 **Boundaries:**
 - In scope: Full deposit/withdraw flow execution against local devnets (Anvil L1 + Aztec Sandbox)
@@ -36,7 +36,7 @@ Build a minimal SolidJS frontend that replicates the workflow in `e2e/scripts/fu
 - L1 RPC: `http://localhost:8545` (Anvil)
 - L2 PXE: `http://localhost:8081` (Aztec Sandbox)
 
-**Architecture (from `CLAUDE.md:4-7`):**
+**Architecture (from `CLAUDE.md:5-13`):**
 - Two-layer: L2 (Noir/Aztec) creates private intents, L1 (Solidity) executes Aave operations
 - Privacy model: `hash(ownerL2)` protects user identity across chains
 
@@ -44,7 +44,7 @@ Build a minimal SolidJS frontend that replicates the workflow in `e2e/scripts/fu
 
 ## Core Workflow
 
-The full-flow script (`e2e/scripts/full-flow.ts:5-14`) demonstrates:
+The full-flow script (`e2e/scripts/full-flow.ts:6-14`) demonstrates:
 
 ### DEPOSIT FLOW (L2 → L1 → L2):
 1. **User calls `request_deposit()` on L2** → creates L2→L1 message
@@ -62,7 +62,7 @@ The full-flow script (`e2e/scripts/full-flow.ts:5-14`) demonstrates:
 
 ### Package Requirements
 
-From `e2e/package.json:21-28`:
+From `e2e/package.json:20-29`:
 
 ```json
 {
@@ -72,7 +72,9 @@ From `e2e/package.json:21-28`:
     "@aztec/accounts": "3.0.0-devnet.20251212",
     "@aztec/foundation": "3.0.0-devnet.20251212",
     "@aztec/test-wallet": "3.0.0-devnet.20251212",
-    "viem": "^2.21.0"
+    "ethers": "^6.13.0",
+    "viem": "^2.21.0",
+    "@aztec-aave-wrapper/shared": "workspace:*"
   }
 }
 ```
@@ -294,13 +296,14 @@ import { EthAddress } from "@aztec/foundation/eth-address";
 
 ### viem Imports
 
-From `e2e/scripts/full-flow.ts:23-37`:
+From `e2e/scripts/full-flow.ts:23-39`:
 
 ```typescript
 import {
   createPublicClient,
   createWalletClient,
   http,
+  encodeDeployData,
   keccak256,
   encodePacked,
   encodeAbiParameters,
@@ -321,12 +324,12 @@ import { foundry } from "viem/chains";
 
 ### Client Setup
 
-From `e2e/scripts/full-flow.ts:336-371`:
+From `e2e/scripts/full-flow.ts:47-68`:
 
 ```typescript
 const CONFIG = {
-  l1RpcUrl: "http://localhost:8545",
-  l2RpcUrl: "http://localhost:8081",
+  l1RpcUrl: process.env.L1_RPC_URL ?? "http://localhost:8545",
+  l2RpcUrl: process.env.L2_RPC_URL ?? "http://localhost:8081",
   depositAmount: 1_000_000n, // 1 USDC (6 decimals)
   withdrawAmount: 1_000_000n,
   assetId: 1n,
@@ -384,7 +387,10 @@ From `e2e/scripts/full-flow.ts:205-215`:
 
 ```typescript
 function loadArtifact(contractPath: string, contractName: string) {
-  const artifactPath = `eth/out/${contractPath}/${contractName}.json`;
+  const artifactPath = join(
+    __dirname,
+    `../../eth/out/${contractPath}/${contractName}.json`
+  );
   const artifact = JSON.parse(readFileSync(artifactPath, "utf-8"));
   return {
     abi: artifact.abi,
@@ -399,27 +405,27 @@ From `e2e/scripts/full-flow.ts:628-663`:
 
 ```typescript
 // Mint USDC to user
-await walletClient.writeContract({
+await deployerWallet.writeContract({
   address: l1Addresses.mockUsdc,
-  abi: erc20Abi,
+  abi: mockERC20Artifact.abi,
   functionName: "mint",
-  args: [userAddress, amount],
+  args: [userL1Address, userFundAmount],
 });
 
 // Approve portal
-await walletClient.writeContract({
+await userWallet.writeContract({
   address: l1Addresses.mockUsdc,
-  abi: erc20Abi,
+  abi: mockERC20Artifact.abi,
   functionName: "approve",
-  args: [l1Addresses.portal, amount],
+  args: [l1Addresses.portal, CONFIG.depositAmount],
 });
 
 // Transfer to portal
-await walletClient.writeContract({
+await userWallet.writeContract({
   address: l1Addresses.mockUsdc,
-  abi: erc20Abi,
+  abi: mockERC20Artifact.abi,
   functionName: "transfer",
-  args: [l1Addresses.portal, amount],
+  args: [l1Addresses.portal, CONFIG.depositAmount],
 });
 ```
 
@@ -432,7 +438,7 @@ await relayerWallet.writeContract({
   address: l1Addresses.portal,
   abi: portalArtifact.abi,
   functionName: "executeDeposit",
-  args: [depositIntent, l2BlockNumber, leafIndex, siblingPath],
+  args: [depositIntent, l2BlockNumber, 0n, []],
 });
 ```
 
@@ -528,14 +534,14 @@ async function deployL2Contract(wallet, walletAddress, portalAddress: Address) {
 
 ### L2 AaveWrapper Contract Methods
 
-From `e2e/src/generated/AaveWrapper.ts:128-172`:
+From `e2e/src/generated/AaveWrapper.ts:164-168`:
 
 ```typescript
 // Request deposit
 methods.request_deposit(
   asset: FieldLike,           // Asset identifier
   amount: bigint | number,    // Amount to deposit
-  original_decimals: number,  // Token decimals (6 for USDC)
+  original_decimals: bigint | number,  // Token decimals (6 for USDC)
   deadline: bigint | number,  // Unix timestamp deadline
   secret_hash: FieldLike      // Hash of secret for L1→L2 claiming
 ): ContractFunctionInteraction
@@ -569,7 +575,7 @@ methods.finalize_withdraw(
 
 ### L1 Portal Contract Methods
 
-From `eth/contracts/AztecAavePortalL1.sol:173-244`:
+From `eth/contracts/AztecAavePortalL1.sol:173-271`:
 
 ```solidity
 function executeDeposit(
@@ -594,7 +600,7 @@ function executeWithdraw(
 
 ### DepositIntent (L1)
 
-From `eth/contracts/types/Intent.sol` (referenced in `full-flow.ts:691-700`):
+From `eth/contracts/types/Intent.sol:12-29`:
 
 ```typescript
 interface DepositIntent {
@@ -610,20 +616,20 @@ interface DepositIntent {
 
 ### WithdrawIntent (L1)
 
-From `eth/contracts/AztecAavePortalL1.sol:265-270`:
+From `eth/contracts/types/Intent.sol:34-44`:
 
 ```typescript
 interface WithdrawIntent {
-  intentId: Hex;
-  ownerHash: Hex;
-  amount: bigint;
-  deadline: bigint;
+  intentId: Hex;        // bytes32
+  ownerHash: Hex;       // bytes32 - hash(ownerL2)
+  amount: bigint;       // uint128
+  deadline: bigint;     // uint64
 }
 ```
 
 ### PositionReceiptNote (L2 private)
 
-From `aztec/src/main.nr:466-473`:
+From `aztec/src/types/position_receipt.nr:17-30`:
 
 ```typescript
 // Private note structure (encrypted)
@@ -631,15 +637,27 @@ interface PositionReceiptNote {
   owner: AztecAddress;
   nonce: Field;
   asset_id: Field;
-  shares: bigint;      // u128
-  aave_market_id: number;
-  status: PositionStatus; // ACTIVE | PENDING_WITHDRAW
+  shares: u128;
+  aave_market_id: Field;
+  status: u8; // 0=PENDING_DEPOSIT, 1=ACTIVE, 2=PENDING_WITHDRAW
+}
+```
+
+### PositionStatus (L2 private)
+
+From `aztec/src/types/position_receipt.nr:33-40`:
+
+```typescript
+enum PositionStatus {
+  PENDING_DEPOSIT = 0,
+  ACTIVE = 1,
+  PENDING_WITHDRAW = 2
 }
 ```
 
 ### IntentStatus (L2 public)
 
-From `aztec/src/main.nr:200-212`:
+From `aztec/src/main.nr:201-212`:
 
 ```typescript
 enum IntentStatus {
@@ -662,14 +680,14 @@ From `e2e/scripts/full-flow.ts:539-822`:
 ```
 1. Generate secret: Fr.random()
 2. Compute secretHash: computeSecretHash(secret)
-3. Get L1 timestamp for deadline
+3. Get L1 block timestamp for deadline
 4. Compute ownerHash: poseidon2Hash([l2Address.toBigInt()])
 5. Call request_deposit() on L2
    → Returns intentId
    → Sends L2→L1 message
 6. Wait for L2 blocks: sleep + mineAztecBlocks
 7. Fund portal with USDC:
-   a. Mint USDC to user
+   a. Mint USDC to user (via deployer)
    b. Approve portal
    c. Transfer to portal
 8. Prepare DepositIntent struct
@@ -688,7 +706,7 @@ From `e2e/scripts/full-flow.ts:539-822`:
 
 **Failure paths:**
 - If deadline passed: `DeadlinePassed()` error (`eth/contracts/AztecAavePortalL1.sol:186`)
-- If intent already consumed: `IntentAlreadyConsumed()` error (`eth/contracts/AztecAavePortalL1.sol:180`)
+- If intent already consumed: `IntentAlreadyConsumed()` error (`eth/contracts/AztecAavePortalL1.sol:180-181`)
 - If L1→L2 message not found: `finalize_deposit` reverts (`aztec/src/main.nr:459`)
 
 ### Flow: Complete Withdrawal
@@ -717,16 +735,14 @@ From `e2e/scripts/full-flow.ts:828-914`:
 
 **Failure paths:**
 - If position not found: `"Position receipt note not found"` (`aztec/src/main.nr:575`)
-- If partial withdrawal: `"Must withdraw full position"` (`aztec/src/main.nr:585-588`)
-- If no shares recorded: `NoSharesForIntent()` (`eth/contracts/AztecAavePortalL1.sol:287`)
+- If partial withdrawal: `"Must withdraw full position (partial withdrawals not supported)"` (`aztec/src/main.nr:585-588`)
+- If no shares recorded: `NoSharesForIntent()` (`eth/contracts/AztecAavePortalL1.sol:287-288`)
 
 ---
 
 ## SolidJS Implementation Patterns
 
 ### Core Primitives
-
-From `/home/ametel/source/solid-docs/AGENTS/LLM.md:51-62`:
 
 ```tsx
 import { createSignal, createEffect, createResource, createMemo } from "solid-js";
@@ -750,16 +766,12 @@ const [data] = createResource(fetchData);
 
 ### Key SolidJS Rules
 
-From `/home/ametel/source/solid-docs/AGENTS/LLM.md:77-83`:
-
 1. **Call signals as functions**: `count()` not `count`
 2. **Don't destructure props**: breaks reactivity
 3. **Components run once**: only reactive parts update
 4. **Use control flow components**: `<Show>`, `<For>`, `<Switch>`
 
 ### Resource Pattern for Async Operations
-
-From `/home/ametel/source/solid-docs/AGENTS/llm_corpus/007-resources.md:29-44`:
 
 ```tsx
 import { createResource, Suspense, ErrorBoundary } from "solid-js";
@@ -779,8 +791,6 @@ deposit.state     // "unresolved" | "pending" | "ready" | "refreshing" | "errore
 ```
 
 ### Store Pattern for Complex State
-
-From `/home/ametel/source/solid-docs/AGENTS/llm_corpus/005-stores.md:42-56`:
 
 ```tsx
 import { createStore, produce } from "solid-js/store";
@@ -858,8 +868,6 @@ interface AppState {
 ```
 
 ### Context Provider Pattern
-
-From `/home/ametel/source/solid-docs/AGENTS/LLM.md:1109-1131`:
 
 ```tsx
 import { createContext, useContext } from "solid-js";
@@ -1132,8 +1140,6 @@ function PositionCard(props) {
 
 ### Control Flow Components
 
-From `/home/ametel/source/solid-docs/AGENTS/LLM.md:476-564`:
-
 ```tsx
 import { Show, For, Switch, Match, Suspense, ErrorBoundary } from "solid-js";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -1226,7 +1232,7 @@ export const LOCAL_PRIVATE_KEYS = {
 
 ### Protocol Constants
 
-From `shared/src/constants.ts:73-85`:
+From `shared/src/constants.ts:75-85`:
 
 ```typescript
 export const USDC_DECIMALS = 6;
@@ -1236,7 +1242,7 @@ export const MAX_DEADLINE_OFFSET = 24 * 60 * 60; // 24 hours
 
 ### L1 Portal Deadline Constraints
 
-From `eth/contracts/AztecAavePortalL1.sol:54-57`:
+From `eth/contracts/AztecAavePortalL1.sol:53-57`:
 
 ```solidity
 uint256 public constant MIN_DEADLINE = 5 minutes;
@@ -1249,7 +1255,7 @@ uint256 public constant MAX_DEADLINE = 24 hours;
 
 ### Protocol Invariants
 
-From `CLAUDE.md:23-29`:
+From `CLAUDE.md:96-100`:
 
 1. **Per-intent share tracking**: L1 portal tracks shares per intent ID (not per owner) to maintain privacy
 2. **Full withdrawal only**: Withdrawals must be for the entire position
@@ -1258,14 +1264,14 @@ From `CLAUDE.md:23-29`:
 
 ### MVP Constraints
 
-From `CLAUDE.md:31-32`:
+From `CLAUDE.md:102-104`:
 
 - **USDC-only**: MVP focuses on single asset support
 - **L1 Aave only**: Direct deposit to Ethereum L1 Aave pool
 
 ### Privacy Invariants
 
-From `aztec/src/main.nr:346-347` and `eth/contracts/AztecAavePortalL1.sol:170-171`:
+From `aztec/src/main.nr:345-346` and `eth/contracts/AztecAavePortalL1.sol:170-171`:
 
 - **ownerHash**: L2 owner address is hashed (Poseidon) before inclusion in cross-chain messages
 - Owner identity is never revealed on L1
@@ -1282,7 +1288,7 @@ From `aztec/src/main.nr:337`:
 
 ### Withdrawal Constraints
 
-From `aztec/src/main.nr:585-588`:
+From `aztec/src/main.nr:584-588`:
 
 ```
 - MVP: Only full withdrawals supported (amount == receipt.shares)
