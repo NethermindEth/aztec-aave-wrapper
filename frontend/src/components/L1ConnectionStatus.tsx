@@ -5,12 +5,12 @@
  * Uses Card and Badge components for consistent styling.
  */
 
-import { Show, createSignal, onCleanup } from "solid-js";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { createSignal, onCleanup, Show } from "solid-js";
+import { createL1PublicClient, verifyL1Connection } from "../services/l1/client.js";
+import { useApp } from "../store/hooks.js";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { useApp } from "../store/hooks.js";
-import { createL1PublicClient, verifyL1Connection } from "../services/l1/client.js";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 /**
  * Polling interval for block number updates (in milliseconds)
@@ -120,11 +120,7 @@ export function L1ConnectionStatus() {
               <Show when={error()}>
                 <p class="text-sm text-destructive">{error()}</p>
               </Show>
-              <Button
-                onClick={handleConnect}
-                disabled={isConnecting()}
-                class="w-full"
-              >
+              <Button onClick={handleConnect} disabled={isConnecting()} class="w-full">
                 {isConnecting() ? "Connecting..." : "Connect to L1"}
               </Button>
             </div>

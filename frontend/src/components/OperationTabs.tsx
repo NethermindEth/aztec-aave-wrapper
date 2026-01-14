@@ -5,11 +5,11 @@
  * Handles tab switching and prevents switching during active operations.
  */
 
-import { createSignal, Show } from "solid-js";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { DepositFlow, type DepositFlowProps } from "./DepositFlow";
-import { WithdrawFlow, type WithdrawFlowProps } from "./WithdrawFlow";
+import { createSignal } from "solid-js";
 import { useApp } from "../store/hooks.js";
+import { DepositFlow, type DepositFlowProps } from "./DepositFlow";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { WithdrawFlow, type WithdrawFlowProps } from "./WithdrawFlow";
 
 /**
  * Tab values for the operation tabs
@@ -54,9 +54,7 @@ export function OperationTabs(props: OperationTabsProps) {
   const { state } = useApp();
 
   // Track the active tab
-  const [activeTab, setActiveTab] = createSignal<OperationTab>(
-    props.defaultTab ?? "deposit"
-  );
+  const [activeTab, setActiveTab] = createSignal<OperationTab>(props.defaultTab ?? "deposit");
 
   // Check if an operation is currently in progress
   const isOperationActive = () => state.operation.type !== "idle";
@@ -71,22 +69,12 @@ export function OperationTabs(props: OperationTabsProps) {
   };
 
   return (
-    <Tabs
-      value={activeTab()}
-      onValueChange={handleTabChange}
-      class={props.class}
-    >
+    <Tabs value={activeTab()} onValueChange={handleTabChange} class={props.class}>
       <TabsList class="grid w-full grid-cols-2">
-        <TabsTrigger
-          value="deposit"
-          disabled={isOperationActive() && activeTab() !== "deposit"}
-        >
+        <TabsTrigger value="deposit" disabled={isOperationActive() && activeTab() !== "deposit"}>
           Deposit
         </TabsTrigger>
-        <TabsTrigger
-          value="withdraw"
-          disabled={isOperationActive() && activeTab() !== "withdraw"}
-        >
+        <TabsTrigger value="withdraw" disabled={isOperationActive() && activeTab() !== "withdraw"}>
           Withdraw
         </TabsTrigger>
       </TabsList>

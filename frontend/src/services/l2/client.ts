@@ -5,11 +5,8 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:399-409.
  */
 
-import {
-  loadAztecModules,
-  type AztecModules,
-} from "./modules.js";
 import { getDefaultL2Chain, isLocalDevelopment } from "../../config/chains.js";
+import { type AztecModules, loadAztecModules } from "./modules.js";
 
 // =============================================================================
 // Types
@@ -18,9 +15,7 @@ import { getDefaultL2Chain, isLocalDevelopment } from "../../config/chains.js";
 /**
  * Aztec node client type (inferred from createAztecNodeClient return)
  */
-export type AztecNodeClient = Awaited<
-  ReturnType<AztecModules["createAztecNodeClient"]>
->;
+export type AztecNodeClient = Awaited<ReturnType<AztecModules["createAztecNodeClient"]>>;
 
 /**
  * Re-export NodeInfo from the SDK for consumers
@@ -59,9 +54,7 @@ export interface L2ClientConfig {
  * console.log('Connected to Aztec', nodeInfo.nodeVersion);
  * ```
  */
-export async function createL2NodeClient(
-  config?: L2ClientConfig
-): Promise<AztecNodeClient> {
+export async function createL2NodeClient(config?: L2ClientConfig): Promise<AztecNodeClient> {
   const chainConfig = getDefaultL2Chain();
   const rpcUrl = config?.rpcUrl ?? chainConfig.rpcUrl;
 
@@ -80,9 +73,7 @@ export async function createL2NodeClient(
  * @param config - Optional configuration overrides
  * @returns Aztec node client (may not be ready yet)
  */
-export async function createL2NodeClientNoWait(
-  config?: L2ClientConfig
-): Promise<AztecNodeClient> {
+export async function createL2NodeClientNoWait(config?: L2ClientConfig): Promise<AztecNodeClient> {
   const chainConfig = getDefaultL2Chain();
   const rpcUrl = config?.rpcUrl ?? chainConfig.rpcUrl;
 
@@ -108,9 +99,7 @@ export async function createL2NodeClientNoWait(
  * console.log('Node version:', info.nodeVersion);
  * ```
  */
-export async function checkL2NodeHealth(
-  node: AztecNodeClient
-): Promise<NodeInfo> {
+export async function checkL2NodeHealth(node: AztecNodeClient): Promise<NodeInfo> {
   return node.getNodeInfo();
 }
 
@@ -148,9 +137,7 @@ export async function waitForL2Node(node: AztecNodeClient): Promise<void> {
  */
 export async function createDevnetL2NodeClient(): Promise<AztecNodeClient> {
   if (!isLocalDevelopment()) {
-    console.warn(
-      "createDevnetL2NodeClient() called outside local development environment"
-    );
+    console.warn("createDevnetL2NodeClient() called outside local development environment");
   }
 
   return createL2NodeClient();
@@ -163,8 +150,6 @@ export async function createDevnetL2NodeClient(): Promise<AztecNodeClient> {
  * @returns Node info if connected
  * @throws Error if connection fails
  */
-export async function verifyL2Connection(
-  node: AztecNodeClient
-): Promise<NodeInfo> {
+export async function verifyL2Connection(node: AztecNodeClient): Promise<NodeInfo> {
   return checkL2NodeHealth(node);
 }

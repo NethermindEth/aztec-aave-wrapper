@@ -2,12 +2,8 @@
  * Chain configuration using shared constants
  */
 
-import {
-  CHAIN_IDS,
-  LOCAL_RPC_URLS,
-  AZTEC_CONFIG,
-} from "@aztec-aave-wrapper/shared";
 import type { ChainConfig } from "@aztec-aave-wrapper/shared";
+import { AZTEC_CONFIG, CHAIN_IDS, LOCAL_RPC_URLS } from "@aztec-aave-wrapper/shared";
 
 // =============================================================================
 // Environment Detection

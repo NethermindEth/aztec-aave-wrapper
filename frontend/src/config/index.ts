@@ -4,67 +4,61 @@
  * Re-exports shared constants and provides frontend-specific defaults.
  */
 
-// Re-export everything from shared package
-export {
-  // Chain IDs
-  CHAIN_IDS,
-  // RPC URLs
-  LOCAL_RPC_URLS,
-  AZTEC_CONFIG,
-  // Token addresses
-  USDC_ADDRESSES,
-  USDC_DECIMALS,
-  // Aave addresses
-  AAVE_POOL_ADDRESSES,
-  // Deadline defaults from shared
-  DEFAULT_DEADLINE_OFFSET,
-  MAX_DEADLINE_OFFSET,
-  // Error codes
-  ERROR_CODES,
-} from "@aztec-aave-wrapper/shared";
-
 // Re-export shared types
 export type {
   Address,
   AztecAddress,
   Bytes32,
-  TxHash,
-  DepositIntent,
-  WithdrawIntent,
-  PositionReceipt,
-  ContractAddresses,
   ChainConfig,
+  ContractAddresses,
+  DepositIntent,
   EnvironmentConfig,
+  PositionReceipt,
+  TxHash,
+  WithdrawIntent,
 } from "@aztec-aave-wrapper/shared";
+// Re-export everything from shared package
+export {
+  // Aave addresses
+  AAVE_POOL_ADDRESSES,
+  AZTEC_CONFIG,
+  // Chain IDs
+  CHAIN_IDS,
+  // Deadline defaults from shared
+  DEFAULT_DEADLINE_OFFSET,
+  // Error codes
+  ERROR_CODES,
+  IntentStatus,
+  // RPC URLs
+  LOCAL_RPC_URLS,
+  MAX_DEADLINE_OFFSET,
+  // Token addresses
+  USDC_ADDRESSES,
+  USDC_DECIMALS,
+} from "@aztec-aave-wrapper/shared";
+export type { ContractArtifact, ContractName } from "./artifacts.js";
+// Export artifact loading utilities
+export {
+  clearArtifactCache,
+  loadArtifact,
+  preloadArtifacts,
+} from "./artifacts.js";
 
-export { IntentStatus } from "@aztec-aave-wrapper/shared";
-
+export type { AztecChainConfig } from "./chains.js";
+// Export chain configuration
+export {
+  getDefaultL1Chain,
+  getDefaultL2Chain,
+  isLocalDevelopment,
+  L1_CHAINS,
+  L2_CHAINS,
+} from "./chains.js";
 // Export frontend-specific constants
 export {
   DEADLINE_CONSTRAINTS,
+  DEBOUNCE_DELAYS,
   DEPOSIT_STEP_LABELS,
-  WITHDRAW_STEP_LABELS,
   TIMEOUTS,
   TOAST_DURATIONS,
-  DEBOUNCE_DELAYS,
+  WITHDRAW_STEP_LABELS,
 } from "./constants.js";
-
-// Export chain configuration
-export {
-  L1_CHAINS,
-  L2_CHAINS,
-  isLocalDevelopment,
-  getDefaultL1Chain,
-  getDefaultL2Chain,
-} from "./chains.js";
-
-export type { AztecChainConfig } from "./chains.js";
-
-// Export artifact loading utilities
-export {
-  loadArtifact,
-  preloadArtifacts,
-  clearArtifactCache,
-} from "./artifacts.js";
-
-export type { ContractArtifact, ContractName } from "./artifacts.js";

@@ -8,10 +8,7 @@ export function Card(props: CardProps) {
 
   return (
     <div
-      class={cn(
-        "rounded-lg border bg-card text-card-foreground shadow-sm",
-        local.class
-      )}
+      class={cn("rounded-lg border bg-card text-card-foreground shadow-sm", local.class)}
       {...others}
     >
       {local.children}
@@ -37,10 +34,7 @@ export function CardTitle(props: CardTitleProps) {
   const [local, others] = splitProps(props, ["class", "children"]);
 
   return (
-    <h3
-      class={cn("text-2xl font-semibold leading-none tracking-tight", local.class)}
-      {...others}
-    >
+    <h3 class={cn("text-2xl font-semibold leading-none tracking-tight", local.class)} {...others}>
       {local.children}
     </h3>
   );

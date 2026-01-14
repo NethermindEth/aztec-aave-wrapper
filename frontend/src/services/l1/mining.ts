@@ -5,7 +5,7 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:481-495.
  */
 
-import { type PublicClient, type Chain, type Transport } from "viem";
+import type { Chain, PublicClient, Transport } from "viem";
 import { getDefaultL1Chain } from "../../config/chains.js";
 import { logInfo, logSuccess } from "../../store/logger.js";
 

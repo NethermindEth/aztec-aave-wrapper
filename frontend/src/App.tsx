@@ -8,14 +8,14 @@
 import type { Component } from "solid-js";
 import { createSignal } from "solid-js";
 import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
-import { WalletInfo } from "./components/WalletInfo";
 import { ContractDeployment } from "./components/ContractDeployment";
-import { OperationTabs } from "./components/OperationTabs";
-import { PositionsList } from "./components/PositionsList";
-import { LogViewer, type LogEntry, LogLevel } from "./components/LogViewer";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { type LogEntry, LogLevel, LogViewer } from "./components/LogViewer";
+import { OperationTabs } from "./components/OperationTabs";
 import type { Position } from "./components/PositionCard";
 import { PositionStatus } from "./components/PositionCard";
+import { PositionsList } from "./components/PositionsList";
+import { WalletInfo } from "./components/WalletInfo";
 
 /**
  * Main application component
@@ -79,9 +79,7 @@ const App: Component = () => {
     // Update position status
     setPositions((prev) =>
       prev.map((p) =>
-        p.intentId === intentId
-          ? { ...p, status: PositionStatus.PENDING_WITHDRAW }
-          : p
+        p.intentId === intentId ? { ...p, status: PositionStatus.PENDING_WITHDRAW } : p
       )
     );
     addLog(`Withdrawal request submitted`, LogLevel.SUCCESS);
@@ -114,28 +112,17 @@ const App: Component = () => {
 
       {/* Main Operations */}
       <ErrorBoundary>
-        <OperationTabs
-          defaultTab="deposit"
-          onDeposit={handleDeposit}
-          onWithdraw={handleWithdraw}
-        />
+        <OperationTabs defaultTab="deposit" onDeposit={handleDeposit} onWithdraw={handleWithdraw} />
       </ErrorBoundary>
 
       {/* Positions */}
       <ErrorBoundary>
-        <PositionsList
-          positions={positions()}
-          onWithdraw={handleWithdraw}
-        />
+        <PositionsList positions={positions()} onWithdraw={handleWithdraw} />
       </ErrorBoundary>
 
       {/* Logs */}
       <ErrorBoundary>
-        <LogViewer
-          logs={logs()}
-          title="Operation Logs"
-          maxHeight={300}
-        />
+        <LogViewer logs={logs()} title="Operation Logs" maxHeight={300} />
       </ErrorBoundary>
     </div>
   );

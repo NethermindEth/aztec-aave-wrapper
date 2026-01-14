@@ -5,8 +5,8 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:440-463.
  */
 
-import type { TestWallet, AztecAddress } from "./wallet.js";
-import { logInfo, logSuccess, logError } from "../../store/logger.js";
+import { logError, logInfo, logSuccess } from "../../store/logger.js";
+import type { AztecAddress, TestWallet } from "./wallet.js";
 
 // =============================================================================
 // Types
@@ -15,9 +15,7 @@ import { logInfo, logSuccess, logError } from "../../store/logger.js";
 /**
  * EthAddress type from Aztec foundation
  */
-export type EthAddress = InstanceType<
-  typeof import("@aztec/foundation/eth-address").EthAddress
->;
+export type EthAddress = InstanceType<typeof import("@aztec/foundation/eth-address").EthAddress>;
 
 /**
  * L2 contract deployment configuration
@@ -43,7 +41,7 @@ export interface L2DeploymentResult {
 export type AaveWrapperContract = Awaited<
   ReturnType<
     Awaited<
-      ReturnType<typeof import("../../generated/AaveWrapper.js").AaveWrapperContract.deploy>
+      ReturnType<typeof import("@generated/AaveWrapper").AaveWrapperContract.deploy>
     >["deployed"]
   >
 >;
@@ -95,7 +93,7 @@ export async function deployL2Contract(
   logInfo("Deploying AaveWrapper L2 contract...");
 
   // Dynamically import the generated contract and EthAddress
-  const { AaveWrapperContract } = await import("../../generated/AaveWrapper.js");
+  const { AaveWrapperContract } = await import("@generated/AaveWrapper");
   const { EthAddress } = await import("@aztec/foundation/eth-address");
 
   // Convert portal address string to EthAddress
@@ -118,8 +116,7 @@ export async function deployL2Contract(
       address: deployedContract.address,
     };
   } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown deployment error";
+    const errorMessage = error instanceof Error ? error.message : "Unknown deployment error";
     logError(`AaveWrapper deployment failed: ${errorMessage}`);
     throw error;
   }
@@ -148,7 +145,7 @@ export async function loadL2Contract(
   wallet: TestWallet,
   contractAddress: AztecAddress
 ): Promise<AaveWrapperContract> {
-  const { AaveWrapperContract } = await import("../../generated/AaveWrapper.js");
+  const { AaveWrapperContract } = await import("@generated/AaveWrapper");
   return AaveWrapperContract.at(contractAddress, wallet) as AaveWrapperContract;
 }
 
@@ -164,8 +161,6 @@ export async function loadL2Contract(
  * @returns Contract artifact
  */
 export async function getL2ContractArtifact() {
-  const { AaveWrapperContractArtifact } = await import(
-    "../../generated/AaveWrapper.js"
-  );
+  const { AaveWrapperContractArtifact } = await import("@generated/AaveWrapper");
   return AaveWrapperContractArtifact;
 }

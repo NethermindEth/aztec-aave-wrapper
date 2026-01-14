@@ -6,9 +6,9 @@
  */
 
 import { Show } from "solid-js";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { useApp } from "../store/hooks.js";
 import { formatUSDCFromString } from "../types/state.js";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 /**
  * Truncate an address for display
@@ -49,11 +49,7 @@ export function WalletInfo() {
       <CardContent>
         <Show
           when={hasWallet()}
-          fallback={
-            <p class="text-sm text-muted-foreground">
-              No wallet connected
-            </p>
-          }
+          fallback={<p class="text-sm text-muted-foreground">No wallet connected</p>}
         >
           <div class="space-y-4">
             <div class="space-y-2 text-sm">
@@ -78,9 +74,7 @@ export function WalletInfo() {
             <div class="border-t pt-4 space-y-2 text-sm">
               <div class="flex justify-between">
                 <span class="text-muted-foreground">USDC Balance</span>
-                <span class="font-mono">
-                  {formatUSDCFromString(state.wallet.usdcBalance)} USDC
-                </span>
+                <span class="font-mono">{formatUSDCFromString(state.wallet.usdcBalance)} USDC</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-muted-foreground">aToken Balance</span>

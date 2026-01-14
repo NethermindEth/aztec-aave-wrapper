@@ -14,16 +14,16 @@ export type {
   Address,
   AztecAddress,
   Bytes32,
-  TxHash,
-  // Intent types
-  DepositIntent,
-  WithdrawIntent,
-  // Position types
-  PositionReceipt,
+  ChainConfig,
   // Configuration types
   ContractAddresses,
-  ChainConfig,
+  // Intent types
+  DepositIntent,
   EnvironmentConfig,
+  // Position types
+  PositionReceipt,
+  TxHash,
+  WithdrawIntent,
 } from "@aztec-aave-wrapper/shared";
 
 export { IntentStatus } from "@aztec-aave-wrapper/shared";
@@ -35,27 +35,27 @@ export { IntentStatus } from "@aztec-aave-wrapper/shared";
 export type {
   // State interfaces
   AppState,
+  ContractsState,
+  L1Addresses,
   L1ConnectionState,
   L2ConnectionState,
-  WalletState,
-  L1Addresses,
-  ContractsState,
+  LogEntry,
+  LogLevel,
   OperationState,
   // Display types
   PositionDisplay,
-  LogEntry,
-  LogLevel,
+  WalletState,
 } from "./state.js";
 
 export {
   // State factory
   createInitialAppState,
-  // Bigint utilities
-  toBigIntString,
-  fromBigIntString,
   formatUSDC,
   formatUSDCFromString,
+  fromBigIntString,
   parseUSDCInput,
+  // Bigint utilities
+  toBigIntString,
 } from "./state.js";
 
 // =============================================================================
@@ -63,18 +63,18 @@ export {
 // =============================================================================
 
 export type {
-  OperationType,
-  OperationStatus,
-  StepConfig,
   DepositStep,
+  OperationStatus,
+  OperationType,
+  StepConfig,
   WithdrawStep,
 } from "./operations.js";
 
 export {
   DEPOSIT_STEPS,
-  WITHDRAW_STEPS,
   getDepositStepCount,
-  getWithdrawStepCount,
   getDepositStepIndex,
+  getWithdrawStepCount,
   getWithdrawStepIndex,
+  WITHDRAW_STEPS,
 } from "./operations.js";

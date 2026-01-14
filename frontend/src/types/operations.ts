@@ -38,21 +38,12 @@ export interface StepConfig {
 /**
  * Deposit flow steps
  */
-export type DepositStep =
-  | "approve"
-  | "request"
-  | "confirm_l2"
-  | "execute_l1"
-  | "finalize";
+export type DepositStep = "approve" | "request" | "confirm_l2" | "execute_l1" | "finalize";
 
 /**
  * Withdrawal flow steps
  */
-export type WithdrawStep =
-  | "request"
-  | "confirm_l2"
-  | "execute_l1"
-  | "finalize";
+export type WithdrawStep = "request" | "confirm_l2" | "execute_l1" | "finalize";
 
 /**
  * Deposit step configurations
@@ -129,13 +120,7 @@ export function getWithdrawStepCount(): number {
  * Get step index (1-based) for deposit step
  */
 export function getDepositStepIndex(step: DepositStep): number {
-  const steps: DepositStep[] = [
-    "approve",
-    "request",
-    "confirm_l2",
-    "execute_l1",
-    "finalize",
-  ];
+  const steps: DepositStep[] = ["approve", "request", "confirm_l2", "execute_l1", "finalize"];
   return steps.indexOf(step) + 1;
 }
 
@@ -143,11 +128,6 @@ export function getDepositStepIndex(step: DepositStep): number {
  * Get step index (1-based) for withdraw step
  */
 export function getWithdrawStepIndex(step: WithdrawStep): number {
-  const steps: WithdrawStep[] = [
-    "request",
-    "confirm_l2",
-    "execute_l1",
-    "finalize",
-  ];
+  const steps: WithdrawStep[] = ["request", "confirm_l2", "execute_l1", "finalize"];
   return steps.indexOf(step) + 1;
 }

@@ -6,9 +6,9 @@
  */
 
 import { Show } from "solid-js";
-import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 /**
  * Position status values matching the L2 contract
@@ -117,9 +117,7 @@ export function PositionCard(props: PositionCardProps) {
         <Badge variant={statusVariant()}>{statusLabel()}</Badge>
       </CardHeader>
       <CardContent>
-        <div class="text-2xl font-bold">
-          {formatShares(props.position.shares)} aUSDC
-        </div>
+        <div class="text-2xl font-bold">{formatShares(props.position.shares)} aUSDC</div>
         <Show when={props.position.status === PositionStatus.CONFIRMED}>
           <Button
             variant="outline"

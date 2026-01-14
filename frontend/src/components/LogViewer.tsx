@@ -5,8 +5,8 @@
  * Respects user scrolling by only auto-scrolling when already at the bottom.
  */
 
-import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
-import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
+import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 
 /**
  * Log level for categorizing log messages
@@ -157,9 +157,7 @@ export function LogViewer(props: LogViewerProps) {
   return (
     <Card class={props.class}>
       <CardHeader class="pb-2">
-        <CardTitle class="text-sm font-medium">
-          {props.title ?? "Logs"}
-        </CardTitle>
+        <CardTitle class="text-sm font-medium">{props.title ?? "Logs"}</CardTitle>
       </CardHeader>
       <CardContent>
         <div
@@ -170,11 +168,7 @@ export function LogViewer(props: LogViewerProps) {
         >
           <Show
             when={props.logs.length > 0}
-            fallback={
-              <div class="py-4 text-center text-muted-foreground">
-                No logs yet
-              </div>
-            }
+            fallback={<div class="py-4 text-center text-muted-foreground">No logs yet</div>}
           >
             <For each={props.logs}>
               {(log) => (
@@ -190,6 +184,7 @@ export function LogViewer(props: LogViewerProps) {
         </div>
         <Show when={!isAtBottom() && props.logs.length > 0}>
           <button
+            type="button"
             onClick={scrollToBottom}
             class="mt-2 w-full rounded border border-dashed py-1 text-xs text-muted-foreground hover:bg-muted"
           >

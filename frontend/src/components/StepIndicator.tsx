@@ -49,8 +49,7 @@ export interface StepIndicatorProps {
  */
 export function StepIndicator(props: StepIndicatorProps) {
   // Ensure step values are within valid bounds
-  const normalizedStep = () =>
-    Math.max(0, Math.min(props.currentStep, props.totalSteps));
+  const normalizedStep = () => Math.max(0, Math.min(props.currentStep, props.totalSteps));
 
   const normalizedTotal = () => Math.max(1, props.totalSteps);
 

@@ -13,71 +13,54 @@
  * 6. Call finalize_deposit on L2
  */
 
-import {
-  type PublicClient,
-  type WalletClient,
-  type Chain,
-  type Transport,
-  type Account,
-  type Address,
-  type Hex,
-  pad,
-  toHex,
-} from "viem";
-
-// L1 Services
-import { type L1Clients } from "../services/l1/client.js";
-import {
-  approve,
-  transfer,
-  balanceOf,
-  type L1AddressesForBalances,
-} from "../services/l1/tokens.js";
-import {
-  executeDeposit,
-  getIntentShares,
-  type MerkleProof,
-} from "../services/l1/portal.js";
-import {
-  computeDepositIntentHash,
-  generateSalt,
-  type DepositIntent,
-} from "../services/l1/intent.js";
-import { mineL1Block } from "../services/l1/mining.js";
-
-// L2 Services
-import { type AztecNodeClient } from "../services/l2/client.js";
-import { type AztecAddress } from "../services/l2/wallet.js";
-import { type AaveWrapperContract } from "../services/l2/deploy.js";
-import {
-  executeRequestDeposit,
-  executeFinalizeDeposit,
-  type Fr,
-} from "../services/l2/operations.js";
-import {
-  generateSecretPair,
-  computeOwnerHash,
-} from "../services/l2/crypto.js";
-
 // Shared types
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
-
-// Store
 import {
-  logInfo,
-  logSuccess,
-  logError,
-  logStep,
-  logSection,
-} from "../store/logger.js";
+  type Account,
+  type Address,
+  type Chain,
+  type Hex,
+  type PublicClient,
+  pad,
+  type Transport,
+  toHex,
+  type WalletClient,
+} from "viem";
+// L1 Services
+import type { L1Clients } from "../services/l1/client.js";
 import {
-  startOperation,
-  setOperationStep,
-  setOperationStatus,
-  setOperationIntentId,
-  setOperationError,
+  computeDepositIntentHash,
+  type DepositIntent,
+  generateSalt,
+} from "../services/l1/intent.js";
+import { mineL1Block } from "../services/l1/mining.js";
+import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
+import {
+  approve,
+  balanceOf,
+  type L1AddressesForBalances,
+  transfer,
+} from "../services/l1/tokens.js";
+// L2 Services
+import type { AztecNodeClient } from "../services/l2/client.js";
+import { computeOwnerHash, generateSecretPair } from "../services/l2/crypto.js";
+import type { AaveWrapperContract } from "../services/l2/deploy.js";
+import {
+  executeFinalizeDeposit,
+  executeRequestDeposit,
+  type Fr,
+} from "../services/l2/operations.js";
+import type { AztecAddress } from "../services/l2/wallet.js";
+import {
   addPosition,
+  setOperationError,
+  setOperationIntentId,
+  setOperationStatus,
+  setOperationStep,
+  startOperation,
 } from "../store/actions.js";
+// Store
+import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
 import { getDepositStepCount } from "../types/operations.js";
 import { formatUSDC } from "../types/state.js";
 
@@ -150,8 +133,7 @@ export class DepositFlowError extends Error {
     public readonly stepName: string,
     public readonly cause: unknown
   ) {
-    const message =
-      cause instanceof Error ? cause.message : "Unknown error";
+    const message = cause instanceof Error ? cause.message : "Unknown error";
     super(`Deposit failed at step ${step} (${stepName}): ${message}`);
     this.name = "DepositFlowError";
   }
@@ -374,11 +356,7 @@ export async function executeDepositFlow(
     const userL1Address = userWallet.account.address;
 
     // Check user's USDC balance
-    const userBalance = await balanceOf(
-      publicClient,
-      l1Addresses.mockUsdc,
-      userL1Address
-    );
+    const userBalance = await balanceOf(publicClient, l1Addresses.mockUsdc, userL1Address);
     logInfo(`User USDC balance: ${formatUSDC(userBalance)}`);
 
     if (userBalance < config.amount) {
@@ -454,11 +432,7 @@ export async function executeDepositFlow(
     txHashes.l1Execute = executeResult.txHash;
 
     // Get shares recorded for this intent
-    const shares = await getIntentShares(
-      publicClient,
-      l1Addresses.portal,
-      intentIdHex
-    );
+    const shares = await getIntentShares(publicClient, l1Addresses.portal, intentIdHex);
     logSuccess(`Shares recorded: ${shares.toString()}`);
 
     // =========================================================================
@@ -494,14 +468,8 @@ export async function executeDepositFlow(
       logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
     } catch (error) {
       // In devnet without real L1→L2 messaging, finalize may fail
-      logSection(
-        "L2",
-        "finalize_deposit may fail without real L1→L2 message",
-        "warning"
-      );
-      logInfo(
-        error instanceof Error ? error.message.slice(0, 100) : "Unknown error"
-      );
+      logSection("L2", "finalize_deposit may fail without real L1→L2 message", "warning");
+      logInfo(error instanceof Error ? error.message.slice(0, 100) : "Unknown error");
     }
 
     // Add position to store
@@ -559,7 +527,7 @@ export async function executeDepositFlowWithRetry(
       logError(`Attempt ${attempt} failed: ${lastError.message}`);
 
       if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+        const delay = Math.min(1000 * 2 ** (attempt - 1), 10000);
         logInfo(`Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }

@@ -14,15 +14,7 @@
  * a two-phase deployment or address precomputation.
  */
 
-import {
-  type PublicClient,
-  type WalletClient,
-  type Chain,
-  type Transport,
-  type Account,
-  type Address,
-  type Hex,
-} from "viem";
+import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClient } from "viem";
 
 // L1 Services
 import {
@@ -32,17 +24,11 @@ import {
 } from "../services/l1/deploy.js";
 
 // L2 Services
-import { deployL2Contract, type AaveWrapperContract } from "../services/l2/deploy.js";
-import type { TestWallet, AztecAddress } from "../services/l2/wallet.js";
+import { type AaveWrapperContract, deployL2Contract } from "../services/l2/deploy.js";
+import type { AztecAddress, TestWallet } from "../services/l2/wallet.js";
 
 // Store
-import {
-  logInfo,
-  logSuccess,
-  logError,
-  logStep,
-  logSection,
-} from "../store/logger.js";
+import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
 
 // =============================================================================
 // Constants
@@ -59,8 +45,7 @@ import {
  * - Address precomputation (CREATE2)
  * - Two-phase deployment with portal address update
  */
-export const PLACEHOLDER_PORTAL_ADDRESS: Address =
-  "0x0000000000000000000000000000000000000001";
+export const PLACEHOLDER_PORTAL_ADDRESS: Address = "0x0000000000000000000000000000000000000001";
 
 // =============================================================================
 // Types
@@ -235,8 +220,7 @@ export async function deployAllContracts(
     // Step 1: Deploy L2 contract
     logStep(1, totalSteps, "Deploy L2 AaveWrapper contract");
 
-    const { contract: l2Contract, address: l2Address } =
-      await deployL2WithPlaceholder(l2Context);
+    const { contract: l2Contract, address: l2Address } = await deployL2WithPlaceholder(l2Context);
 
     // Step 2: Deploy L1 contracts
     logStep(2, totalSteps, "Deploy L1 portal and mock contracts");
@@ -263,9 +247,7 @@ export async function deployAllContracts(
     logError(`Deployment failed: ${message}`);
 
     // Determine which step failed based on error message
-    const step = message.includes("L2") || message.includes("AaveWrapper")
-      ? "L2"
-      : "L1";
+    const step = message.includes("L2") || message.includes("AaveWrapper") ? "L2" : "L1";
 
     throw new DeploymentError(step, error);
   }
@@ -295,7 +277,7 @@ export async function deployAllContractsWithRetry(
       logError(`Attempt ${attempt} failed: ${lastError.message}`);
 
       if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        const delay = Math.min(1000 * 2 ** (attempt - 1), 5000);
         logInfo(`Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }

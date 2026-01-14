@@ -5,16 +5,16 @@
  * Uses Card and Badge components for consistent styling.
  */
 
-import { Show, createSignal, onCleanup } from "solid-js";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
-import { useApp } from "../store/hooks.js";
+import { createSignal, onCleanup, Show } from "solid-js";
 import {
+  type AztecNodeClient,
   createL2NodeClient,
   verifyL2Connection,
-  type AztecNodeClient,
 } from "../services/l2/client.js";
+import { useApp } from "../store/hooks.js";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 /**
  * Polling interval for block number updates (in milliseconds)
@@ -130,11 +130,7 @@ export function L2ConnectionStatus() {
               <Show when={error()}>
                 <p class="text-sm text-destructive">{error()}</p>
               </Show>
-              <Button
-                onClick={handleConnect}
-                disabled={isConnecting()}
-                class="w-full"
-              >
+              <Button onClick={handleConnect} disabled={isConnecting()} class="w-full">
                 {isConnecting() ? "Connecting..." : "Connect to L2"}
               </Button>
             </div>

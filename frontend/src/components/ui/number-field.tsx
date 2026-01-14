@@ -1,4 +1,4 @@
-import { type JSX, splitProps, createSignal, createEffect } from "solid-js";
+import { createEffect, createSignal, type JSX, splitProps } from "solid-js";
 import { cn } from "~/lib/utils";
 
 export interface NumberFieldProps {
@@ -19,7 +19,7 @@ export interface NumberFieldProps {
 }
 
 export function NumberField(props: NumberFieldProps) {
-  const [local, others] = splitProps(props, [
+  const [local] = splitProps(props, [
     "value",
     "onChange",
     "min",
@@ -66,7 +66,7 @@ export function NumberField(props: NumberFieldProps) {
   const parseValue = (str: string): number | undefined => {
     if (str === "" || str === "-") return undefined;
     const num = parseFloat(str);
-    return isNaN(num) ? undefined : num;
+    return Number.isNaN(num) ? undefined : num;
   };
 
   const handleInput: JSX.EventHandler<HTMLInputElement, InputEvent> = (e) => {
@@ -130,7 +130,9 @@ export function NumberField(props: NumberFieldProps) {
         <button
           type="button"
           tabIndex={-1}
-          disabled={local.disabled || (min() !== undefined && (parseValue(inputValue()) ?? 0) <= min()!)}
+          disabled={
+            local.disabled || (min() !== undefined && (parseValue(inputValue()) ?? 0) <= min()!)
+          }
           class={cn(
             "flex h-10 w-10 items-center justify-center rounded-l-md border border-r-0 border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           )}
@@ -169,9 +171,7 @@ export function NumberField(props: NumberFieldProps) {
         role="spinbutton"
         class={cn(
           "flex h-10 w-full bg-background px-3 py-2 text-sm text-center ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
-          showButtons()
-            ? "border-y border-input"
-            : "rounded-md border border-input"
+          showButtons() ? "border-y border-input" : "rounded-md border border-input"
         )}
         onInput={handleInput}
         onBlur={handleBlur}
@@ -182,7 +182,9 @@ export function NumberField(props: NumberFieldProps) {
         <button
           type="button"
           tabIndex={-1}
-          disabled={local.disabled || (max() !== undefined && (parseValue(inputValue()) ?? 0) >= max()!)}
+          disabled={
+            local.disabled || (max() !== undefined && (parseValue(inputValue()) ?? 0) >= max()!)
+          }
           class={cn(
             "flex h-10 w-10 items-center justify-center rounded-r-md border border-l-0 border-input bg-background text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           )}

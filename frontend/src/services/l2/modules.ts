@@ -10,12 +10,12 @@
  * Type definitions for dynamically loaded Aztec modules
  */
 export interface AztecModules {
-  Fr: typeof import('@aztec/aztec.js/fields').Fr;
-  AztecAddress: typeof import('@aztec/aztec.js/addresses').AztecAddress;
-  createAztecNodeClient: typeof import('@aztec/aztec.js/node').createAztecNodeClient;
-  waitForNode: typeof import('@aztec/aztec.js/node').waitForNode;
-  computeSecretHash: typeof import('@aztec/stdlib/hash').computeSecretHash;
-  poseidon2Hash: typeof import('@aztec/foundation/crypto/poseidon').poseidon2Hash;
+  Fr: typeof import("@aztec/aztec.js/fields").Fr;
+  AztecAddress: typeof import("@aztec/aztec.js/addresses").AztecAddress;
+  createAztecNodeClient: typeof import("@aztec/aztec.js/node").createAztecNodeClient;
+  waitForNode: typeof import("@aztec/aztec.js/node").waitForNode;
+  computeSecretHash: typeof import("@aztec/stdlib/hash").computeSecretHash;
+  poseidon2Hash: typeof import("@aztec/foundation/crypto/poseidon").poseidon2Hash;
 }
 
 let cachedModules: AztecModules | null = null;
@@ -34,14 +34,13 @@ export async function loadAztecModules(): Promise<AztecModules> {
     return cachedModules;
   }
 
-  const [fieldsModule, addressesModule, nodeModule, hashModule, cryptoModule] =
-    await Promise.all([
-      import('@aztec/aztec.js/fields'),
-      import('@aztec/aztec.js/addresses'),
-      import('@aztec/aztec.js/node'),
-      import('@aztec/stdlib/hash'),
-      import('@aztec/foundation/crypto/poseidon'),
-    ]);
+  const [fieldsModule, addressesModule, nodeModule, hashModule, cryptoModule] = await Promise.all([
+    import("@aztec/aztec.js/fields"),
+    import("@aztec/aztec.js/addresses"),
+    import("@aztec/aztec.js/node"),
+    import("@aztec/stdlib/hash"),
+    import("@aztec/foundation/crypto/poseidon"),
+  ]);
 
   cachedModules = {
     Fr: fieldsModule.Fr,

@@ -1,34 +1,41 @@
-## Usage
+# Aztec Aave Wrapper Frontend
 
-Those templates dependencies are maintained via [pnpm](https://pnpm.io) via `pnpm up -Lri`.
+Minimal SolidJS frontend for the Aztec Aave Wrapper - enabling privacy-preserving Aave lending from Aztec L2 to Ethereum L1.
 
-This is the reason you see a `pnpm-lock.yaml`. That being said, any package manager will work. This file can be safely be removed once you clone a template.
+## Prerequisites
+
+- [Bun](https://bun.sh) 1.1.0+
+- Running devnet (`make devnet-up` from project root)
+
+## Installation
 
 ```bash
-$ npm install # or pnpm install or yarn install
+bun install
 ```
-
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
 
 ## Available Scripts
 
-In the project directory, you can run:
+### `bun run dev`
 
-### `npm run dev` or `npm start`
+Runs the app in development mode.
+Open [http://localhost:5173](http://localhost:5173) to view it in the browser.
 
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+The page will reload if you make edits.
 
-The page will reload if you make edits.<br>
+### `bun run build`
 
-### `npm run build`
-
-Builds the app for production to the `dist` folder.<br>
+Builds the app for production to the `dist` folder.
 It correctly bundles Solid in production mode and optimizes the build for the best performance.
 
-The build is minified and the filenames include the hashes.<br>
+The build is minified and the filenames include the hashes.
 Your app is ready to be deployed!
 
-## Deployment
+### `bun run preview`
 
-You can deploy the `dist` folder to any static host provider (netlify, surge, now, etc.)
+Preview the production build locally.
+
+## Learn More
+
+- [Solid Website](https://solidjs.com)
+- [Solid Discord](https://discord.com/invite/solidjs)
+- [Project Documentation](../docs/frontend-requirements.md)

@@ -5,10 +5,10 @@
  * Provides visual indication when both connections are required for operations.
  */
 
+import { Show } from "solid-js";
+import { useApp } from "../store/hooks.js";
 import { L1ConnectionStatus } from "./L1ConnectionStatus";
 import { L2ConnectionStatus } from "./L2ConnectionStatus";
-import { useApp } from "../store/hooks.js";
-import { Show } from "solid-js";
 
 /**
  * ConnectionStatusBar displays L1 and L2 connection status side by side.

@@ -11,10 +11,10 @@
  * - finalize_withdraw: Complete withdrawal after L1 execution
  */
 
+import { logError, logInfo, logSuccess } from "../../store/logger.js";
 import type { AaveWrapperContract } from "./deploy.js";
-import type { AztecAddress } from "./wallet.js";
 import { loadAztecModules } from "./modules.js";
-import { logInfo, logSuccess, logError } from "../../store/logger.js";
+import type { AztecAddress } from "./wallet.js";
 
 // =============================================================================
 // Types
@@ -23,9 +23,7 @@ import { logInfo, logSuccess, logError } from "../../store/logger.js";
 /**
  * Fr type from Aztec SDK (field element)
  */
-export type Fr = InstanceType<
-  Awaited<ReturnType<typeof loadAztecModules>>["Fr"]
->;
+export type Fr = InstanceType<Awaited<ReturnType<typeof loadAztecModules>>["Fr"]>;
 
 /**
  * Parameters for request_deposit operation
@@ -145,8 +143,7 @@ export class ContractOperationError extends Error {
     public readonly operation: string,
     public readonly cause: unknown
   ) {
-    const message =
-      cause instanceof Error ? cause.message : "Unknown contract error";
+    const message = cause instanceof Error ? cause.message : "Unknown contract error";
     super(`${operation} failed: ${message}`);
     this.name = "ContractOperationError";
   }
@@ -208,7 +205,9 @@ export async function simulateRequestDeposit(
 
     return { intentId };
   } catch (error) {
-    logError(`Deposit simulation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    logError(
+      `Deposit simulation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     throw new ContractOperationError("simulateRequestDeposit", error);
   }
 }
@@ -322,7 +321,9 @@ export async function executeFinalizeDeposit(
       txHash: tx.txHash?.toString() ?? "",
     };
   } catch (error) {
-    logError(`Finalize deposit failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    logError(
+      `Finalize deposit failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     throw new ContractOperationError("executeFinalizeDeposit", error);
   }
 }
@@ -373,7 +374,9 @@ export async function simulateRequestWithdraw(
 
     return { intentId };
   } catch (error) {
-    logError(`Withdrawal simulation failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    logError(
+      `Withdrawal simulation failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     throw new ContractOperationError("simulateRequestWithdraw", error);
   }
 }
@@ -427,7 +430,9 @@ export async function executeRequestWithdraw(
       txHash: tx.txHash?.toString() ?? "",
     };
   } catch (error) {
-    logError(`Withdrawal request failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    logError(
+      `Withdrawal request failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     throw new ContractOperationError("executeRequestWithdraw", error);
   }
 }
@@ -478,7 +483,9 @@ export async function executeFinalizeWithdraw(
       txHash: tx.txHash?.toString() ?? "",
     };
   } catch (error) {
-    logError(`Finalize withdrawal failed: ${error instanceof Error ? error.message : "Unknown error"}`);
+    logError(
+      `Finalize withdrawal failed: ${error instanceof Error ? error.message : "Unknown error"}`
+    );
     throw new ContractOperationError("executeFinalizeWithdraw", error);
   }
 }

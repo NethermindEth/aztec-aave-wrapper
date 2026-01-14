@@ -5,15 +5,15 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:628-663.
  */
 
-import {
-  type PublicClient,
-  type WalletClient,
-  type Chain,
-  type Transport,
-  type Account,
-  type Address,
-  type Abi,
-  type Hex,
+import type {
+  Abi,
+  Account,
+  Address,
+  Chain,
+  Hex,
+  PublicClient,
+  Transport,
+  WalletClient,
 } from "viem";
 import { logInfo, logSuccess } from "../../store/logger.js";
 

@@ -1,13 +1,7 @@
 import { type JSX, splitProps } from "solid-js";
 import { cn } from "~/lib/utils";
 
-export type ButtonVariant =
-  | "default"
-  | "destructive"
-  | "outline"
-  | "secondary"
-  | "ghost"
-  | "link";
+export type ButtonVariant = "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
 
 export type ButtonSize = "default" | "sm" | "lg" | "icon";
 

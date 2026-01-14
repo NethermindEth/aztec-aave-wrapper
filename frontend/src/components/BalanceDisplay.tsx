@@ -50,11 +50,7 @@ export interface BalanceDisplayProps {
  * @param fullPrecision - Whether to show all decimals
  * @returns Formatted balance string
  */
-export function formatBalance(
-  balance: string,
-  decimals: number,
-  fullPrecision = false
-): string {
+export function formatBalance(balance: string, decimals: number, fullPrecision = false): string {
   // Handle empty or invalid input
   if (!balance || balance === "") {
     return "0";
@@ -133,10 +129,7 @@ function formatWithSeparators(value: bigint): string {
 /**
  * Get token configuration, falling back to provided decimals or default
  */
-function getTokenConfig(
-  symbol: string,
-  overrideDecimals?: number
-): TokenConfig {
+function getTokenConfig(symbol: string, overrideDecimals?: number): TokenConfig {
   const known = KNOWN_TOKENS[symbol];
   if (known) {
     return known;

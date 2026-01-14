@@ -5,9 +5,8 @@
  * Bigint values are stored as strings to support SolidJS stores and JSON serialization.
  */
 
-import type { Address, AztecAddress } from "@aztec-aave-wrapper/shared";
-import type { IntentStatus } from "@aztec-aave-wrapper/shared";
-import type { OperationType, OperationStatus } from "./operations.js";
+import type { Address, AztecAddress, IntentStatus } from "@aztec-aave-wrapper/shared";
+import type { OperationStatus, OperationType } from "./operations.js";
 
 // =============================================================================
 // Bigint Serialization Utilities

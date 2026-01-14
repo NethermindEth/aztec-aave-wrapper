@@ -13,10 +13,8 @@ const alertVariants = {
     default: "bg-background text-foreground",
     destructive:
       "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
-    success:
-      "border-green-500/50 text-green-700 dark:text-green-400 [&>svg]:text-green-600",
-    warning:
-      "border-yellow-500/50 text-yellow-700 dark:text-yellow-400 [&>svg]:text-yellow-600",
+    success: "border-green-500/50 text-green-700 dark:text-green-400 [&>svg]:text-green-600",
+    warning: "border-yellow-500/50 text-yellow-700 dark:text-yellow-400 [&>svg]:text-yellow-600",
   },
 };
 
@@ -26,11 +24,7 @@ export function Alert(props: AlertProps) {
   return (
     <div
       role="alert"
-      class={cn(
-        alertVariants.base,
-        alertVariants.variant[local.variant ?? "default"],
-        local.class
-      )}
+      class={cn(alertVariants.base, alertVariants.variant[local.variant ?? "default"], local.class)}
       {...others}
     >
       {local.children}
@@ -44,10 +38,7 @@ export function AlertTitle(props: AlertTitleProps) {
   const [local, others] = splitProps(props, ["class", "children"]);
 
   return (
-    <h5
-      class={cn("mb-1 font-medium leading-none tracking-tight", local.class)}
-      {...others}
-    >
+    <h5 class={cn("mb-1 font-medium leading-none tracking-tight", local.class)} {...others}>
       {local.children}
     </h5>
   );

@@ -5,7 +5,7 @@
  * Addresses are truncated for display with hover tooltip showing full address.
  */
 
-import { For, Show, createSignal } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 
 /**
  * Address entry with label and address string
@@ -88,9 +88,17 @@ function AddressRow(props: { entry: AddressEntry }) {
       <span class="text-muted-foreground">{props.entry.label}</span>
       <div class="flex items-center gap-2">
         <span
+          role="button"
+          tabIndex={0}
           class="font-mono cursor-pointer hover:text-primary transition-colors"
           title={props.entry.address}
           onClick={handleCopy}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              handleCopy();
+            }
+          }}
         >
           {truncateAddress(props.entry.address)}
         </span>
@@ -183,14 +191,10 @@ export function AddressList(props: AddressListProps) {
       </Show>
       <Show
         when={props.addresses.length > 0}
-        fallback={
-          <p class="text-sm text-muted-foreground">No addresses to display</p>
-        }
+        fallback={<p class="text-sm text-muted-foreground">No addresses to display</p>}
       >
         <div class="space-y-2">
-          <For each={props.addresses}>
-            {(entry) => <AddressRow entry={entry} />}
-          </For>
+          <For each={props.addresses}>{(entry) => <AddressRow entry={entry} />}</For>
         </div>
       </Show>
     </div>

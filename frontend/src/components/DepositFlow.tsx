@@ -5,17 +5,17 @@
  * step indicator, and action button.
  */
 
-import { createSignal, Show, Switch, Match } from "solid-js";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { createSignal, Match, Show, Switch } from "solid-js";
+import { DEADLINE_CONSTRAINTS } from "../config/constants.js";
+import { useApp } from "../store/hooks.js";
+import { fromBigIntString } from "../types/state.js";
+import { StepIndicator } from "./StepIndicator";
+import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, type SelectOption } from "./ui/select";
-import { Alert, AlertDescription } from "./ui/alert";
-import { StepIndicator } from "./StepIndicator";
-import { useApp } from "../store/hooks.js";
-import { DEADLINE_CONSTRAINTS } from "../config/constants.js";
-import { fromBigIntString } from "../types/state.js";
 
 /**
  * Deposit flow step labels
@@ -55,16 +55,13 @@ export interface DepositFlowProps {
  * Validate amount input
  * @returns Error message or null if valid
  */
-function validateAmount(
-  amountStr: string,
-  maxBalance: bigint
-): string | null {
+function validateAmount(amountStr: string, maxBalance: bigint): string | null {
   if (!amountStr || amountStr.trim() === "") {
     return "Amount is required";
   }
 
   const amount = parseFloat(amountStr);
-  if (isNaN(amount)) {
+  if (Number.isNaN(amount)) {
     return "Invalid amount";
   }
 
@@ -140,8 +137,7 @@ export function DepositFlow(props: DepositFlowProps) {
 
   // Derived state
   const isOperationActive = () => state.operation.type === "deposit";
-  const isProcessing = () =>
-    isOperationActive() && state.operation.status === "pending";
+  const isProcessing = () => isOperationActive() && state.operation.status === "pending";
 
   const currentStepLabel = () => {
     if (!isOperationActive()) return "";
@@ -174,7 +170,7 @@ export function DepositFlow(props: DepositFlowProps) {
     }
 
     // Must have valid deadline
-    const deadlineError = validateDeadline(parseInt(deadline()));
+    const deadlineError = validateDeadline(parseInt(deadline(), 10));
     if (deadlineError) {
       return false;
     }
@@ -205,7 +201,7 @@ export function DepositFlow(props: DepositFlowProps) {
     }
 
     // Validate deadline
-    const deadlineSeconds = parseInt(deadline());
+    const deadlineSeconds = parseInt(deadline(), 10);
     const deadlineError = validateDeadline(deadlineSeconds);
     if (deadlineError) {
       setValidationError(deadlineError);
@@ -279,9 +275,7 @@ export function DepositFlow(props: DepositFlowProps) {
             disabled={isProcessing()}
             placeholder="Select deadline"
           />
-          <p class="text-xs text-muted-foreground">
-            Transaction must complete within this time
-          </p>
+          <p class="text-xs text-muted-foreground">Transaction must complete within this time</p>
         </div>
 
         {/* Step Progress */}
@@ -301,11 +295,7 @@ export function DepositFlow(props: DepositFlowProps) {
         </Show>
       </CardContent>
       <CardFooter>
-        <Button
-          class="w-full"
-          disabled={!canDeposit() || isProcessing()}
-          onClick={handleDeposit}
-        >
+        <Button class="w-full" disabled={!canDeposit() || isProcessing()} onClick={handleDeposit}>
           <Switch fallback="Deposit">
             <Match when={isProcessing()}>Processing...</Match>
             <Match when={!state.wallet.l1Address}>Connect Wallet</Match>

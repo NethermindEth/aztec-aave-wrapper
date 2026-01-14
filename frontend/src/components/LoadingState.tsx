@@ -8,8 +8,8 @@
 
 import type { Component } from "solid-js";
 import { Index } from "solid-js";
-import { Skeleton } from "./ui/skeleton";
 import { Card, CardContent, CardHeader } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
 
 /**
  * Props for LoadingState components
@@ -193,9 +193,7 @@ export const PositionsListSkeleton: Component<LoadingStateProps & { count?: numb
 
   return (
     <div class={`space-y-4 ${props.class ?? ""}`}>
-      <Index each={items()}>
-        {() => <PositionCardSkeleton />}
-      </Index>
+      <Index each={items()}>{() => <PositionCardSkeleton />}</Index>
     </div>
   );
 };

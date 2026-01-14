@@ -14,17 +14,17 @@
  */
 
 import {
-  type PublicClient,
-  type WalletClient,
-  type Chain,
-  type Transport,
-  type Account,
   type Abi,
-  type Hex,
+  type Account,
   type Address,
+  type Chain,
+  type Hex,
+  type PublicClient,
   pad,
+  type Transport,
+  type WalletClient,
 } from "viem";
-import { logInfo, logSuccess, logError } from "../../store/logger.js";
+import { logError, logInfo, logSuccess } from "../../store/logger.js";
 
 // =============================================================================
 // Types
@@ -291,9 +291,7 @@ export async function deployL1Contracts(
  * Extract bytecode from Foundry artifact format.
  * Foundry stores bytecode in artifact.bytecode.object
  */
-export function extractBytecode(artifact: {
-  bytecode: { object: string };
-}): Hex {
+export function extractBytecode(artifact: { bytecode: { object: string } }): Hex {
   const bytecode = artifact.bytecode.object;
   // Ensure it has 0x prefix
   return (bytecode.startsWith("0x") ? bytecode : `0x${bytecode}`) as Hex;
@@ -380,9 +378,7 @@ export async function fetchArtifact(
  * const addresses = await deployL1Contracts(client, wallet, artifacts, config);
  * ```
  */
-export async function fetchAllArtifacts(
-  baseUrl: string
-): Promise<L1DeploymentArtifacts> {
+export async function fetchAllArtifacts(baseUrl: string): Promise<L1DeploymentArtifacts> {
   const [
     mockERC20,
     mockAztecOutbox,

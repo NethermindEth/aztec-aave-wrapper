@@ -18,10 +18,7 @@ export function Progress(props: ProgressProps) {
       aria-valuemin={0}
       aria-valuemax={max()}
       aria-valuenow={value()}
-      class={cn(
-        "relative h-4 w-full overflow-hidden rounded-full bg-secondary",
-        local.class
-      )}
+      class={cn("relative h-4 w-full overflow-hidden rounded-full bg-secondary", local.class)}
       {...others}
     >
       <div

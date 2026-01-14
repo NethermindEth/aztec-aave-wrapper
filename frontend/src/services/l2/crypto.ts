@@ -19,9 +19,7 @@ import { loadAztecModules } from "./modules.js";
 /**
  * Fr type from Aztec SDK (field element)
  */
-export type Fr = InstanceType<
-  Awaited<ReturnType<typeof loadAztecModules>>["Fr"]
->;
+export type Fr = InstanceType<Awaited<ReturnType<typeof loadAztecModules>>["Fr"]>;
 
 /**
  * AztecAddress type from Aztec SDK
@@ -105,9 +103,7 @@ export async function generateSecretPair(): Promise<SecretPair> {
  * const hash = await computeSecretHashFromValue(secret);
  * ```
  */
-export async function computeSecretHashFromValue(
-  secret: Fr | bigint
-): Promise<Fr> {
+export async function computeSecretHashFromValue(secret: Fr | bigint): Promise<Fr> {
   const { Fr, computeSecretHash } = await loadAztecModules();
 
   const secretFr = typeof secret === "bigint" ? new Fr(secret) : secret;
@@ -157,9 +153,7 @@ export async function computeOwnerHash(owner: AztecAddress): Promise<Fr> {
  * const ownerHash = await computeOwnerHashFromBigInt(ownerBigInt);
  * ```
  */
-export async function computeOwnerHashFromBigInt(
-  ownerBigInt: bigint
-): Promise<Fr> {
+export async function computeOwnerHashFromBigInt(ownerBigInt: bigint): Promise<Fr> {
   const { poseidon2Hash } = await loadAztecModules();
   return poseidon2Hash([ownerBigInt]);
 }
@@ -189,15 +183,11 @@ export async function computeOwnerHashFromBigInt(
  * const salt = await computeSalt(userAddress, secretHash);
  * ```
  */
-export async function computeSalt(
-  caller: AztecAddress,
-  secretHash: Fr | bigint
-): Promise<Fr> {
+export async function computeSalt(caller: AztecAddress, secretHash: Fr | bigint): Promise<Fr> {
   const { poseidon2Hash } = await loadAztecModules();
 
   const callerField = caller.toBigInt();
-  const secretHashBigInt =
-    typeof secretHash === "bigint" ? secretHash : secretHash.toBigInt();
+  const secretHashBigInt = typeof secretHash === "bigint" ? secretHash : secretHash.toBigInt();
 
   return poseidon2Hash([callerField, secretHashBigInt]);
 }
@@ -250,8 +240,7 @@ export async function computeIntentId(params: {
   const { poseidon2Hash } = await loadAztecModules();
 
   const callerField = params.caller.toBigInt();
-  const saltBigInt =
-    typeof params.salt === "bigint" ? params.salt : params.salt.toBigInt();
+  const saltBigInt = typeof params.salt === "bigint" ? params.salt : params.salt.toBigInt();
 
   return poseidon2Hash([
     callerField,

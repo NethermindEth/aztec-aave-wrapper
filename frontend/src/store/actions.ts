@@ -6,17 +6,17 @@
  */
 
 import type { Address, AztecAddress } from "@aztec-aave-wrapper/shared";
+import type { OperationStatus, OperationType } from "../types/operations.js";
 import type {
+  ContractsState,
   L1ConnectionState,
   L2ConnectionState,
-  WalletState,
-  ContractsState,
-  OperationState,
-  PositionDisplay,
   LogEntry,
   LogLevel,
+  OperationState,
+  PositionDisplay,
+  WalletState,
 } from "../types/state.js";
-import type { OperationType, OperationStatus } from "../types/operations.js";
 import { setState } from "./state.js";
 
 // =============================================================================
@@ -150,10 +150,7 @@ export function setContracts(contracts: Partial<ContractsState>): void {
 /**
  * Start a new operation
  */
-export function startOperation(
-  type: OperationType,
-  totalSteps: number
-): void {
+export function startOperation(type: OperationType, totalSteps: number): void {
   setState("operation", {
     type,
     step: 1,
@@ -200,11 +197,7 @@ const MAX_LOG_ENTRIES = 100;
 /**
  * Add log entry to operation
  */
-export function addOperationLog(
-  level: LogLevel,
-  message: string,
-  txHash?: string
-): void {
+export function addOperationLog(level: LogLevel, message: string, txHash?: string): void {
   const entry: LogEntry = {
     timestamp: Date.now(),
     level,
@@ -284,24 +277,15 @@ export function addPosition(position: PositionDisplay): void {
 /**
  * Update an existing position by intent ID
  */
-export function updatePosition(
-  intentId: string,
-  updates: Partial<PositionDisplay>
-): void {
-  setState(
-    "positions",
-    (pos) => pos.intentId === intentId,
-    updates
-  );
+export function updatePosition(intentId: string, updates: Partial<PositionDisplay>): void {
+  setState("positions", (pos) => pos.intentId === intentId, updates);
 }
 
 /**
  * Remove a position by intent ID
  */
 export function removePosition(intentId: string): void {
-  setState("positions", (positions) =>
-    positions.filter((p) => p.intentId !== intentId)
-  );
+  setState("positions", (positions) => positions.filter((p) => p.intentId !== intentId));
 }
 
 // =============================================================================

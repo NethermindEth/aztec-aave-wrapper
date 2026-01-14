@@ -5,24 +5,20 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:336-371.
  */
 
+import { CHAIN_IDS, LOCAL_PRIVATE_KEYS, LOCAL_RPC_URLS } from "@aztec-aave-wrapper/shared";
 import {
+  type Account,
+  type Chain,
   createPublicClient,
   createWalletClient,
-  http,
   defineChain,
+  http,
   type PublicClient,
-  type WalletClient,
-  type Chain,
   type Transport,
-  type Account,
+  type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { foundry } from "viem/chains";
-import {
-  CHAIN_IDS,
-  LOCAL_RPC_URLS,
-  LOCAL_PRIVATE_KEYS,
-} from "@aztec-aave-wrapper/shared";
 import { getDefaultL1Chain, isLocalDevelopment } from "../../config/chains.js";
 
 // =============================================================================
@@ -94,9 +90,7 @@ export interface L1ClientConfig {
  * const chainId = await publicClient.getChainId();
  * ```
  */
-export function createL1PublicClient(
-  config?: L1ClientConfig
-): PublicClient<Transport, Chain> {
+export function createL1PublicClient(config?: L1ClientConfig): PublicClient<Transport, Chain> {
   const chainConfig = getDefaultL1Chain();
   const rpcUrl = config?.rpcUrl ?? chainConfig.rpcUrl;
   const chainId = config?.chainId ?? chainConfig.chainId;
@@ -183,9 +177,7 @@ export function createDevnetL1Clients(
   userPrivateKey: `0x${string}` = DevnetAccounts.user1
 ): L1Clients {
   if (!isLocalDevelopment()) {
-    console.warn(
-      "createDevnetL1Clients() called outside local development environment"
-    );
+    console.warn("createDevnetL1Clients() called outside local development environment");
   }
 
   const publicClient = createL1PublicClient();
@@ -208,9 +200,7 @@ export function createDevnetL1Clients(
  * @returns Chain ID if connected
  * @throws Error if connection fails
  */
-export async function verifyL1Connection(
-  client: PublicClient<Transport, Chain>
-): Promise<number> {
+export async function verifyL1Connection(client: PublicClient<Transport, Chain>): Promise<number> {
   const chainId = await client.getChainId();
   return chainId;
 }

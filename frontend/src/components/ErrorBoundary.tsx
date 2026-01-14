@@ -11,9 +11,9 @@
  * - Server-side rendering errors
  */
 
-import { ErrorBoundary as SolidErrorBoundary, type ParentComponent, type JSX } from "solid-js";
+import { type JSX, type ParentComponent, ErrorBoundary as SolidErrorBoundary } from "solid-js";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "./ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 
 export interface ErrorFallbackProps {
   error: unknown;
@@ -43,21 +43,13 @@ const ErrorFallback = (props: ErrorFallbackProps) => {
     <Card class="border-destructive bg-destructive/10">
       <CardHeader>
         <CardTitle class="text-destructive">Something went wrong</CardTitle>
-        <CardDescription>
-          An error occurred while rendering this component.
-        </CardDescription>
+        <CardDescription>An error occurred while rendering this component.</CardDescription>
       </CardHeader>
       <CardContent class="space-y-4">
         <div class="bg-muted p-3 rounded-md">
-          <p class="text-sm font-mono text-destructive break-all">
-            {getErrorMessage(props.error)}
-          </p>
+          <p class="text-sm font-mono text-destructive break-all">{getErrorMessage(props.error)}</p>
         </div>
-        <Button
-          variant="outline"
-          onClick={props.reset}
-          class="w-full"
-        >
+        <Button variant="outline" onClick={props.reset} class="w-full">
           Try Again
         </Button>
       </CardContent>

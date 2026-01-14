@@ -5,15 +5,19 @@
  * Handles deployment loading state and prevents duplicate deployments.
  */
 
-import { Show, For, createSignal } from "solid-js";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { useApp } from "../store/hooks.js";
+import { createSignal, For, Show } from "solid-js";
+import {
+  createL1PublicClient,
+  createL1WalletClient,
+  DevnetAccounts,
+} from "../services/l1/client.js";
 import { deployL1Contracts, fetchAllArtifacts } from "../services/l1/deploy.js";
-import { deployL2Contract } from "../services/l2/deploy.js";
-import { createL1PublicClient, createL1WalletClient, DevnetAccounts } from "../services/l1/client.js";
-import { createTestWallet } from "../services/l2/wallet.js";
 import { createL2NodeClient } from "../services/l2/client.js";
+import { deployL2Contract } from "../services/l2/deploy.js";
+import { createTestWallet } from "../services/l2/wallet.js";
+import { useApp } from "../store/hooks.js";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 
 /**
  * Truncate an address for display
@@ -108,11 +112,9 @@ export function ContractDeployment() {
 
       // Deploy L2 contract first (we need a placeholder portal address)
       // For now, use a zero address placeholder - will be updated after L1 deployment
-      const { address: l2Address } = await deployL2Contract(
-        wallet,
-        walletAddress,
-        { portalAddress: "0x0000000000000000000000000000000000000000" }
-      );
+      const { address: l2Address } = await deployL2Contract(wallet, walletAddress, {
+        portalAddress: "0x0000000000000000000000000000000000000000",
+      });
 
       // Update L2 wrapper address in state
       actions.setContracts({ l2Wrapper: l2Address.toString() });
@@ -129,15 +131,10 @@ export function ContractDeployment() {
 
       // Fetch artifacts and deploy L1 contracts
       const artifacts = await fetchAllArtifacts("/artifacts");
-      const l1Addresses = await deployL1Contracts(
-        publicClient,
-        walletClient,
-        artifacts,
-        {
-          l2ContractAddress: l2Address.toString() as `0x${string}`,
-          ownerAddress: l1Address,
-        }
-      );
+      const l1Addresses = await deployL1Contracts(publicClient, walletClient, artifacts, {
+        l2ContractAddress: l2Address.toString() as `0x${string}`,
+        ownerAddress: l1Address,
+      });
 
       // Update L1 contract addresses in state
       actions.setContracts({

@@ -5,8 +5,8 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:411-434.
  */
 
-import type { AztecModules } from "./modules.js";
 import type { AztecNodeClient } from "./client.js";
+import type { AztecModules } from "./modules.js";
 
 // =============================================================================
 // Types

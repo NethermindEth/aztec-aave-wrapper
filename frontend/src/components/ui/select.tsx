@@ -1,4 +1,4 @@
-import { type JSX, splitProps, createSignal, Show, For, createEffect, onCleanup } from "solid-js";
+import { createEffect, createSignal, For, type JSX, onCleanup, Show, splitProps } from "solid-js";
 import { cn } from "~/lib/utils";
 
 export interface SelectOption {
@@ -21,7 +21,7 @@ export interface SelectProps {
 }
 
 export function Select(props: SelectProps) {
-  const [local, others] = splitProps(props, [
+  const [local] = splitProps(props, [
     "options",
     "value",
     "onChange",
@@ -143,10 +143,7 @@ export function Select(props: SelectProps) {
           {selectedOption()?.label ?? local.placeholder ?? "Select..."}
         </span>
         <svg
-          class={cn(
-            "h-4 w-4 opacity-50 transition-transform",
-            isOpen() && "rotate-180"
-          )}
+          class={cn("h-4 w-4 opacity-50 transition-transform", isOpen() && "rotate-180")}
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
           fill="none"

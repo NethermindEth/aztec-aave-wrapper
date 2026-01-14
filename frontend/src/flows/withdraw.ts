@@ -14,64 +14,43 @@
  */
 
 import {
-  type PublicClient,
-  type WalletClient,
-  type Chain,
-  type Transport,
   type Account,
   type Address,
+  type Chain,
   type Hex,
+  type PublicClient,
   pad,
+  type Transport,
   toHex,
+  type WalletClient,
 } from "viem";
 
 // L1 Services
-import { type L1Clients } from "../services/l1/client.js";
-import {
-  executeWithdraw,
-  getIntentShares,
-  type MerkleProof,
-} from "../services/l1/portal.js";
-import {
-  computeWithdrawIntentHash,
-  type WithdrawIntent,
-} from "../services/l1/intent.js";
+import type { L1Clients } from "../services/l1/client.js";
+import { computeWithdrawIntentHash, type WithdrawIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
+import { executeWithdraw, type MerkleProof } from "../services/l1/portal.js";
 
 // L2 Services
-import { type AztecNodeClient } from "../services/l2/client.js";
-import { type AztecAddress } from "../services/l2/wallet.js";
-import { type AaveWrapperContract } from "../services/l2/deploy.js";
+import type { AztecNodeClient } from "../services/l2/client.js";
+import { computeOwnerHash, generateSecretPair } from "../services/l2/crypto.js";
+import type { AaveWrapperContract } from "../services/l2/deploy.js";
 import {
-  executeRequestWithdraw,
   executeFinalizeWithdraw,
+  executeRequestWithdraw,
   type Fr,
 } from "../services/l2/operations.js";
+import type { AztecAddress } from "../services/l2/wallet.js";
 import {
-  generateSecretPair,
-  computeOwnerHash,
-} from "../services/l2/crypto.js";
-
-// Shared types
-import { IntentStatus } from "@aztec-aave-wrapper/shared";
-
-// Store
-import {
-  logInfo,
-  logSuccess,
-  logError,
-  logStep,
-  logSection,
-} from "../store/logger.js";
-import {
-  startOperation,
-  setOperationStep,
-  setOperationStatus,
-  setOperationIntentId,
-  setOperationError,
-  updatePosition,
   removePosition,
+  setOperationError,
+  setOperationIntentId,
+  setOperationStatus,
+  setOperationStep,
+  startOperation,
 } from "../store/actions.js";
+// Store
+import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
 import { getWithdrawStepCount } from "../types/operations.js";
 import { formatUSDC } from "../types/state.js";
 
@@ -152,8 +131,7 @@ export class WithdrawFlowError extends Error {
     public readonly stepName: string,
     public readonly cause: unknown
   ) {
-    const message =
-      cause instanceof Error ? cause.message : "Unknown error";
+    const message = cause instanceof Error ? cause.message : "Unknown error";
     super(`Withdraw failed at step ${step} (${stepName}): ${message}`);
     this.name = "WithdrawFlowError";
   }
@@ -290,10 +268,7 @@ async function setMockOutboxMessageValid(
  * @param positionShares - Shares available in the position
  * @throws PartialWithdrawError if amounts don't match
  */
-function validateFullWithdrawal(
-  requestedAmount: bigint,
-  positionShares: bigint
-): void {
+function validateFullWithdrawal(requestedAmount: bigint, positionShares: bigint): void {
   if (requestedAmount !== positionShares) {
     throw new PartialWithdrawError(requestedAmount, positionShares);
   }
@@ -389,7 +364,9 @@ export async function executeWithdrawFlow(
     setOperationStep(2);
 
     logSection("L2", "Attempting request_withdraw...");
-    logInfo(`Position nonce (deposit intent ID): ${position.depositIntentId.toString().slice(0, 16)}...`);
+    logInfo(
+      `Position nonce (deposit intent ID): ${position.depositIntentId.toString().slice(0, 16)}...`
+    );
 
     let intentId: Fr;
     try {
@@ -511,14 +488,8 @@ export async function executeWithdrawFlow(
       logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
     } catch (error) {
       // In devnet without real L1→L2 messaging, finalize may fail
-      logSection(
-        "L2",
-        "finalize_withdraw may fail without real L1→L2 message",
-        "warning"
-      );
-      logInfo(
-        error instanceof Error ? error.message.slice(0, 100) : "Unknown error"
-      );
+      logSection("L2", "finalize_withdraw may fail without real L1→L2 message", "warning");
+      logInfo(error instanceof Error ? error.message.slice(0, 100) : "Unknown error");
     }
 
     // Remove position from store (full withdrawal consumes the position)
@@ -540,10 +511,7 @@ export async function executeWithdrawFlow(
     setOperationError(error instanceof Error ? error.message : "Unknown error");
 
     // Re-throw specific error types
-    if (
-      error instanceof PositionNotFoundError ||
-      error instanceof PartialWithdrawError
-    ) {
+    if (error instanceof PositionNotFoundError || error instanceof PartialWithdrawError) {
       throw error;
     }
 
@@ -579,10 +547,7 @@ export async function executeWithdrawFlowWithRetry(
       return await executeWithdrawFlow(l1Clients, l1Addresses, l2Context, config);
     } catch (error) {
       // Don't retry permanent failures
-      if (
-        error instanceof PositionNotFoundError ||
-        error instanceof PartialWithdrawError
-      ) {
+      if (error instanceof PositionNotFoundError || error instanceof PartialWithdrawError) {
         throw error;
       }
 
@@ -590,7 +555,7 @@ export async function executeWithdrawFlowWithRetry(
       logError(`Attempt ${attempt} failed: ${lastError.message}`);
 
       if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+        const delay = Math.min(1000 * 2 ** (attempt - 1), 10000);
         logInfo(`Retrying in ${delay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }

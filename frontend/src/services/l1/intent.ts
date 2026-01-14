@@ -7,12 +7,7 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:501-533.
  */
 
-import {
-  keccak256,
-  encodeAbiParameters,
-  type Address,
-  type Hex,
-} from "viem";
+import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 
 // =============================================================================
 // Types
@@ -86,13 +81,13 @@ export function computeDepositIntentHash(intent: DepositIntent): Hex {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "bytes32" },  // intentId
-        { type: "bytes32" },  // ownerHash
-        { type: "address" },  // asset
-        { type: "uint128" },  // amount
-        { type: "uint8" },    // originalDecimals
-        { type: "uint64" },   // deadline
-        { type: "bytes32" },  // salt
+        { type: "bytes32" }, // intentId
+        { type: "bytes32" }, // ownerHash
+        { type: "address" }, // asset
+        { type: "uint128" }, // amount
+        { type: "uint8" }, // originalDecimals
+        { type: "uint64" }, // deadline
+        { type: "bytes32" }, // salt
       ],
       [
         intent.intentId,
@@ -131,17 +126,12 @@ export function computeWithdrawIntentHash(intent: WithdrawIntent): Hex {
   return keccak256(
     encodeAbiParameters(
       [
-        { type: "bytes32" },  // intentId
-        { type: "bytes32" },  // ownerHash
-        { type: "uint128" },  // amount
-        { type: "uint64" },   // deadline
+        { type: "bytes32" }, // intentId
+        { type: "bytes32" }, // ownerHash
+        { type: "uint128" }, // amount
+        { type: "uint64" }, // deadline
       ],
-      [
-        intent.intentId,
-        intent.ownerHash,
-        intent.amount,
-        intent.deadline,
-      ]
+      [intent.intentId, intent.ownerHash, intent.amount, intent.deadline]
     )
   );
 }

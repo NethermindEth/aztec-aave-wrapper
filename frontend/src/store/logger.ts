@@ -51,11 +51,7 @@ export function formatLogTimestampWithMs(timestamp: number): string {
  * Add a log entry to the operation log.
  * Automatically enforces MAX_LOG_ENTRIES limit.
  */
-export function log(
-  level: LogLevel,
-  message: string,
-  txHash?: string
-): void {
+export function log(level: LogLevel, message: string, txHash?: string): void {
   const entry = {
     timestamp: Date.now(),
     level,
@@ -105,11 +101,7 @@ export function logError(message: string, txHash?: string): void {
  * Log a step in the operation process.
  * Format: "Step X/Y: description"
  */
-export function logStep(
-  step: number,
-  totalSteps: number,
-  description: string
-): void {
+export function logStep(step: number, totalSteps: number, description: string): void {
   log("info", `Step ${step}/${totalSteps}: ${description}`);
 }
 
@@ -117,11 +109,7 @@ export function logStep(
  * Log with section prefix.
  * Format: "[section] message"
  */
-export function logSection(
-  section: string,
-  message: string,
-  level: LogLevel = "info"
-): void {
+export function logSection(section: string, message: string, level: LogLevel = "info"): void {
   log(level, `[${section}] ${message}`);
 }
 

@@ -32,10 +32,7 @@ interface FoundryArtifact {
 /**
  * Supported contract names for artifact loading
  */
-export type ContractName =
-  | "MockERC20"
-  | "MockLendingPool"
-  | "AztecAavePortalL1Simple";
+export type ContractName = "MockERC20" | "MockLendingPool" | "AztecAavePortalL1Simple";
 
 /**
  * Cache for loaded artifacts to avoid redundant fetches
@@ -49,9 +46,7 @@ const artifactCache = new Map<ContractName, ContractArtifact>();
  * @returns Contract artifact with ABI and bytecode
  * @throws Error if artifact cannot be loaded or parsed
  */
-export async function loadArtifact(
-  contractName: ContractName
-): Promise<ContractArtifact> {
+export async function loadArtifact(contractName: ContractName): Promise<ContractArtifact> {
   // Check cache first
   const cached = artifactCache.get(contractName);
   if (cached) {
@@ -90,9 +85,7 @@ export async function loadArtifact(
   }
 
   if (!foundryArtifact.bytecode?.object) {
-    throw new Error(
-      `Invalid artifact for ${contractName}: missing bytecode.object`
-    );
+    throw new Error(`Invalid artifact for ${contractName}: missing bytecode.object`);
   }
 
   // Extract and format bytecode
@@ -135,11 +128,7 @@ export async function loadArtifact(
  * @throws AggregateError if any artifacts fail to load, containing all individual errors
  */
 export async function preloadArtifacts(): Promise<void> {
-  const contracts: ContractName[] = [
-    "MockERC20",
-    "MockLendingPool",
-    "AztecAavePortalL1Simple",
-  ];
+  const contracts: ContractName[] = ["MockERC20", "MockLendingPool", "AztecAavePortalL1Simple"];
 
   const results = await Promise.allSettled(contracts.map(loadArtifact));
 
@@ -153,7 +142,9 @@ export async function preloadArtifacts(): Promise<void> {
   if (failures.length > 0) {
     const errors = failures.map(
       ({ result, contract }) =>
-        new Error(`${contract}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`)
+        new Error(
+          `${contract}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`
+        )
     );
     throw new AggregateError(errors, `Failed to load ${failures.length} artifact(s)`);
   }

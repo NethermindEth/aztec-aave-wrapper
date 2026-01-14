@@ -1,10 +1,10 @@
 import {
-  type JSX,
-  createContext,
-  useContext,
-  createSignal,
-  splitProps,
   type Accessor,
+  createContext,
+  createSignal,
+  type JSX,
+  splitProps,
+  useContext,
 } from "solid-js";
 import { cn } from "~/lib/utils";
 

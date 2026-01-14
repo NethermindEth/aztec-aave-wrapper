@@ -6,7 +6,7 @@
  */
 
 import { For, Show } from "solid-js";
-import { PositionCard, type Position } from "./PositionCard";
+import { type Position, PositionCard } from "./PositionCard";
 
 /**
  * Props for PositionsList component
@@ -65,12 +65,7 @@ export function PositionsList(props: PositionsListProps) {
         >
           <div class="grid gap-4">
             <For each={props.positions}>
-              {(position) => (
-                <PositionCard
-                  position={position}
-                  onWithdraw={props.onWithdraw}
-                />
-              )}
+              {(position) => <PositionCard position={position} onWithdraw={props.onWithdraw} />}
             </For>
           </div>
         </Show>

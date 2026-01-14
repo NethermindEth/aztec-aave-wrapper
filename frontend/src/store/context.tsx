@@ -7,8 +7,8 @@
 
 import { createContext, type JSX } from "solid-js";
 import type { AppState } from "../types/state.js";
-import { state, setState, type SetAppState } from "./state.js";
 import * as actions from "./actions.js";
+import { type SetAppState, setState, state } from "./state.js";
 
 // =============================================================================
 // Context Types
@@ -86,9 +86,5 @@ const contextValue: AppContextValue = {
  * ```
  */
 export function AppProvider(props: AppProviderProps): JSX.Element {
-  return (
-    <AppContext.Provider value={contextValue}>
-      {props.children}
-    </AppContext.Provider>
-  );
+  return <AppContext.Provider value={contextValue}>{props.children}</AppContext.Provider>;
 }

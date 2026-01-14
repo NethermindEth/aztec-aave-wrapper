@@ -5,14 +5,15 @@
  * and action button. Supports full withdrawal only (MVP constraint).
  */
 
-import { createSignal, Show, Switch, Match, For, createMemo } from "solid-js";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
-import { Button } from "./ui/button";
-import { Select, type SelectOption } from "./ui/select";
-import { Alert, AlertDescription } from "./ui/alert";
-import { StepIndicator } from "./StepIndicator";
+import { createMemo, createSignal, Match, Show, Switch } from "solid-js";
 import { useApp } from "../store/hooks.js";
+import { IntentStatus } from "../types/index.js";
 import type { PositionDisplay } from "../types/state.js";
+import { StepIndicator } from "./StepIndicator";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Select, type SelectOption } from "./ui/select";
 
 /**
  * Withdraw flow step labels
@@ -39,7 +40,7 @@ export interface WithdrawFlowProps {
  */
 function positionsToOptions(positions: PositionDisplay[]): SelectOption[] {
   return positions
-    .filter((p) => p.status === "finalized")
+    .filter((p) => p.status === IntentStatus.Active)
     .map((p) => ({
       value: p.intentId,
       label: `${p.sharesFormatted} (${p.intentId.slice(0, 10)}...)`,
@@ -78,8 +79,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
   );
 
   const isOperationActive = () => state.operation.type === "withdraw";
-  const isProcessing = () =>
-    isOperationActive() && state.operation.status === "pending";
+  const isProcessing = () => isOperationActive() && state.operation.status === "pending";
 
   const currentStepLabel = () => {
     if (!isOperationActive()) return "";
@@ -110,9 +110,9 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
       return false;
     }
 
-    // Selected position must exist and be finalized
+    // Selected position must exist and be active (deposit finalized)
     const position = selectedPositionData();
-    if (!position || position.status !== "finalized") {
+    if (!position || position.status !== IntentStatus.Active) {
       return false;
     }
 
@@ -137,7 +137,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
       return;
     }
 
-    if (position.status !== "finalized") {
+    if (position.status !== IntentStatus.Active) {
       setValidationError("Position is not available for withdrawal");
       return;
     }
@@ -219,11 +219,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
         </Show>
       </CardContent>
       <CardFooter>
-        <Button
-          class="w-full"
-          disabled={!canWithdraw() || isProcessing()}
-          onClick={handleWithdraw}
-        >
+        <Button class="w-full" disabled={!canWithdraw() || isProcessing()} onClick={handleWithdraw}>
           <Switch fallback="Withdraw">
             <Match when={isProcessing()}>Processing...</Match>
             <Match when={!state.wallet.l1Address}>Connect Wallet</Match>

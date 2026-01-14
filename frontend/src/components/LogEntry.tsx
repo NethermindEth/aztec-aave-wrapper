@@ -5,7 +5,7 @@
  * Supports displaying additional data objects in a readable format.
  */
 
-import { Show, For } from "solid-js";
+import { For, Show } from "solid-js";
 
 /**
  * Log level for categorizing log messages
@@ -140,9 +140,7 @@ export function LogEntry(props: LogEntryProps) {
     <div class="py-0.5">
       <div class="flex flex-wrap items-start gap-2">
         {/* Timestamp */}
-        <span class="shrink-0 text-muted-foreground">
-          [{formatTimestamp(props.timestamp)}]
-        </span>
+        <span class="shrink-0 text-muted-foreground">[{formatTimestamp(props.timestamp)}]</span>
 
         {/* Section badge */}
         <Show when={parsed().section}>
