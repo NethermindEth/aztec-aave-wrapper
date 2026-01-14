@@ -22,16 +22,13 @@ make check-tooling
 # 1. Install dependencies
 make install
 
-# 2. Start local devnet (Anvil L1 + Aztec Sandbox)
-make devnet-up
-
-# 3. Wait for services to be ready (~30 seconds)
-make devnet-health
-
-# 4. Build all contracts
+# 2. Build all contracts
 make build
 
-# 5. Run the full deposit/withdraw flow
+# 3. Start local devnet and deploy contracts
+make devnet-up
+
+# 4. Run the full deposit/withdraw flow
 cd e2e && bun run full-flow
 ```
 
@@ -127,10 +124,11 @@ The `full-flow` script shows the complete deposit journey with balance tracking:
 
 ```bash
 # Start/stop devnet
-make devnet-up       # Start Anvil L1 + Aztec Sandbox
+make devnet-up       # Start Anvil L1 + Aztec Sandbox + deploy contracts
 make devnet-down     # Stop all containers
 make devnet-health   # Check services are ready
-make devnet-clean    # Full cleanup and restart
+make deploy-local    # Redeploy contracts (devnet must be running)
+make devnet-clean    # Full cleanup with volume removal
 
 # Build
 make build           # Build all contracts
@@ -230,10 +228,12 @@ aztec-aave-wrapper/
 │       └── utils/             # Aztec helpers
 │
 ├── scripts/
+│   ├── deploy-local.ts        # Contract deployment script
 │   └── wait-for-services.sh   # Health check script
 │
 ├── docker-compose.yml         # Local devnet configuration
 ├── Makefile                   # Build/test/deploy commands
+├── .deployments.local.json    # Deployed contract addresses (generated)
 └── CLAUDE.md                  # Developer guidelines
 ```
 
@@ -290,11 +290,10 @@ cd eth && forge test --match-test test_executeDeposit -vvv
 
 ### E2E Tests
 
-Requires running devnet:
+Requires running devnet (contracts are deployed automatically):
 
 ```bash
 make devnet-up
-make devnet-health
 make e2e
 ```
 
@@ -307,8 +306,7 @@ cd e2e && bun run full-flow
 ```
 
 This script:
-- Deploys all L1 contracts (MockUSDC, MockAave, Portal)
-- Deploys L2 AaveWrapper contract
+- Uses contracts deployed by `make devnet-up`
 - Shows user funding the portal with USDC
 - Demonstrates relayer executing deposit on L1
 - Tracks balances at each step

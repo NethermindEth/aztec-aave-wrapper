@@ -310,7 +310,7 @@ async function main() {
     "contracts/mocks/MockERC20.sol:MockERC20",
     ['"Mock USDC"', '"USDC"', "6"],
     L1_RPC,
-    "l1"
+    "eth"
   );
 
   // Deploy MockLendingPool
@@ -318,7 +318,7 @@ async function main() {
     "contracts/mocks/MockLendingPool.sol:MockLendingPool",
     [],
     L1_RPC,
-    "l1"
+    "eth"
   );
 
   // ---------------------------------------------------------------------------
@@ -345,7 +345,7 @@ async function main() {
       DEPLOYER_ADDRESS,
     ],
     L1_RPC,
-    "l1"
+    "eth"
   );
 
   // ---------------------------------------------------------------------------

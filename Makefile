@@ -180,7 +180,7 @@ check-tooling:
 # Devnet Management
 # ==============================================================================
 
-## devnet-up: Start local development network (Anvil L1, Aztec Sandbox)
+## devnet-up: Start local development network and deploy contracts
 devnet-up:
 	@echo ""
 	@echo "Starting local devnet..."
@@ -192,7 +192,13 @@ devnet-up:
 	@echo ""
 	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up -d
 	@echo ""
-	@echo "Devnet started. Run 'make devnet-health' to check status."
+	@echo "Waiting for services to be healthy..."
+	@./scripts/wait-for-services.sh
+	@echo ""
+	@echo "Deploying contracts..."
+	@bun run scripts/deploy-local.ts
+	@echo ""
+	@echo -e "$(GREEN)Devnet ready with contracts deployed!$(NC)"
 	@echo "Run 'make devnet-logs' to view logs."
 	@echo ""
 
