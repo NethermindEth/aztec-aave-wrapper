@@ -85,12 +85,22 @@ export function setWallet(wallet: Partial<WalletState>): void {
   if (wallet.l2Address !== undefined) {
     setState("wallet", "l2Address", wallet.l2Address);
   }
+  if (wallet.ethBalance !== undefined) {
+    setState("wallet", "ethBalance", wallet.ethBalance);
+  }
   if (wallet.usdcBalance !== undefined) {
     setState("wallet", "usdcBalance", wallet.usdcBalance);
   }
   if (wallet.aTokenBalance !== undefined) {
     setState("wallet", "aTokenBalance", wallet.aTokenBalance);
   }
+}
+
+/**
+ * Set ETH balance (as string)
+ */
+export function setEthBalance(balance: string): void {
+  setState("wallet", "ethBalance", balance);
 }
 
 /**
@@ -309,6 +319,7 @@ export function resetState(): void {
   setState("wallet", {
     l1Address: null,
     l2Address: null,
+    ethBalance: "0",
     usdcBalance: "0",
     aTokenBalance: "0",
   });

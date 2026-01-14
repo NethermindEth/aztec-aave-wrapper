@@ -133,6 +133,8 @@ export interface WalletState {
   l1Address: Address | null;
   /** Connected L2 wallet address */
   l2Address: AztecAddress | null;
+  /** L1 ETH balance as string */
+  ethBalance: string;
   /** USDC balance as string */
   usdcBalance: string;
   /** aToken balance as string */
@@ -237,6 +239,7 @@ export function createInitialAppState(): AppState {
     wallet: {
       l1Address: null,
       l2Address: null,
+      ethBalance: "0",
       usdcBalance: "0",
       aTokenBalance: "0",
     },

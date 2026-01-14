@@ -51,6 +51,22 @@ const nodePolyfillsFix = (options?: PolyfillOptions | undefined): Plugin => {
       if (source === 'lmdb') {
         return path.resolve(__dirname, './src/shims/lmdb.ts');
       }
+      // Handle async_hooks - redirect to our shim (Node.js module)
+      if (source === 'async_hooks') {
+        return path.resolve(__dirname, './src/shims/async_hooks.ts');
+      }
+      // Handle fs/promises - redirect to our shim (Node.js module)
+      if (source === 'fs/promises') {
+        return path.resolve(__dirname, './src/shims/fs-promises.ts');
+      }
+      // Handle node:util - redirect to our shim (Node.js module)
+      if (source === 'node:util') {
+        return path.resolve(__dirname, './src/shims/node-util.ts');
+      }
+      // Handle os - redirect to our shim (Node.js module)
+      if (source === 'os') {
+        return path.resolve(__dirname, './src/shims/os.ts');
+      }
     },
   };
 };
@@ -79,6 +95,10 @@ export default defineConfig({
           src: '../eth/out/AztecAavePortalL1Simple.sol/AztecAavePortalL1Simple.json',
           dest: 'artifacts',
         },
+        {
+          src: '../.deployments.local.json',
+          dest: '.',
+        },
       ],
     }),
   ],
@@ -101,6 +121,14 @@ export default defineConfig({
       'module': path.resolve(__dirname, './src/shims/module.ts'),
       // Provide lmdb shim (native Node.js module not available in browser)
       'lmdb': path.resolve(__dirname, './src/shims/lmdb.ts'),
+      // Provide async_hooks shim (Node.js module not available in browser)
+      'async_hooks': path.resolve(__dirname, './src/shims/async_hooks.ts'),
+      // Provide fs/promises shim (Node.js module not available in browser)
+      'fs/promises': path.resolve(__dirname, './src/shims/fs-promises.ts'),
+      // Provide node:util shim (Node.js module not available in browser)
+      'node:util': path.resolve(__dirname, './src/shims/node-util.ts'),
+      // Provide os shim (Node.js module not available in browser)
+      'os': path.resolve(__dirname, './src/shims/os.ts'),
     },
   },
   server: {
