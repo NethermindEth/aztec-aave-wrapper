@@ -194,6 +194,9 @@ export function setOperationError(error: string): void {
   setState("operation", "status", "error");
 }
 
+/** Maximum number of log entries to retain */
+const MAX_LOG_ENTRIES = 100;
+
 /**
  * Add log entry to operation
  */
@@ -208,7 +211,14 @@ export function addOperationLog(
     message,
     txHash,
   };
-  setState("operation", "logs", (logs) => [...logs, entry]);
+  setState("operation", "logs", (logs) => {
+    const newLogs = [...logs, entry];
+    // Trim oldest entries if exceeding max limit to prevent memory issues
+    if (newLogs.length > MAX_LOG_ENTRIES) {
+      return newLogs.slice(newLogs.length - MAX_LOG_ENTRIES);
+    }
+    return newLogs;
+  });
 }
 
 /**

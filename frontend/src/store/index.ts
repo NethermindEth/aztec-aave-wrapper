@@ -61,3 +61,28 @@ export {
   // Reset action
   resetState,
 } from "./actions.js";
+
+// =============================================================================
+// Logger
+// =============================================================================
+
+export {
+  // Constants
+  MAX_LOG_ENTRIES,
+  // Timestamp formatting
+  formatLogTimestamp,
+  formatLogTimestampWithMs,
+  // Logging actions
+  log,
+  logInfo,
+  logSuccess,
+  logWarning,
+  logError,
+  logStep,
+  logSection,
+  clearLogs,
+  // Log utilities
+  getFormattedLogs,
+  getLogCount,
+} from "./logger.js";
+export type { LogEntry, LogLevel } from "./logger.js";
