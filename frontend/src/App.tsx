@@ -13,6 +13,7 @@ import { ContractDeployment } from "./components/ContractDeployment";
 import { OperationTabs } from "./components/OperationTabs";
 import { PositionsList } from "./components/PositionsList";
 import { LogViewer, type LogEntry, LogLevel } from "./components/LogViewer";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import type { Position } from "./components/PositionCard";
 import { PositionStatus } from "./components/PositionCard";
 
@@ -97,33 +98,45 @@ const App: Component = () => {
       </header>
 
       {/* Connection Status */}
-      <ConnectionStatusBar />
+      <ErrorBoundary>
+        <ConnectionStatusBar />
+      </ErrorBoundary>
 
       {/* Wallet Info */}
-      <WalletInfo />
+      <ErrorBoundary>
+        <WalletInfo />
+      </ErrorBoundary>
 
       {/* Contract Deployment */}
-      <ContractDeployment />
+      <ErrorBoundary>
+        <ContractDeployment />
+      </ErrorBoundary>
 
       {/* Main Operations */}
-      <OperationTabs
-        defaultTab="deposit"
-        onDeposit={handleDeposit}
-        onWithdraw={handleWithdraw}
-      />
+      <ErrorBoundary>
+        <OperationTabs
+          defaultTab="deposit"
+          onDeposit={handleDeposit}
+          onWithdraw={handleWithdraw}
+        />
+      </ErrorBoundary>
 
       {/* Positions */}
-      <PositionsList
-        positions={positions()}
-        onWithdraw={handleWithdraw}
-      />
+      <ErrorBoundary>
+        <PositionsList
+          positions={positions()}
+          onWithdraw={handleWithdraw}
+        />
+      </ErrorBoundary>
 
       {/* Logs */}
-      <LogViewer
-        logs={logs()}
-        title="Operation Logs"
-        maxHeight={300}
-      />
+      <ErrorBoundary>
+        <LogViewer
+          logs={logs()}
+          title="Operation Logs"
+          maxHeight={300}
+        />
+      </ErrorBoundary>
     </div>
   );
 };
