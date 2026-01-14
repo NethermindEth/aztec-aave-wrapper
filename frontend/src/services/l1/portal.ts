@@ -27,6 +27,14 @@ import type { DepositIntent, WithdrawIntent } from "./intent.js";
  * Includes only the functions needed for executing intents and querying state.
  */
 export const PORTAL_ABI = [
+  // Read-only contract addresses
+  {
+    type: "function",
+    name: "aztecOutbox",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
   // Execute functions
   {
     type: "function",
@@ -413,4 +421,26 @@ export async function getIntentStatus(
   ]);
 
   return { consumed, shares, asset };
+}
+
+/**
+ * Get the Aztec outbox address from the portal contract.
+ *
+ * @param publicClient - Viem public client
+ * @param portalAddress - Portal contract address
+ * @param abi - Optional custom ABI
+ * @returns Aztec outbox address
+ */
+export async function getAztecOutbox(
+  publicClient: PublicClient<Transport, Chain>,
+  portalAddress: Address,
+  abi: Abi = PORTAL_ABI as unknown as Abi
+): Promise<Address> {
+  const outbox = await publicClient.readContract({
+    address: portalAddress,
+    abi,
+    functionName: "aztecOutbox",
+    args: [],
+  });
+  return outbox as Address;
 }

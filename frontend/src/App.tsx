@@ -15,14 +15,24 @@ import type { Position } from "./components/PositionCard";
 import { PositionStatus } from "./components/PositionCard";
 import { PositionsList } from "./components/PositionsList";
 import { TopBar } from "./components/TopBar";
+import { executeDepositFlow, type DepositL1Addresses, type DepositL2Context } from "./flows/deposit";
+import { createDevnetL1Clients } from "./services/l1/client";
+import { getAztecOutbox } from "./services/l1/portal";
+import { createL2NodeClient } from "./services/l2/client";
+import { loadContractWithAzguard } from "./services/l2/contract";
+import { connectAztecWallet } from "./services/wallet/aztec";
+import { useApp } from "./store/hooks";
 
 /**
  * Main application component
  */
 const App: Component = () => {
+  const { state } = useApp();
+
   // Positions state - would typically come from store or data fetching
   const [positions, setPositions] = createSignal<Position[]>([]);
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
+  const [isDepositing, setIsDepositing] = createSignal(false);
 
   /**
    * Add a log entry
@@ -51,23 +61,101 @@ const App: Component = () => {
   };
 
   /**
-   * Handle deposit operation
+   * Handle deposit operation using the real deposit flow
    */
-  const handleDeposit = (amount: bigint, deadline: number) => {
-    // Format amount for display using bigint arithmetic to avoid precision loss
+  const handleDeposit = async (amount: bigint, deadline: number) => {
+    // Prevent duplicate submissions
+    if (isDepositing()) {
+      addLog("Deposit already in progress", LogLevel.WARNING);
+      return;
+    }
+
+    // Validate contracts are loaded
+    if (
+      !state.contracts.portal ||
+      !state.contracts.mockUsdc ||
+      !state.contracts.mockLendingPool ||
+      !state.contracts.l2Wrapper
+    ) {
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+      return;
+    }
+
+    // Extract validated contract addresses for type narrowing
+    const portal = state.contracts.portal;
+    const mockUsdc = state.contracts.mockUsdc;
+    const mockLendingPool = state.contracts.mockLendingPool;
+    const l2WrapperAddress = state.contracts.l2Wrapper;
+
+    setIsDepositing(true);
     const amountFormatted = formatAmount(amount);
     addLog(`Initiating deposit of ${amountFormatted} USDC with ${deadline}s deadline`);
-    // Generate unique intent ID using crypto.randomUUID for uniqueness
-    const intentId = `0x${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`;
-    setPositions((prev) => [
-      ...prev,
-      {
-        intentId,
-        shares: amount,
-        status: PositionStatus.PENDING_DEPOSIT,
-      },
-    ]);
-    addLog(`Created deposit intent: ${intentId}`, LogLevel.SUCCESS);
+
+    try {
+      // Initialize L1 clients
+      addLog("Connecting to L1...");
+      const l1Clients = createDevnetL1Clients();
+
+      // Get mockAztecOutbox from portal contract
+      addLog("Fetching portal configuration...");
+      const mockAztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
+
+      // Build L1 addresses
+      // Note: In MVP, mockAToken uses the same address as mockUsdc since mock lending
+      // pool doesn't issue separate aTokens. In production, this would be the actual
+      // aToken address from Aave.
+      const l1Addresses: DepositL1Addresses = {
+        portal,
+        mockUsdc,
+        mockAToken: mockUsdc,
+        mockLendingPool,
+        mockAztecOutbox,
+      };
+
+      // Initialize L2 context
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectAztecWallet();
+
+      addLog("Loading AaveWrapper contract...");
+      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      // Build L2 context - need to parse address
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const l2Context: DepositL2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        contract,
+      };
+
+      // Execute the deposit flow
+      addLog("Executing deposit flow...");
+      const result = await executeDepositFlow(l1Clients, l1Addresses, l2Context, {
+        assetId: 1n, // USDC asset ID
+        amount,
+        originalDecimals: 6,
+        deadlineOffset: deadline,
+      });
+
+      // Update UI with result
+      setPositions((prev) => [
+        ...prev,
+        {
+          intentId: result.intentId,
+          shares: result.shares,
+          status: PositionStatus.PENDING_DEPOSIT,
+        },
+      ]);
+      addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Deposit failed: ${message}`, LogLevel.ERROR);
+    } finally {
+      setIsDepositing(false);
+    }
   };
 
   /**
