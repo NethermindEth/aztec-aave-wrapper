@@ -219,7 +219,56 @@ bun run test:setup
 bun run test:watch
 ```
 
+## Full Flow Demo Script
+
+The `scripts/full-flow.ts` script demonstrates the complete deposit and withdrawal flow similar to the [Aztec token bridge tutorial](https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.20251212/docs/examples/tutorials/token_bridge_contract/scripts/index.ts).
+
+### Usage
+
+```bash
+# Run full flow (requires deployed contracts)
+cd e2e && bun run full-flow
+
+# Or with npm scripts
+bun run full-flow
+
+# Run with fresh contract deployment
+bun run full-flow:deploy
+```
+
+### What It Does
+
+**DEPOSIT FLOW (L2 → L1 → L2):**
+1. User calls `request_deposit()` on L2 → creates L2→L1 message
+2. Relayer calls `executeDeposit()` on L1 portal → supplies to Aave, sends L1→L2 message
+3. User calls `finalize_deposit()` on L2 → creates PositionReceiptNote
+
+**WITHDRAW FLOW (L2 → L1 → L2):**
+1. User calls `request_withdraw()` on L2 → consumes note, creates L2→L1 message
+2. Relayer calls `executeWithdraw()` on L1 portal → withdraws from Aave, sends L1→L2 message
+3. User calls `finalize_withdraw()` on L2 → tokens credited to user
+
+### Privacy Properties Demonstrated
+
+- User L2 address is NEVER revealed on L1
+- `ownerHash` (one-way Poseidon hash) used in cross-chain messages
+- Relayer executes L1 operations (not user)
+- `secret`/`secretHash` for authorization
+
 ### Prerequisites
+
+1. Local devnet running: `make devnet-up`
+2. Contracts deployed: `make deploy-local` (or use `--deploy` flag)
+3. Health check passing: `make devnet-health`
+
+### Mock Mode Limitations
+
+In mock mode (without real L1↔L2 message passing):
+- `executeDeposit`/`executeWithdraw` on L1 require merkle proofs from the Aztec outbox
+- `finalize_deposit`/`finalize_withdraw` require real L1→L2 messages in the inbox
+- The script demonstrates the flow structure and API calls but cannot complete full round-trips
+
+## Test Prerequisites
 
 1. Local devnet running: `docker compose up`
 2. Contracts compiled: `cd aztec && aztec compile`

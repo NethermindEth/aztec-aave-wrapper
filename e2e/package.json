@@ -12,6 +12,8 @@
     "test:mock": "TEST_ENVIRONMENT=local TEST_MODE=mock vitest run",
     "test:integration": "TEST_ENVIRONMENT=testnet TEST_MODE=integration vitest run",
     "test:setup": "vitest run src/setup.test.ts",
+    "full-flow": "bun run scripts/full-flow.ts",
+    "full-flow:deploy": "bun run scripts/full-flow.ts --deploy",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist node_modules/.cache"
   },
