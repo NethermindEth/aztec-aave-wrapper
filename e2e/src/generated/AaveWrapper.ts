@@ -9,7 +9,7 @@ import { EthAddress } from '@aztec/aztec.js/addresses';
 import { Fr, Point } from '@aztec/aztec.js/fields';
 import { type PublicKey, PublicKeys } from '@aztec/aztec.js/keys';
 import type { Wallet } from '@aztec/aztec.js/wallet';
-import AaveWrapperContractArtifactJson from '../../../aztec_contracts/target/aave_wrapper-AaveWrapper.json' with { type: 'json' };
+import AaveWrapperContractArtifactJson from '../../../aztec/target/aave_wrapper-AaveWrapper.json' with { type: 'json' };
 export const AaveWrapperContractArtifact = loadContractArtifact(AaveWrapperContractArtifactJson as NoirCompiledContract);
 
 

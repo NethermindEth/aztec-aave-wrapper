@@ -8,14 +8,14 @@
  *
  * Prerequisites:
  * - Local devnet running (docker compose up)
- * - Contract compiled (aztec compile in aztec_contracts/)
+ * - Contract compiled (aztec compile in aztec/)
  * - Node.js v20 or v22 (v23+ has breaking changes with aztec.js import syntax)
  *
  * Run with: npm test -- integration.test.ts
  */
 
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { AaveWrapperContract, AaveWrapperContractArtifact } from "../../aztec_contracts/generated/AaveWrapper";
+import { AaveWrapperContract, AaveWrapperContractArtifact } from "../../aztec/generated/AaveWrapper";
 
 // Dynamic imports to handle Node.js v23+ compatibility issues with aztec.js
 // The aztec packages use `import ... assert { type: 'json' }` which was

@@ -2,8 +2,8 @@
  * Intent Type Definitions
  *
  * Shared message payload structures for L2→L1 communication.
- * These types must match the Noir definitions in aztec_contracts/src/types/intent.nr
- * and Solidity definitions in l1/contracts/types/Intent.sol
+ * These types must match the Noir definitions in aztec/src/types/intent.nr
+ * and Solidity definitions in eth/contracts/types/Intent.sol
  */
 
 /**

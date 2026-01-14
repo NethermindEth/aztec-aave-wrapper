@@ -57,7 +57,7 @@ The target executor contract (`AaveExecutorTarget`) holds all aTokens in custody
    - Mapping: `intentShares[intentId] => shares`
 
 2. **Emergency withdraw function**: Admin can recover stuck tokens
-   - Location: `l1/contracts/AztecAavePortalL1.sol:646`
+   - Location: `eth/contracts/AztecAavePortalL1.sol:646`
    - Protected by: `onlyOwner` modifier
 
 3. **No admin keys on target**: Target executor has no owner/admin functions
@@ -92,16 +92,16 @@ Cross-chain operations must not be executable more than once. Multiple replay ve
 
 #### L2 (Aztec)
 - **Intent consumption tracking**: `consumed_intents` mapping prevents reuse
-  - Location: `aztec_contracts/src/main.nr:256`
+  - Location: `aztec/src/main.nr:256`
 - **Note nullifiers**: Aztec framework prevents double-spending of notes
 
 #### L1 Portal
 - **Intent ID tracking**: `consumedIntents` mapping checked before execution
-  - Location: `l1/contracts/AztecAavePortalL1.sol:89`
+  - Location: `eth/contracts/AztecAavePortalL1.sol:89`
 - **Wormhole delivery tracking**: `processedDeliveries` mapping for confirmations
-  - Location: `l1/contracts/AztecAavePortalL1.sol:93`
+  - Location: `eth/contracts/AztecAavePortalL1.sol:93`
 - **VAA hash tracking**: `processedVAAs` mapping for token transfers
-  - Location: `l1/contracts/AztecAavePortalL1.sol:95`
+  - Location: `eth/contracts/AztecAavePortalL1.sol:95`
 
 #### Target Executor
 - **VAA consumption tracking**: `consumedVAAs` mapping checked before execution
@@ -136,7 +136,7 @@ The protocol uses `hash(ownerL2)` to protect user identity in cross-chain messag
 ### Current Implementation
 
 1. **Owner hash computation**: Poseidon2 hash of L2 address
-   - Location: `aztec_contracts/src/main.nr:363`
+   - Location: `aztec/src/main.nr:363`
    - Formula: `owner_hash = poseidon2_hash([caller.to_field()])`
 
 2. **Secret/SecretHash mechanism**: Claim authentication
@@ -144,7 +144,7 @@ The protocol uses `hash(ownerL2)` to protect user identity in cross-chain messag
    - Must provide matching `secret` during finalization
 
 3. **Public events emit only intent_id**: No user-identifying data
-   - Location: `aztec_contracts/src/main.nr:291-294`
+   - Location: `aztec/src/main.nr:291-294`
 
 ### Privacy Limitations
 
@@ -236,7 +236,7 @@ The L1 portal can be paused by the admin to stop new operations while allowing i
 
 ### Current Implementation
 
-- Location: `l1/contracts/AztecAavePortalL1.sol:617-627`
+- Location: `eth/contracts/AztecAavePortalL1.sol:617-627`
 - Scope: Pauses `executeDeposit` and `executeWithdraw` only
 - NOT paused: `receiveWormholeMessages`, `completeWithdrawalTransfer`
 
@@ -283,7 +283,7 @@ Deadlines prevent stale intents from being executed. Enforcement happens on L1 s
 
 ### Current Implementation
 
-- Location: `l1/contracts/AztecAavePortalL1.sol:172-183`
+- Location: `eth/contracts/AztecAavePortalL1.sol:172-183`
 - Bounds: `MIN_DEADLINE = 5 minutes`, `MAX_DEADLINE = 24 hours`
 - Validation: `deadline - block.timestamp` must be within bounds
 
@@ -318,7 +318,7 @@ When a withdrawal deadline expires:
 3. New Active note created with fresh nonce
 4. Position remains usable for future withdrawal attempts
 
-Location: `aztec_contracts/src/main.nr:866-962`
+Location: `aztec/src/main.nr:866-962`
 
 ---
 
@@ -334,7 +334,7 @@ The protocol relies on Wormhole for cross-chain message passing and token bridgi
 
 #### L1 Portal (Receiving confirmations)
 ```solidity
-// Location: l1/contracts/AztecAavePortalL1.sol:362-411
+// Location: eth/contracts/AztecAavePortalL1.sol:362-411
 function receiveWormholeMessages(...) {
     // 1. Verify caller is registered relayer
     if (msg.sender != wormholeRelayer) revert UnauthorizedRelayer(msg.sender);

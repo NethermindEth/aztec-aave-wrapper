@@ -301,20 +301,20 @@ abi.encode(
 ### Phase 2 - L2 Contract (Complete ✅)
 
 **Test Files**:
-- `aztec_contracts/src/test/deposit_tests.nr` - Deposit flow
-- `aztec_contracts/src/test/withdraw_tests.nr` - Withdraw flow
-- `aztec_contracts/src/test/edge_cases.nr` - Error conditions
+- `aztec/src/test/deposit_tests.nr` - Deposit flow
+- `aztec/src/test/withdraw_tests.nr` - Withdraw flow
+- `aztec/src/test/edge_cases.nr` - Error conditions
 
 **Coverage**: All L2 functions tested in isolation with mocked L1→L2 messages.
 
 ### Phase 3 - L1 Portal (Complete ✅)
 
 **Test Files**:
-- `l1/test/Portal.executeDeposit.t.sol` - Deposit execution
-- `l1/test/Portal.executeWithdraw.t.sol` - Withdraw with secret verification
-- `l1/test/Portal.poolFunding.t.sol` - Pool management
-- `l1/test/Portal.privacy.t.sol` - Privacy verification
-- `l1/test/Portal.edgeCases.t.sol` - Error conditions
+- `eth/test/Portal.executeDeposit.t.sol` - Deposit execution
+- `eth/test/Portal.executeWithdraw.t.sol` - Withdraw with secret verification
+- `eth/test/Portal.poolFunding.t.sol` - Pool management
+- `eth/test/Portal.privacy.t.sol` - Privacy verification
+- `eth/test/Portal.edgeCases.t.sol` - Error conditions
 
 **Coverage**: >90% line coverage on L1 portal contract.
 

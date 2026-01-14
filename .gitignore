@@ -21,13 +21,13 @@ cache/
 artifacts/
 
 # Foundry
-l1/cache/
-l1/out/
+eth/cache/
+eth/out/
 target/cache/
 target/out/
 
 # Noir/Aztec
-aztec_contracts/target/
+aztec/target/
 *.json.gz
 
 # IDE

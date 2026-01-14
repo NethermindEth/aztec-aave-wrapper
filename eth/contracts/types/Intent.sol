@@ -3,7 +3,7 @@ pragma solidity ^0.8.33;
 
 /// @title Intent Type Definitions
 /// @notice Shared message payload structures for cross-chain communication
-/// @dev These structs must match the Noir definitions in aztec_contracts/src/types/intent.nr
+/// @dev These structs must match the Noir definitions in aztec/src/types/intent.nr
 ///      and TypeScript definitions in shared/types/Intent.ts
 
 /// @notice Intent to deposit assets into Aave on a target chain

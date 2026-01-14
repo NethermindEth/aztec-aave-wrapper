@@ -222,7 +222,7 @@ bun run test:watch
 ### Prerequisites
 
 1. Local devnet running: `docker compose up`
-2. Contracts compiled: `cd aztec_contracts && aztec compile`
+2. Contracts compiled: `cd aztec && aztec compile`
 3. Node.js v20 or v22 (v23+ has breaking import syntax changes)
 
 ## Possible Enhancements

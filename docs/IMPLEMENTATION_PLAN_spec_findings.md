@@ -5,8 +5,8 @@
 | File | Owns |
 |------|------|
 | `CLAUDE.md:1-127` | Project overview, build commands, key files, dependencies |
-| `aztec_contracts/src/main.nr` | L2 Noir contract (AaveWrapper) |
-| `l1/contracts/AztecAavePortalL1.sol` | L1 Portal Solidity contract |
+| `aztec/src/main.nr` | L2 Noir contract (AaveWrapper) |
+| `eth/contracts/AztecAavePortalL1.sol` | L1 Portal Solidity contract |
 | `target/contracts/AaveExecutorTarget.sol` | Target executor Solidity contract |
 | `docker-compose.yml` | Local devnet configuration |
 | `Makefile` | All build/test/deploy commands |
@@ -20,7 +20,7 @@
 
 **Evidence:**
 - `CLAUDE.md:7`: "Aztec Aave Wrapper enables privacy-preserving Aave lending from Aztec L2 via Wormhole bridge"
-- `l1/contracts/AztecAavePortalL1.sol:29-36`: Architecture doc comments
+- `eth/contracts/AztecAavePortalL1.sol:29-36`: Architecture doc comments
 - `target/contracts/AaveExecutorTarget.sol:12-26`: Aave V3 integration doc
 
 **Confidence:** High
@@ -33,8 +33,8 @@
 
 **Evidence:**
 - `CLAUDE.md:9-12`: Architecture overview
-- `aztec_contracts/src/main.nr:183-963`: Full L2 contract
-- `l1/contracts/AztecAavePortalL1.sol:27-43`: L1 portal contract
+- `aztec/src/main.nr:183-963`: Full L2 contract
+- `eth/contracts/AztecAavePortalL1.sol:27-43`: L1 portal contract
 - `target/contracts/AaveExecutorTarget.sol:12-34`: Target executor
 
 **Confidence:** High
@@ -43,8 +43,8 @@
 **Answer:** Uses `hash(ownerL2)` (Poseidon hash) in cross-chain messages. L1/target execution is done by relayers who don't need to know the L2 owner. Authentication uses secret/secretHash mechanism.
 
 **Evidence:**
-- `aztec_contracts/src/main.nr:363`: `let owner_hash = poseidon2_hash([caller.to_field()]);`
-- `aztec_contracts/src/main.nr:49-80`: Privacy documentation in `compute_deposit_message_content`
+- `aztec/src/main.nr:363`: `let owner_hash = poseidon2_hash([caller.to_field()]);`
+- `aztec/src/main.nr:49-80`: Privacy documentation in `compute_deposit_message_content`
 - `CLAUDE.md:100-104`: Privacy model description
 
 **Confidence:** High
@@ -114,8 +114,8 @@ docker compose logs aztec-sandbox -f  # Aztec only
 5. L2: `finalize_deposit()` consumes message, creates PositionReceiptNote
 
 **Evidence:**
-- `aztec_contracts/src/main.nr:342-409`: `request_deposit` implementation
-- `l1/contracts/AztecAavePortalL1.sol:203-258`: `executeDeposit` implementation
+- `aztec/src/main.nr:342-409`: `request_deposit` implementation
+- `eth/contracts/AztecAavePortalL1.sol:203-258`: `executeDeposit` implementation
 - `target/contracts/AaveExecutorTarget.sol:159-207`: `consumeAndExecuteDeposit`
 - `CLAUDE.md:89-96`: Flow description
 
@@ -151,7 +151,7 @@ docker compose logs aztec-sandbox -f  # Aztec only
 
 **Evidence:**
 - `CLAUDE.md:113-114`: MVP constraints
-- `aztec_contracts/src/main.nr:614-618`: Full withdrawal enforcement
+- `aztec/src/main.nr:614-618`: Full withdrawal enforcement
 
 **Confidence:** High
 
@@ -166,32 +166,32 @@ docker compose logs aztec-sandbox -f  # Aztec only
 
 **Evidence:**
 - `CLAUDE.md:72-76`: Dependencies listed
-- `l1/contracts/AztecAavePortalL1.sol:2`: `pragma solidity ^0.8.33`
+- `eth/contracts/AztecAavePortalL1.sol:2`: `pragma solidity ^0.8.33`
 - `target/contracts/AaveExecutorTarget.sol:2`: `pragma solidity ^0.8.33`
 
 **Confidence:** High
 
 ## Actual Flow: Deposit
 
-1. `aztec_contracts/src/main.nr:342-409` - User calls `request_deposit()` privately
-2. `aztec_contracts/src/main.nr:363` - Owner hash computed via Poseidon
-3. `aztec_contracts/src/main.nr:400` - L2→L1 message sent to portal
-4. `l1/contracts/AztecAavePortalL1.sol:203-258` - Relayer calls `executeDeposit()`
-5. `l1/contracts/AztecAavePortalL1.sol:228-229` - Aztec outbox message consumed
-6. `l1/contracts/AztecAavePortalL1.sol:246-253` - Wormhole bridge called
+1. `aztec/src/main.nr:342-409` - User calls `request_deposit()` privately
+2. `aztec/src/main.nr:363` - Owner hash computed via Poseidon
+3. `aztec/src/main.nr:400` - L2→L1 message sent to portal
+4. `eth/contracts/AztecAavePortalL1.sol:203-258` - Relayer calls `executeDeposit()`
+5. `eth/contracts/AztecAavePortalL1.sol:228-229` - Aztec outbox message consumed
+6. `eth/contracts/AztecAavePortalL1.sol:246-253` - Wormhole bridge called
 7. `target/contracts/AaveExecutorTarget.sol:159-207` - Target receives VAA
 8. `target/contracts/AaveExecutorTarget.sol:220` - Aave `supply()` called
 9. L1 receives confirmation via `receiveWormholeMessages()`
-10. `aztec_contracts/src/main.nr:462-514` - User calls `finalize_deposit()`
-11. `aztec_contracts/src/main.nr:495-507` - PositionReceiptNote created
+10. `aztec/src/main.nr:462-514` - User calls `finalize_deposit()`
+11. `aztec/src/main.nr:495-507` - PositionReceiptNote created
 
 ## Verified Facts
 
-- L2 contract name: `AaveWrapper` (`aztec_contracts/src/main.nr:184`)
-- L1 portal inherits: `Ownable2Step`, `Pausable` (`l1/contracts/AztecAavePortalL1.sol:43`)
-- Deadline validation: MIN 5 min, MAX 24 hours (`l1/contracts/AztecAavePortalL1.sol:75-78`)
+- L2 contract name: `AaveWrapper` (`aztec/src/main.nr:184`)
+- L1 portal inherits: `Ownable2Step`, `Pausable` (`eth/contracts/AztecAavePortalL1.sol:43`)
+- Deadline validation: MIN 5 min, MAX 24 hours (`eth/contracts/AztecAavePortalL1.sol:75-78`)
 - Wormhole decimals: 8 (`target/contracts/AaveExecutorTarget.sol:103`)
-- Target gas limit: 200,000 (`l1/contracts/AztecAavePortalL1.sol:84`)
+- Target gas limit: 200,000 (`eth/contracts/AztecAavePortalL1.sol:84`)
 - PXE port: 8080 (`docker-compose.yml:93`)
 - L1 anvil port: 8545 (`docker-compose.yml:16`)
 - Target anvil port: 8546 (`docker-compose.yml:56`)

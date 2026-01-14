@@ -140,8 +140,8 @@ make build-target  # Target Solidity (Executor)
 ```
 
 Expected output:
-- L1: `l1/out/*.sol/*.json` artifacts
-- L2: `aztec_contracts/target/*.json` artifacts
+- L1: `eth/out/*.sol/*.json` artifacts
+- L2: `aztec/target/*.json` artifacts
 - Target: `target/out/*.sol/*.json` artifacts
 
 ---
@@ -298,7 +298,7 @@ cd l1 && forge test --match-test test_executeDeposit -vvv
 cd target && forge test --match-test test_receiveDeposit -vvv
 
 # L2 specific test
-cd aztec_contracts && aztec test --filter "test_request_deposit"
+cd aztec && aztec test --filter "test_request_deposit"
 ```
 
 ---
@@ -468,6 +468,6 @@ cat .deployments.local.json
 After successful local deployment:
 
 1. **Run the full test suite**: `make test && make e2e`
-2. **Explore the contracts**: Review code in `l1/`, `aztec_contracts/`, `target/`
+2. **Explore the contracts**: Review code in `eth/`, `aztec/`, `target/`
 3. **Read the architecture**: See `docs/IMPLEMENTATION_NOTES.md`
 4. **Try manual operations**: Use `cast` to interact with deployed contracts

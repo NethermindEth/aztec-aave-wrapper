@@ -511,12 +511,12 @@ Failing to verify allows message spoofing.
 
 ### Unit Tests (Comprehensive)
 
-- **L2 (Noir)**: `aztec_contracts/src/test/*.nr`
+- **L2 (Noir)**: `aztec/src/test/*.nr`
   - Hash determinism and uniqueness
   - Collision resistance
   - Edge cases (zero values, max values)
 
-- **L1 (Solidity)**: `l1/test/*.t.sol`
+- **L1 (Solidity)**: `eth/test/*.t.sol`
   - Deposit/withdraw execution
   - Confirmation handling
   - Admin functions
@@ -542,7 +542,7 @@ make test
 
 # Single layer
 make test-l1      # cd l1 && forge test -vv
-make test-l2      # cd aztec_contracts && aztec test
+make test-l2      # cd aztec && aztec test
 make test-target  # cd target && forge test -vv
 
 # E2E (requires devnet)

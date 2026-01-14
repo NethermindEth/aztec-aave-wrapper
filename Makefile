@@ -22,8 +22,8 @@ RED := \033[0;31m
 NC := \033[0m
 
 # Project directories
-L1_DIR := l1
-L2_DIR := aztec_contracts
+L1_DIR := eth
+L2_DIR := aztec
 E2E_DIR := e2e
 
 # Docker compose configuration

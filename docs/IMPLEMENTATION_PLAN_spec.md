@@ -25,7 +25,7 @@ This plan outlines implementation of the Aztec Aave Wrapper MVP following a thre
 - **Custodial Risk**: Accepted for MVP; single-contract custody documented
 
 **Current Implementation Status**: 
-The current codebase has basic L2 contract structure in `aztec_contracts/src/main.nr` with deposit/withdraw request functions, but does NOT yet implement the hash(ownerL2) privacy model, Wormhole integration, or target executor. Most of the steps below are NOT IMPLEMENTED.
+The current codebase has basic L2 contract structure in `aztec/src/main.nr` with deposit/withdraw request functions, but does NOT yet implement the hash(ownerL2) privacy model, Wormhole integration, or target executor. Most of the steps below are NOT IMPLEMENTED.
 
 **Open Research Items**:
 - Aztec patterns for private owner routing (how to elegantly resolve hash(ownerL2) → ownerL2)
@@ -58,18 +58,18 @@ bun --version
 Ensure Wormhole contracts and interfaces are available for L1 portal and target executor integration. Normalize all Solidity versions to 0.8.33 (latest stable).
 
 #### Files
-- `l1/contracts/interfaces/IWormholeTokenBridge.sol` - [DOES NOT EXIST] Need to add transferTokensWithPayload interface
-- `l1/contracts/interfaces/IWormholeRelayer.sol` - [DOES NOT EXIST] Add for message relaying
+- `eth/contracts/interfaces/IWormholeTokenBridge.sol` - [DOES NOT EXIST] Need to add transferTokensWithPayload interface
+- `eth/contracts/interfaces/IWormholeRelayer.sol` - [DOES NOT EXIST] Add for message relaying
 - `target/contracts/interfaces/IWormhole.sol` - [DOES NOT EXIST] Add Wormhole core interface for VAA parsing
 - `shared/wormhole/` - [DOES NOT EXIST] Create shared Wormhole constants (chain IDs, etc.)
-- `l1/foundry.toml` - Current version: 0.8.24 (needs update to 0.8.33)
+- `eth/foundry.toml` - Current version: 0.8.24 (needs update to 0.8.33)
 - `target/foundry.toml` - Current version: 0.8.20 (needs update to 0.8.33)
 
 #### Validation
 ```bash
 cd l1 && forge build --contracts contracts/AztecAavePortalL1.sol
 cd target && forge build --contracts contracts/AaveExecutorTarget.sol
-grep "solc_version" l1/foundry.toml | grep "0.8.33"
+grep "solc_version" eth/foundry.toml | grep "0.8.33"
 grep "solc_version" target/foundry.toml | grep "0.8.33"
 ```
 
@@ -97,11 +97,11 @@ Define consistent message payload structures across L2, L1, and Target layers ma
 
 #### Files
 - `shared/types/Intent.ts` - [DOES NOT EXIST] TypeScript types for DepositIntent, WithdrawIntent
-- `aztec_contracts/src/types/intent.nr` - [EXISTS] Basic structs present, needs update to use hash(ownerL2), remove secret/denomination
-- `l1/contracts/types/Intent.sol` - [DOES NOT EXIST] Solidity structs with ownerHash and originalDecimals
+- `aztec/src/types/intent.nr` - [EXISTS] Basic structs present, needs update to use hash(ownerL2), remove secret/denomination
+- `eth/contracts/types/Intent.sol` - [DOES NOT EXIST] Solidity structs with ownerHash and originalDecimals
 - `target/contracts/types/Intent.sol` - [DOES NOT EXIST] Same structs for target executor
 
-Current `aztec_contracts/src/types/intent.nr` has basic DepositIntent and WithdrawIntent structs but uses plain addresses, not hash(ownerL2).
+Current `aztec/src/types/intent.nr` has basic DepositIntent and WithdrawIntent structs but uses plain addresses, not hash(ownerL2).
 
 Example target structure (Solidity):
 ```solidity
@@ -120,7 +120,7 @@ struct DepositIntent {
 #### Validation
 ```bash
 cd l1 && forge test --match-test test_intentEncoding
-cd aztec_contracts && aztec test --match-test test_intent_serialization
+cd aztec && aztec test --match-test test_intent_serialization
 ```
 
 #### Failure modes
@@ -142,7 +142,7 @@ Update docker-compose.yml and deployment scripts to include Wormhole mock contra
 - `scripts/deploy-local.ts` - [DOES NOT EXIST] Need to create deploy script with Wormhole mocks and deadline configs
 - `.env.example` - [DOES NOT EXIST] Add Wormhole contract addresses, MIN_DEADLINE, MAX_DEADLINE
 - `Makefile` - [EXISTS] Has deploy-local target but needs update for new deployment script
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] Basic structure, needs DeadlineConfig struct and validation
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] Basic structure, needs DeadlineConfig struct and validation
 
 #### Validation
 ```bash
@@ -165,8 +165,8 @@ Align the L2 Noir contract with spec.md requirements: use hash(ownerL2), remove 
 
 ### Phase Validation
 ```bash
-cd aztec_contracts && aztec test
-cd aztec_contracts && aztec compile
+cd aztec && aztec test
+cd aztec && aztec compile
 ```
 
 ### Step 1: Add intentId → owner mapping storage in L2 contract **COMPLETE**
@@ -177,15 +177,15 @@ cd aztec_contracts && aztec compile
 Implement private storage mapping to track intentId → owner relationship for finalization routing.
 
 #### Files
-- `aztec_contracts/src/main.nr` - [EXISTS] Current storage does not include intent_owners mapping
+- `aztec/src/main.nr` - [EXISTS] Current storage does not include intent_owners mapping
 - Storage is defined inline in main.nr, not a separate storage.nr file
 
 Current storage in main.nr does NOT include intentId → owner mapping.
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec compile
-cd aztec_contracts && aztec test --match-test test_storage_mapping
+cd aztec && aztec compile
+cd aztec && aztec test --match-test test_storage_mapping
 ```
 
 #### Failure modes
@@ -203,9 +203,9 @@ cd aztec_contracts && aztec test --match-test test_storage_mapping
 Update PositionReceiptNote to match spec.md §3.1 data model without secret/denomination fields, using direct shares amount.
 
 #### Files
-- `aztec_contracts/src/types/position_receipt.nr` - [EXISTS] Current structure has different fields
+- `aztec/src/types/position_receipt.nr` - [EXISTS] Current structure has different fields
 
-Current PositionReceiptNote in `aztec_contracts/src/types/position_receipt.nr`:
+Current PositionReceiptNote in `aztec/src/types/position_receipt.nr`:
 ```noir
 struct PositionReceiptNote {
     owner: AztecAddress,
@@ -233,8 +233,8 @@ struct PositionReceiptNote {
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec compile
-cd aztec_contracts && aztec test --match-test test_position_receipt_note
+cd aztec && aztec compile
+cd aztec && aztec test --match-test test_position_receipt_note
 ```
 
 #### Failure modes
@@ -252,7 +252,7 @@ cd aztec_contracts && aztec test --match-test test_position_receipt_note
 Refactor request_deposit function to accept direct amounts, compute hash(ownerL2), store intentId → owner mapping, enforce deadline bounds.
 
 #### Files
-- `aztec_contracts/src/main.nr` - [EXISTS] Current request_deposit implementation in lines 63-109 uses denomination model
+- `aztec/src/main.nr` - [EXISTS] Current request_deposit implementation in lines 63-109 uses denomination model
 
 Current implementation does NOT:
 - Use hash(ownerL2) 
@@ -262,8 +262,8 @@ Current implementation does NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_request_deposit
-cd aztec_contracts && aztec test --match-test test_deadline_validation
+cd aztec && aztec test --match-test test_request_deposit
+cd aztec && aztec test --match-test test_deadline_validation
 ```
 
 #### Failure modes
@@ -281,13 +281,13 @@ cd aztec_contracts && aztec test --match-test test_deadline_validation
 Modify compute_deposit_message_content to encode DepositIntent with hash(ownerL2) instead of plain owner, matching spec.md §3.2 format.
 
 #### Files
-- `aztec_contracts/src/main.nr` - [EXISTS] Need to verify/update message encoding functions
+- `aztec/src/main.nr` - [EXISTS] Need to verify/update message encoding functions
 
 Current implementation in main.nr does not appear to have compute_deposit_message_content helper function. Message content encoding needs to be added or refactored.
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_message_encoding
+cd aztec && aztec test --match-test test_message_encoding
 # Cross-validate with L1 contract message consumption
 ```
 
@@ -306,8 +306,8 @@ cd aztec_contracts && aztec test --match-test test_message_encoding
 Complete finalize_deposit function to consume L1→L2 confirmation messages, resolve owner from mapping, and mint PositionReceiptNote.
 
 #### Files
-- `aztec_contracts/src/main.nr` - [EXISTS] finalize_deposit function at lines 111-152, needs owner resolution logic
-- `aztec_contracts/src/test/` - [DOES NOT EXIST] No separate test files; tests are in main.nr
+- `aztec/src/main.nr` - [EXISTS] finalize_deposit function at lines 111-152, needs owner resolution logic
+- `aztec/src/test/` - [DOES NOT EXIST] No separate test files; tests are in main.nr
 
 Current finalize_deposit does NOT:
 - Resolve owner from intentId → owner mapping
@@ -316,7 +316,7 @@ Current finalize_deposit does NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_finalize_deposit
+cd aztec && aztec test --match-test test_finalize_deposit
 ```
 
 #### Failure modes
@@ -335,8 +335,8 @@ cd aztec_contracts && aztec test --match-test test_finalize_deposit
 Implement request_withdraw and finalize_withdraw functions per spec.md §4.2. Update receipt status to PendingWithdraw (don't nullify until finalized).
 
 #### Files
-- `aztec_contracts/src/main.nr` - [EXISTS] request_withdraw (lines 154-199) and finalize_withdraw (lines 201-245) exist but need updates
-- `aztec_contracts/src/types/intent.nr` - [EXISTS] WithdrawIntent struct exists
+- `aztec/src/main.nr` - [EXISTS] request_withdraw (lines 154-199) and finalize_withdraw (lines 201-245) exist but need updates
+- `aztec/src/types/intent.nr` - [EXISTS] WithdrawIntent struct exists
 - Test functions are inline in main.nr
 
 Current implementations do NOT:
@@ -347,8 +347,8 @@ Current implementations do NOT:
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_withdraw
-cd aztec_contracts && aztec test --match-test test_full_withdrawal_only
+cd aztec && aztec test --match-test test_withdraw
+cd aztec && aztec test --match-test test_full_withdrawal_only
 ```
 
 #### Failure modes
@@ -374,12 +374,12 @@ Add claim_refund function to mint new receipt note when withdrawal request expir
 - New nonce generation for refunded notes: hash(original_nonce, owner) to prevent double-spending
 
 #### Files
-- `aztec_contracts/src/main.nr` - claim_refund and _claim_refund_public implemented
-- `aztec_contracts/src/test/refund_tests.nr` - Comprehensive unit tests for refund mechanism
+- `aztec/src/main.nr` - claim_refund and _claim_refund_public implemented
+- `aztec/src/test/refund_tests.nr` - Comprehensive unit tests for refund mechanism
 
 #### Validation
 ```bash
-cd aztec_contracts && aztec test --match-test test_refund
+cd aztec && aztec test --match-test test_refund
 ```
 
 #### Failure Modes
@@ -410,10 +410,10 @@ cd l1 && forge coverage
 Implement executeDeposit function to consume L2→L1 messages, validate intents with min/max deadline bounds, per spec.md §4.1 Step 2.
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, has basic executeDeposit but needs updates
-- `l1/test/Portal.executeDeposit.t.sol` - [DOES NOT EXIST] Tests need to be added
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] at eth/src/AztecAavePortalL1.sol, has basic executeDeposit but needs updates
+- `eth/test/Portal.executeDeposit.t.sol` - [DOES NOT EXIST] Tests need to be added
 
-Current implementation in `l1/src/AztecAavePortalL1.sol` does NOT:
+Current implementation in `eth/src/AztecAavePortalL1.sol` does NOT:
 - Have DeadlineConfig struct or min/max validation
 - Track consumedIntents for replay protection
 - Integrate with Aztec outbox for message consumption
@@ -442,8 +442,8 @@ cd l1 && forge test --match-test test_deadlineValidation -vvv
 Integrate Wormhole transferTokensWithPayload to bridge tokens and message to target chain, encoding original decimals for denormalization (spec.md §4.1 Step 2, §6 Mode B).
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, needs Wormhole integration
-- `l1/contracts/interfaces/IWormholeTokenBridge.sol` - [DOES NOT EXIST] Need to add interface
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] at eth/src/AztecAavePortalL1.sol, needs Wormhole integration
+- `eth/contracts/interfaces/IWormholeTokenBridge.sol` - [DOES NOT EXIST] Need to add interface
 
 Current portal does NOT integrate with Wormhole at all.
 
@@ -470,8 +470,8 @@ cd l1 && forge test --match-test test_decimals_encoding -vvv
 Implement executeWithdraw to send withdrawal requests to target chain per spec.md §4.2 Step 2.
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, executeWithdraw stub exists
-- `l1/test/Portal.executeWithdraw.t.sol` - [DOES NOT EXIST] Tests need to be added
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] at eth/src/AztecAavePortalL1.sol, executeWithdraw stub exists
+- `eth/test/Portal.executeWithdraw.t.sol` - [DOES NOT EXIST] Tests need to be added
 
 Current executeWithdraw is a stub without Wormhole integration.
 
@@ -495,8 +495,8 @@ cd l1 && forge test --match-test test_executeWithdraw -vvv
 Add function to receive Wormhole VAA messages from target executor with deposit confirmations (spec.md §4.1 Step 5).
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, no receive function present
-- `l1/contracts/types/Confirmation.sol` - [DOES NOT EXIST] Need to define confirmation structs
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] at eth/src/AztecAavePortalL1.sol, no receive function present
+- `eth/contracts/types/Confirmation.sol` - [DOES NOT EXIST] Need to define confirmation structs
 
 #### Validation
 ```bash
@@ -519,7 +519,7 @@ cd l1 && forge test --match-test test_receiveConfirmation -vvv
 Add function to receive bridged tokens back from target executor on withdrawals (spec.md §4.2 Step 4).
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, function not present
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] at eth/src/AztecAavePortalL1.sol, function not present
 
 #### Validation
 ```bash
@@ -541,8 +541,8 @@ cd l1 && forge test --match-test test_completeWithdrawal -vvv
 Add safety mechanisms: pause (blocks new operations only), emergency withdrawal, admin functions.
 
 #### Files
-- `l1/contracts/AztecAavePortalL1.sol` - [EXISTS] at l1/src/AztecAavePortalL1.sol, no Pausable or Ownable imports
-- `l1/test/Portal.admin.t.sol` - [DOES NOT EXIST] Test admin functions
+- `eth/contracts/AztecAavePortalL1.sol` - [EXISTS] at eth/src/AztecAavePortalL1.sol, no Pausable or Ownable imports
+- `eth/test/Portal.admin.t.sol` - [DOES NOT EXIST] Test admin functions
 
 Current contract does not inherit from Pausable or Ownable.
 

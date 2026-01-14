@@ -184,7 +184,7 @@ docker compose ps
 
 ```
 aztec-aave-wrapper/
-├── aztec_contracts/           # L2 Noir contracts
+├── aztec/                     # L2 Noir contracts
 │   ├── src/
 │   │   ├── main.nr            # AaveWrapper contract
 │   │   ├── types/
@@ -193,7 +193,7 @@ aztec-aave-wrapper/
 │   │   └── test/              # Noir unit tests
 │   └── Nargo.toml
 │
-├── l1/                        # L1 Portal contracts
+├── eth/                       # L1 Portal contracts
 │   ├── contracts/
 │   │   ├── AztecAavePortalL1.sol
 │   │   ├── interfaces/        # IAztecOutbox, IAavePool, etc.
@@ -269,7 +269,7 @@ make test-l1
 make test-l2
 
 # Single Foundry test
-cd l1 && forge test --match-test test_executeDeposit -vvv
+cd eth && forge test --match-test test_executeDeposit -vvv
 ```
 
 ### E2E Tests

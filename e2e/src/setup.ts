@@ -361,13 +361,13 @@ export class TestHarness {
     try {
       const artifactPath = join(
         __dirname,
-        "../../aztec_contracts/target/aave_wrapper-AaveWrapper.json"
+        "../../aztec/target/aave_wrapper-AaveWrapper.json"
       );
       const artifactJson = readFileSync(artifactPath, "utf-8");
       this._artifact = JSON.parse(artifactJson) as ContractArtifact;
     } catch (error) {
       console.warn(
-        "Contract artifact not found. Run: cd aztec_contracts && aztec compile"
+        "Contract artifact not found. Run: cd aztec && aztec compile"
       );
       this._artifact = null;
     }
@@ -510,7 +510,7 @@ export class TestHarness {
     try {
       // Import the generated contract wrapper
       const { AaveWrapperContract, AaveWrapperContractArtifact } = await import(
-        "../../aztec_contracts/generated/AaveWrapper"
+        "../../aztec/generated/AaveWrapper"
       );
       const { EthAddress } = await import("@aztec/foundation/eth-address");
 

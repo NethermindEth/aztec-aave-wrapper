@@ -16,7 +16,7 @@ This document outlines the simplification of the Aztec Aave Wrapper from a three
 
 | Aspect | Our Implementation | Official Wormhole Aztec |
 |--------|-------------------|------------------------|
-| **Location** | `l1/contracts/` | `/home/ametel/source/wormhole/aztec/` |
+| **Location** | `eth/contracts/` | `/home/ametel/source/wormhole/aztec/` |
 | **Messaging** | L2 → L1 Portal → Wormhole → Target | L2 → Wormhole Guardians → Target (direct) |
 | **L2 Contract** | Uses `context.message_portal()` | Uses `context.emit_public_log()` |
 | **Chain ID** | Custom (via portal) | Aztec = Chain ID 56 |
@@ -73,8 +73,8 @@ Aztec L2 (message_portal) → L1 Outbox → L1 Portal → L1 Wormhole → Target
 
 | Contract | Location | Chain | Purpose |
 |----------|----------|-------|---------|
-| `AaveWrapper` | `aztec_contracts/src/main.nr` | Aztec L2 | Private intents, position receipts |
-| `AztecAavePortalL1` | `l1/contracts/AztecAavePortalL1.sol` | Ethereum L1 | Consumes L2 messages, bridges via Wormhole |
+| `AaveWrapper` | `aztec/src/main.nr` | Aztec L2 | Private intents, position receipts |
+| `AztecAavePortalL1` | `eth/contracts/AztecAavePortalL1.sol` | Ethereum L1 | Consumes L2 messages, bridges via Wormhole |
 | `AaveExecutorTarget` | `target/contracts/AaveExecutorTarget.sol` | Target (e.g., Arbitrum) | Executes Aave operations |
 
 ### 2.2 Current Flow (Deposit)
@@ -92,7 +92,7 @@ Aztec L2 (message_portal) → L1 Outbox → L1 Portal → L1 Wormhole → Target
 
 ### 2.3 Wormhole Dependencies in Current Code
 
-**L1 Portal** (`l1/contracts/AztecAavePortalL1.sol`):
+**L1 Portal** (`eth/contracts/AztecAavePortalL1.sol`):
 - `wormholeTokenBridge` - Used for `transferTokensWithPayload` (lines 246-253)
 - `wormholeRelayer` - Used for `sendPayloadToEvm` (lines 320-326)
 - `targetChainId` - Wormhole chain ID of target (line 67)
@@ -136,7 +136,7 @@ Aztec L2 (message_portal) → L1 Outbox → L1 Portal → L1 Wormhole → Target
 
 ### 3.3 Contract Changes Required
 
-#### 3.3.1 L2 Contract (`aztec_contracts/src/main.nr`)
+#### 3.3.1 L2 Contract (`aztec/src/main.nr`)
 
 **Changes**:
 1. Remove `target_chain_id` from deposit/withdraw functions (always L1)
@@ -162,7 +162,7 @@ fn request_deposit(asset: Field, amount: u128, original_decimals: u8,
                    deadline: u64, secret_hash: Field)
 ```
 
-#### 3.3.2 L1 Portal (`l1/contracts/AztecAavePortalL1.sol`)
+#### 3.3.2 L1 Portal (`eth/contracts/AztecAavePortalL1.sol`)
 
 **Remove**:
 - `wormholeTokenBridge` (line 58)
@@ -223,8 +223,8 @@ function executeDeposit(...) external {
 ### 3.5 Mock Contracts for L1
 
 **Required mocks** (keep/create):
-- `MockERC20` ✅ exists at `l1/contracts/mocks/MockERC20.sol`
-- `MockLendingPool` - Need to **move** from `target/contracts/mocks/` to `l1/contracts/mocks/`
+- `MockERC20` ✅ exists at `eth/contracts/mocks/MockERC20.sol`
+- `MockLendingPool` - Need to **move** from `target/contracts/mocks/` to `eth/contracts/mocks/`
 
 **L1 mocks** (removed as part of L1-only simplification):
 - `MockWormholeCore` - REMOVED
@@ -367,8 +367,8 @@ frontend/
   - [ ] Update any network references
 
 - [ ] **Mock Contracts**
-  - [ ] Move `MockLendingPool` to `l1/contracts/mocks/`
-  - [ ] Remove Wormhole mocks from `l1/contracts/mocks/`
+  - [ ] Move `MockLendingPool` to `eth/contracts/mocks/`
+  - [ ] Remove Wormhole mocks from `eth/contracts/mocks/`
   - [ ] Update foundry.toml remappings if needed
 
 - [ ] **Deploy Script**
@@ -441,10 +441,10 @@ frontend/
 
 | File | Lines to Change |
 |------|-----------------|
-| `aztec_contracts/src/main.nr` | 27-47 (compute_intent_id), 65-80 (compute_deposit_message_content), 99-111 (compute_deposit_confirmation_content), 130-142 (compute_withdraw_confirmation_content), 164-181 (compute_withdraw_message_content), 342-409 (request_deposit), 462-514 (finalize_deposit), 586-668 (request_withdraw), 735-801 (finalize_withdraw) |
-| `aztec_contracts/src/types/intent.nr` | Lines 19-36 (DepositIntent struct) |
-| `l1/contracts/AztecAavePortalL1.sol` | 58-70 (Wormhole immutables), 203-258 (executeDeposit), 280-329 (executeWithdraw), 362-411 (receiveWormholeMessages), 554-605 (completeWithdrawalTransfer) |
-| `l1/contracts/types/Intent.sol` | Remove target_chain_id (but note: DepositIntent struct still has targetChainId at line 26) |
+| `aztec/src/main.nr` | 27-47 (compute_intent_id), 65-80 (compute_deposit_message_content), 99-111 (compute_deposit_confirmation_content), 130-142 (compute_withdraw_confirmation_content), 164-181 (compute_withdraw_message_content), 342-409 (request_deposit), 462-514 (finalize_deposit), 586-668 (request_withdraw), 735-801 (finalize_withdraw) |
+| `aztec/src/types/intent.nr` | Lines 19-36 (DepositIntent struct) |
+| `eth/contracts/AztecAavePortalL1.sol` | 58-70 (Wormhole immutables), 203-258 (executeDeposit), 280-329 (executeWithdraw), 362-411 (receiveWormholeMessages), 554-605 (completeWithdrawalTransfer) |
+| `eth/contracts/types/Intent.sol` | Remove target_chain_id (but note: DepositIntent struct still has targetChainId at line 26) |
 | `docker-compose.yml` | ✅ Already done - anvil-target removed |
 | `scripts/deploy-local.ts` | Lines 372-445 (target deployment section) |
 
@@ -460,15 +460,15 @@ target/contracts/mocks/MockLendingPool.sol
 target/contracts/mocks/MockWormholeCore.sol
 target/contracts/types/FailedOperation.sol
 target/contracts/types/Intent.sol
-l1/contracts/interfaces/IWormholeTokenBridge.sol
-l1/contracts/interfaces/IWormholeRelayer.sol
+eth/contracts/interfaces/IWormholeTokenBridge.sol
+eth/contracts/interfaces/IWormholeRelayer.sol
 ```
 
 ### Files to Create
 
 ```
 frontend/                           [NOT IMPLEMENTED]
-l1/contracts/mocks/MockLendingPool.sol (move from target)
+eth/contracts/mocks/MockLendingPool.sol (move from target)
 ```
 
 ---

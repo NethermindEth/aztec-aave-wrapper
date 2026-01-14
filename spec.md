@@ -305,7 +305,7 @@ Monorepo layout:
   * `contracts/aave_wrapper_l2/` (Noir)
   * `contracts/token/` (if you need a local private token for demos)
   * `tests/` (Noir unit tests)
-* `l1/`
+* `eth/`
 
   * `contracts/AztecAavePortalL1.sol`
   * `scripts/deploy.ts`

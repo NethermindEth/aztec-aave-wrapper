@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Aztec Aave Wrapper enables privacy-preserving Aave lending from Aztec L2 to Ethereum L1. Users on Aztec can deposit into Aave V3 on Ethereum L1 while keeping their identity private.
 
 **Architecture**: Two-layer architecture:
-1. **L2 (Noir/aztec_contracts/)**: Creates private intents, manages encrypted position receipts
-2. **L1 Portal (Solidity/l1/)**: Consumes Aztec messages, executes Aave operations directly
+1. **L2 (Noir/aztec)**: Creates private intents, manages encrypted position receipts
+2. **L1 Portal (Solidity/eth)**: Consumes Aztec messages, executes Aave operations directly
 
 **Privacy model**: Uses hash(ownerL2) to protect user identity across chains while enabling verification. L1 execution doesn't require user identity ("anyone can execute" relay model).
 
@@ -20,16 +20,16 @@ make check-tooling
 
 # Build all contracts
 make build           # Build all (L1, L2)
-make build-l1        # L1 portal: cd l1 && forge build
-make build-l2        # L2 Noir:   cd aztec_contracts && aztec compile
+make build-l1        # L1 portal: cd eth && forge build
+make build-l2        # L2 Noir:   cd aztec && aztec compile
 
 # Run tests
 make test            # All unit tests
-make test-l1         # L1: cd l1 && forge test -vv
-make test-l2         # L2: cd aztec_contracts && aztec test
+make test-l1         # L1: cd eth && forge test -vv
+make test-l2         # L2: cd aztec && aztec test
 
 # Run single Foundry test
-cd l1 && forge test --match-test test_executeDeposit -vvv
+cd eth && forge test --match-test test_executeDeposit -vvv
 
 # E2E tests (requires running devnet)
 make devnet-up       # Start Docker containers
@@ -39,8 +39,8 @@ make devnet-down     # Stop containers
 
 # Formatting
 make fmt             # Format all code
-cd l1 && forge fmt   # Solidity formatting
-cd aztec_contracts && aztec fmt  # Noir formatting
+cd eth && forge fmt   # Solidity formatting
+cd aztec && aztec fmt  # Noir formatting
 
 # Install dependencies
 make install         # bun install + forge install for l1
@@ -49,16 +49,16 @@ make install         # bun install + forge install for l1
 ## Key Files
 
 **L2 Contract (Noir)**:
-- `aztec_contracts/src/main.nr` - AaveWrapper contract with request_deposit, finalize_deposit, request_withdraw, finalize_withdraw
-- `aztec_contracts/src/types/position_receipt.nr` - PositionReceiptNote (private encrypted note)
-- `aztec_contracts/src/types/intent.nr` - DepositIntent, WithdrawIntent structs
+- `aztec/src/main.nr` - AaveWrapper contract with request_deposit, finalize_deposit, request_withdraw, finalize_withdraw
+- `aztec/src/types/position_receipt.nr` - PositionReceiptNote (private encrypted note)
+- `aztec/src/types/intent.nr` - DepositIntent, WithdrawIntent structs
 
 **L1 Portal (Solidity)**:
-- `l1/contracts/AztecAavePortalL1.sol` - Consumes L2 messages, executes Aave operations directly
+- `eth/contracts/AztecAavePortalL1.sol` - Consumes L2 messages, executes Aave operations directly
 
 **Tests**:
 - `e2e/src/e2e.test.ts` - Full deposit/withdraw flow tests
-- `aztec_contracts/src/test/*.nr` - Noir unit tests
+- `aztec/src/test/*.nr` - Noir unit tests
 
 ## Dependencies & Versions
 

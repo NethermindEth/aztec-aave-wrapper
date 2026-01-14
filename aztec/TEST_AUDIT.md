@@ -1,4 +1,4 @@
-# Test Suite Audit: `aztec_contracts/src/test`
+# Test Suite Audit: `aztec/src/test`
 
 **Date:** 2026-01-08
 **Scope:** Unit tests for AaveWrapper L2 contract helper functions
@@ -392,4 +392,4 @@ Tests implemented in `/e2e/src/integration.test.ts` using aztec.js:
 are implemented in TypeScript using aztec.js. See `/e2e/src/integration.test.ts`.
 
 Run integration tests: `cd e2e && npm test -- integration.test.ts`
-Run Noir unit tests: `cd aztec_contracts && aztec test`
+Run Noir unit tests: `cd aztec && aztec test`
