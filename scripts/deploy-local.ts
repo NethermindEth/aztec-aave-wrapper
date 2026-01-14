@@ -38,6 +38,9 @@ const DEPLOYER_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 // Native chain IDs
 const L1_CHAIN_ID = 31337;
 
+// Initial mint amount: 10,000 USDC (6 decimals)
+const INITIAL_USDC_MINT = "10000000000";
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -115,6 +118,38 @@ function deployWithForge(
     } else {
       console.error(`    ✗ Failed:`, error instanceof Error ? error.message : error);
     }
+    throw error;
+  }
+}
+
+// =============================================================================
+// Token Minting Helper
+// =============================================================================
+
+function mintTokens(
+  tokenAddress: string,
+  recipient: string,
+  amount: string,
+  rpcUrl: string
+): void {
+  console.log(`  Minting ${amount} tokens to ${recipient.slice(0, 10)}...`);
+
+  try {
+    // Use cast to call mint(address,uint256) on the token contract
+    const cmd = [
+      "cast send",
+      tokenAddress,
+      '"mint(address,uint256)"',
+      recipient,
+      amount,
+      "--rpc-url", rpcUrl,
+      "--private-key", DEPLOYER_PRIVATE_KEY,
+    ].join(" ");
+
+    execSync(cmd, { encoding: "utf-8", stdio: "pipe" });
+    console.log(`    ✓ Minted ${Number(amount) / 1_000_000} USDC`);
+  } catch (error) {
+    console.error(`    ✗ Mint failed:`, error instanceof Error ? error.message : error);
     throw error;
   }
 }
@@ -313,6 +348,9 @@ async function main() {
     "eth"
   );
 
+  // Mint initial USDC to deployer account
+  mintTokens(addresses.l1.mockUsdc, DEPLOYER_ADDRESS, INITIAL_USDC_MINT, L1_RPC);
+
   // Deploy MockLendingPool
   addresses.l1.mockLendingPool = deployWithForge(
     "contracts/mocks/MockLendingPool.sol:MockLendingPool",
@@ -399,9 +437,13 @@ async function main() {
   console.log("\nL2 Contracts (Aztec :8081):");
   console.log(`  AaveWrapper:         ${addresses.l2.aaveWrapper || "(not deployed)"}`);
 
+  console.log("\nTest Tokens:");
+  console.log(`  Deployer (${DEPLOYER_ADDRESS}):`);
+  console.log(`    USDC: ${Number(INITIAL_USDC_MINT) / 1_000_000} USDC`);
+
   console.log("\nNext steps:");
   console.log("  1. Run E2E tests: make e2e");
-  console.log("  2. Mint test tokens: bun run scripts/mint-tokens.ts");
+  console.log("  2. Start frontend: cd frontend && bun run dev");
 }
 
 // Run
