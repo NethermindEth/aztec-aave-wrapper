@@ -2,6 +2,41 @@
 
 Privacy-preserving Aave lending from Aztec L2.
 
+## Quick Start
+
+### Prerequisites
+
+- **Docker**: For running local devnet
+- **Foundry**: `curl -L https://foundry.paradigm.xyz | bash && foundryup`
+- **Bun**: `curl -fsSL https://bun.sh/install | bash`
+- **Aztec CLI**: `curl -L aztec.network | bash`
+
+Verify installation:
+```bash
+make check-tooling
+```
+
+### Run the Full Flow Demo
+
+```bash
+# 1. Install dependencies
+make install
+
+# 2. Start local devnet (Anvil L1 + Aztec Sandbox)
+make devnet-up
+
+# 3. Wait for services to be ready (~30 seconds)
+make devnet-health
+
+# 4. Build all contracts
+make build
+
+# 5. Run the full deposit/withdraw flow
+cd e2e && bun run full-flow
+```
+
+The full-flow script demonstrates the complete user journey with real L1 contract deployment and balance tracking at each step.
+
 ## Overview
 
 Aztec Aave Wrapper enables users on Aztec L2 to deposit into Aave V3 on Ethereum L1 while keeping their identity completely private. The system uses a two-layer architecture with cross-chain messaging to maintain privacy throughout the entire flow.
@@ -63,69 +98,53 @@ The system preserves user privacy through several mechanisms:
 
 4. **Minimal Public Data**: Public events emit only `intent_id` and status - no user-identifying information.
 
-## Prerequisites
+## What the Full Flow Demonstrates
 
-- **Docker**: For running local devnet
-- **Foundry**: Solidity development (`curl -L https://foundry.paradigm.xyz | bash && foundryup`)
-- **Bun**: Package manager (`curl -fsSL https://bun.sh/install | bash`)
-- **Aztec CLI**: For Noir contracts (`curl -L aztec.network | bash`)
+The `full-flow` script shows the complete deposit journey with balance tracking:
 
-Verify installation:
+```
+📊 USER HAS USDC (starting point)
+| User (L1)  | USDC  | 10.000000 |   ← User starts with USDC on L1
 
-```bash
-make check-tooling
+📊 AFTER USER FUNDS PORTAL
+| User (L1)  | USDC  |  9.000000 |   ← User sends 1 USDC to portal
+| Portal     | USDC  |  1.000000 |
+
+📊 AFTER RELAYER EXECUTES DEPOSIT
+| User (L1)  | USDC  |  9.000000 |
+| Portal     | USDC  |  0.000000 |   ← Portal deposits to Aave
+| Portal     | aUSDC |  1.000000 |   ← Portal receives aTokens
+| Aave Pool  | USDC  |  1.000000 |   ← Aave holds the USDC
 ```
 
-## Quick Start
+**Privacy Properties:**
+- User's L2 address is NEVER revealed on L1
+- `ownerHash` (Poseidon hash) used in cross-chain messages
+- Relayer executes L1 operations (not user)
+- `secret`/`secretHash` for authorization
 
-### 1. Install Dependencies
-
-```bash
-make install
-```
-
-### 2. Start Local Development Network
+## Development Commands
 
 ```bash
-make devnet-up
-```
+# Start/stop devnet
+make devnet-up       # Start Anvil L1 + Aztec Sandbox
+make devnet-down     # Stop all containers
+make devnet-health   # Check services are ready
+make devnet-clean    # Full cleanup and restart
 
-This starts two Docker containers:
-- `anvil-l1`: Ethereum L1 simulation (port 8545)
-- `aztec-sandbox`: Aztec PXE (port 8081)
+# Build
+make build           # Build all contracts
+make build-l1        # L1 Solidity only
+make build-l2        # L2 Noir only
 
-### 3. Wait for Services to Be Ready
+# Test
+make test            # All unit tests
+make test-l1         # L1 Foundry tests
+make test-l2         # L2 Noir tests
+make e2e             # E2E integration tests
 
-```bash
-make devnet-health
-```
-
-This polls each service until healthy (5 minute timeout).
-
-### 4. Build All Contracts
-
-```bash
-make build
-```
-
-Or build individually:
-
-```bash
-make build-l1      # L1 Solidity contracts
-make build-l2      # L2 Noir contracts
-```
-
-### 5. Run Tests
-
-```bash
-make test          # All unit tests
-make e2e           # E2E tests (requires running devnet)
-```
-
-### 6. Stop Development Network
-
-```bash
-make devnet-down
+# Full flow demo
+cd e2e && bun run full-flow
 ```
 
 ## Monitoring & Debugging
@@ -201,7 +220,9 @@ aztec-aave-wrapper/
 │   │   └── mocks/             # MockAavePool contracts
 │   └── foundry.toml
 │
-├── e2e/                       # End-to-end tests
+├── e2e/                       # End-to-end tests & demos
+│   ├── scripts/
+│   │   └── full-flow.ts       # Full deposit/withdraw demo script
 │   └── src/
 │       ├── e2e.test.ts        # Main test suite
 │       ├── setup.ts           # Test harness
@@ -259,16 +280,11 @@ If a withdrawal request expires:
 ### Unit Tests
 
 ```bash
-# All unit tests
-make test
+make test            # All unit tests
+make test-l1         # L1 Foundry tests
+make test-l2         # L2 Noir tests
 
-# L1 contracts only
-make test-l1
-
-# L2 contracts only
-make test-l2
-
-# Single Foundry test
+# Single Foundry test with verbose output
 cd eth && forge test --match-test test_executeDeposit -vvv
 ```
 
@@ -281,6 +297,22 @@ make devnet-up
 make devnet-health
 make e2e
 ```
+
+### Full Flow Demo
+
+The `full-flow` script demonstrates the complete deposit/withdraw flow with real L1 contracts:
+
+```bash
+cd e2e && bun run full-flow
+```
+
+This script:
+- Deploys all L1 contracts (MockUSDC, MockAave, Portal)
+- Deploys L2 AaveWrapper contract
+- Shows user funding the portal with USDC
+- Demonstrates relayer executing deposit on L1
+- Tracks balances at each step
+- Attempts withdrawal (requires real L1→L2 message)
 
 E2E tests cover:
 - Full deposit flow with privacy verification
