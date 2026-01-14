@@ -69,12 +69,14 @@ export interface WithdrawL1Addresses {
 }
 
 /**
- * L2 context for withdraw operations
+ * L2 context for withdraw operations.
+ * Note: AzguardWallet doesn't expose address directly - callers must
+ * construct this wrapper using wallet.getAccounts() (see useFlowClients).
  */
 export interface WithdrawL2Context {
   /** Aztec node client */
   node: AztecNodeClient;
-  /** User wallet */
+  /** User wallet wrapper with address accessor */
   wallet: { address: AztecAddress };
   /** AaveWrapper contract instance */
   contract: AaveWrapperContract;
