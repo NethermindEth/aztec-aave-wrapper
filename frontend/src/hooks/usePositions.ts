@@ -14,12 +14,7 @@
 
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import { type Accessor, createEffect, createMemo, on, onMount } from "solid-js";
-import {
-  addPosition,
-  removePosition,
-  setPositions,
-  updatePosition,
-} from "../store/actions.js";
+import { addPosition, removePosition, setPositions, updatePosition } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 import type { PositionDisplay } from "../types/state.js";
 import { fromBigIntString } from "../types/state.js";
@@ -30,6 +25,9 @@ import { fromBigIntString } from "../types/state.js";
 
 /** LocalStorage key for position persistence */
 const POSITIONS_STORAGE_KEY = "aztec-aave-positions";
+
+/** Flag to track if positions have been loaded from localStorage (prevents duplicate loading across hook instances) */
+let hasLoadedFromStorage = false;
 
 // =============================================================================
 // Types
@@ -187,9 +185,7 @@ export function usePositions(): UsePositionsResult {
   const state = useAppState();
 
   // Convert store positions (string shares) to Position (bigint shares)
-  const positions = createMemo<Position[]>(() =>
-    state.positions.map(toPosition)
-  );
+  const positions = createMemo<Position[]>(() => state.positions.map(toPosition));
 
   // Filter positions that are ready for withdrawal
   const withdrawablePositions = createMemo<Position[]>(() =>
@@ -197,19 +193,21 @@ export function usePositions(): UsePositionsResult {
   );
 
   // Calculate total value across all positions
-  const totalValue = createMemo<bigint>(() =>
-    positions().reduce((sum, p) => sum + p.shares, 0n)
-  );
+  const totalValue = createMemo<bigint>(() => positions().reduce((sum, p) => sum + p.shares, 0n));
 
-  // Load positions from localStorage on mount
+  // Load positions from localStorage on mount (only once across all hook instances)
   onMount(() => {
+    // Prevent duplicate loading when multiple components use this hook
+    if (hasLoadedFromStorage) {
+      return;
+    }
+    hasLoadedFromStorage = true;
+
     const storedPositions = loadPositionsFromStorage();
     if (storedPositions.length > 0) {
       // Merge with any existing positions, avoiding duplicates
       const existingIds = new Set(state.positions.map((p) => p.intentId));
-      const newPositions = storedPositions.filter(
-        (p) => !existingIds.has(p.intentId)
-      );
+      const newPositions = storedPositions.filter((p) => !existingIds.has(p.intentId));
 
       if (newPositions.length > 0) {
         setPositions([...state.positions, ...newPositions]);
@@ -275,6 +273,8 @@ export function usePositions(): UsePositionsResult {
   function clearAllPositions(): void {
     setPositions([]);
     clearPositionsFromStorage();
+    // Reset loading flag so positions can be reloaded if needed
+    hasLoadedFromStorage = false;
   }
 
   return {
@@ -312,6 +312,8 @@ export function getPositionStatusLabel(status: IntentStatus): string {
       return "Active";
     case IntentStatus.PendingWithdraw:
       return "Pending Withdrawal";
+    case IntentStatus.Consumed:
+      return "Consumed";
     default:
       return "Unknown";
   }

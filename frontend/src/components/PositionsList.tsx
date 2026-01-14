@@ -2,18 +2,17 @@
  * PositionsList Component
  *
  * Displays a list of all user Aave positions with empty state handling.
- * Uses the For component to efficiently render position cards.
+ * Uses the usePositions hook for reactive position data with persistence.
  */
 
 import { For, Show } from "solid-js";
-import { type Position, PositionCard } from "./PositionCard";
+import { usePositions } from "../hooks/usePositions.js";
+import { PositionCard } from "./PositionCard.js";
 
 /**
  * Props for PositionsList component
  */
 export interface PositionsListProps {
-  /** Array of positions to display */
-  positions: Position[];
   /** Callback when withdraw is requested for a position */
   onWithdraw: (intentId: string) => void;
   /** Whether positions are currently being loaded */
@@ -26,23 +25,23 @@ export interface PositionsListProps {
  * PositionsList renders a list of user positions with empty state handling.
  *
  * Features:
+ * - Uses usePositions hook for reactive position data with persistence
  * - Displays all positions using PositionCard components
  * - Shows empty state when no positions exist
  * - Shows loading state while fetching positions
  * - Passes withdraw callback to each position card
+ * - Automatically re-renders when positions change in the store
  *
  * @example
  * ```tsx
  * <PositionsList
- *   positions={[
- *     { intentId: "0x123...", shares: 1000000n, status: PositionStatus.CONFIRMED },
- *     { intentId: "0x456...", shares: 500000n, status: PositionStatus.PENDING_DEPOSIT },
- *   ]}
  *   onWithdraw={(intentId) => handleWithdraw(intentId)}
  * />
  * ```
  */
 export function PositionsList(props: PositionsListProps) {
+  const { positions } = usePositions();
+
   return (
     <div class={props.class}>
       <Show when={props.loading}>
@@ -53,7 +52,7 @@ export function PositionsList(props: PositionsListProps) {
 
       <Show when={!props.loading}>
         <Show
-          when={props.positions.length > 0}
+          when={positions().length > 0}
           fallback={
             <div class="flex flex-col items-center justify-center py-8 text-center">
               <div class="text-muted-foreground mb-2">No positions yet</div>
@@ -64,7 +63,7 @@ export function PositionsList(props: PositionsListProps) {
           }
         >
           <div class="grid gap-4">
-            <For each={props.positions}>
+            <For each={positions()}>
               {(position) => <PositionCard position={position} onWithdraw={props.onWithdraw} />}
             </For>
           </div>

@@ -5,32 +5,12 @@
  * and withdraw button (for active positions only).
  */
 
+import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import { Show } from "solid-js";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-
-/**
- * Position status values matching the L2 contract
- */
-export enum PositionStatus {
-  UNKNOWN = 0,
-  PENDING_DEPOSIT = 1,
-  CONFIRMED = 2, // Active
-  PENDING_WITHDRAW = 4,
-}
-
-/**
- * Position data structure
- */
-export interface Position {
-  /** Unique identifier for the intent */
-  intentId: string;
-  /** Number of aUSDC shares held */
-  shares: bigint;
-  /** Current status of the position */
-  status: PositionStatus;
-}
+import type { Position } from "../hooks/usePositions.js";
 
 /**
  * Props for PositionCard component
@@ -47,14 +27,16 @@ export interface PositionCardProps {
 /**
  * Get the badge variant based on position status
  */
-function getStatusVariant(status: PositionStatus): BadgeVariant {
+function getStatusVariant(status: IntentStatus): BadgeVariant {
   switch (status) {
-    case PositionStatus.PENDING_DEPOSIT:
+    case IntentStatus.PendingDeposit:
       return "secondary";
-    case PositionStatus.CONFIRMED:
+    case IntentStatus.Active:
       return "default";
-    case PositionStatus.PENDING_WITHDRAW:
+    case IntentStatus.PendingWithdraw:
       return "outline";
+    case IntentStatus.Consumed:
+      return "destructive";
     default:
       return "destructive";
   }
@@ -63,14 +45,16 @@ function getStatusVariant(status: PositionStatus): BadgeVariant {
 /**
  * Get human-readable label for position status
  */
-function getStatusLabel(status: PositionStatus): string {
+function getStatusLabel(status: IntentStatus): string {
   switch (status) {
-    case PositionStatus.PENDING_DEPOSIT:
+    case IntentStatus.PendingDeposit:
       return "Pending Deposit";
-    case PositionStatus.CONFIRMED:
+    case IntentStatus.Active:
       return "Active";
-    case PositionStatus.PENDING_WITHDRAW:
+    case IntentStatus.PendingWithdraw:
       return "Pending Withdraw";
+    case IntentStatus.Consumed:
+      return "Consumed";
     default:
       return "Unknown";
   }
@@ -78,9 +62,16 @@ function getStatusLabel(status: PositionStatus): string {
 
 /**
  * Format shares for display (USDC has 6 decimals)
+ * Uses bigint arithmetic to avoid precision loss for large values
  */
 function formatShares(shares: bigint): string {
-  return (Number(shares) / 1_000_000).toFixed(6);
+  const DECIMALS = 6n;
+  const SCALE = 10n ** DECIMALS;
+  const wholePart = shares / SCALE;
+  const decimalPart = shares % SCALE;
+  // Pad decimal part with leading zeros
+  const decimalStr = decimalPart.toString().padStart(Number(DECIMALS), "0");
+  return `${wholePart}.${decimalStr}`;
 }
 
 /**
@@ -97,8 +88,10 @@ function formatShares(shares: bigint): string {
  * <PositionCard
  *   position={{
  *     intentId: "0x1234567890abcdef",
+ *     assetId: "0x01",
  *     shares: 1000000n,
- *     status: PositionStatus.CONFIRMED,
+ *     sharesFormatted: "1.000000",
+ *     status: IntentStatus.Active,
  *   }}
  *   onWithdraw={(intentId) => console.log("Withdraw:", intentId)}
  * />
@@ -118,7 +111,7 @@ export function PositionCard(props: PositionCardProps) {
       </CardHeader>
       <CardContent>
         <div class="text-2xl font-bold">{formatShares(props.position.shares)} aUSDC</div>
-        <Show when={props.position.status === PositionStatus.CONFIRMED}>
+        <Show when={props.position.status === IntentStatus.Active}>
           <Button
             variant="outline"
             size="sm"

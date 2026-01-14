@@ -5,32 +5,36 @@
  * AppProvider context is provided at the entry point (index.tsx).
  */
 
+import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import type { Component } from "solid-js";
 import { createSignal } from "solid-js";
 import { ContractDeployment } from "./components/ContractDeployment";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { type LogEntry, LogLevel, LogViewer } from "./components/LogViewer";
 import { OperationTabs } from "./components/OperationTabs";
-import type { Position } from "./components/PositionCard";
-import { PositionStatus } from "./components/PositionCard";
 import { PositionsList } from "./components/PositionsList";
 import { TopBar } from "./components/TopBar";
-import { executeDepositFlow, type DepositL1Addresses, type DepositL2Context } from "./flows/deposit";
+import {
+  type DepositL1Addresses,
+  type DepositL2Context,
+  executeDepositFlow,
+} from "./flows/deposit";
+import { usePositions } from "./hooks/usePositions.js";
 import { createDevnetL1Clients } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
 import { createL2NodeClient } from "./services/l2/client";
 import { loadContractWithAzguard } from "./services/l2/contract";
 import { connectAztecWallet } from "./services/wallet/aztec";
 import { useApp } from "./store/hooks";
+import { formatUSDC, toBigIntString } from "./types/state.js";
 
 /**
  * Main application component
  */
 const App: Component = () => {
   const { state } = useApp();
+  const { addNewPosition, updatePositionStatus } = usePositions();
 
-  // Positions state - would typically come from store or data fetching
-  const [positions, setPositions] = createSignal<Position[]>([]);
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
   const [isDepositing, setIsDepositing] = createSignal(false);
 
@@ -139,15 +143,14 @@ const App: Component = () => {
         deadlineOffset: deadline,
       });
 
-      // Update UI with result
-      setPositions((prev) => [
-        ...prev,
-        {
-          intentId: result.intentId,
-          shares: result.shares,
-          status: PositionStatus.PENDING_DEPOSIT,
-        },
-      ]);
+      // Update UI with result - add position to store
+      addNewPosition({
+        intentId: result.intentId,
+        assetId: "0x01", // USDC asset ID
+        shares: toBigIntString(result.shares),
+        sharesFormatted: formatUSDC(result.shares),
+        status: IntentStatus.PendingDeposit,
+      });
       addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
       addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
     } catch (error) {
@@ -163,12 +166,8 @@ const App: Component = () => {
    */
   const handleWithdraw = (intentId: string) => {
     addLog(`Initiating withdrawal for position: ${intentId}`);
-    // Update position status
-    setPositions((prev) =>
-      prev.map((p) =>
-        p.intentId === intentId ? { ...p, status: PositionStatus.PENDING_WITHDRAW } : p
-      )
-    );
+    // Update position status in store
+    updatePositionStatus(intentId, IntentStatus.PendingWithdraw);
     addLog(`Withdrawal request submitted`, LogLevel.SUCCESS);
   };
 
@@ -206,7 +205,7 @@ const App: Component = () => {
 
           {/* Positions */}
           <ErrorBoundary>
-            <PositionsList positions={positions()} onWithdraw={handleWithdraw} />
+            <PositionsList onWithdraw={handleWithdraw} />
           </ErrorBoundary>
 
           {/* Logs */}

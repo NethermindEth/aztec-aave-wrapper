@@ -10,14 +10,7 @@
  * - Lazy loading of Aztec modules
  */
 
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  onCleanup,
-} from "solid-js";
+import { type Accessor, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
 import type { Account, Address, Chain, PublicClient, Transport, WalletClient } from "viem";
 import type { L1Clients } from "../services/l1/client.js";
 import { createL1WalletClient, DevnetAccounts } from "../services/l1/client.js";
@@ -213,9 +206,7 @@ export function useFlowClients(
   /**
    * Initialize L1 clients from wallet connection.
    */
-  async function initializeL1Clients(
-    connection: EthereumWalletConnection
-  ): Promise<L1Clients> {
+  async function initializeL1Clients(connection: EthereumWalletConnection): Promise<L1Clients> {
     const { publicClient, walletClient } = connection;
 
     // Create relayer wallet for L1 operations that don't reveal user identity
