@@ -298,8 +298,10 @@ export function DepositFlow(props: DepositFlowProps) {
         <Button class="w-full" disabled={!canDeposit() || isProcessing()} onClick={handleDeposit}>
           <Switch fallback="Deposit">
             <Match when={isProcessing()}>Processing...</Match>
-            <Match when={!state.wallet.l1Address}>Connect Wallet</Match>
-            <Match when={!state.contracts.portal}>Deploy Contracts</Match>
+            <Match when={!state.wallet.l1Address}>Connect ETH Wallet</Match>
+            <Match when={!state.wallet.l2Address}>Connect Aztec Wallet</Match>
+            <Match when={!state.contracts.portal}>Loading Contracts...</Match>
+            <Match when={!state.contracts.l2Wrapper}>Loading L2 Contract...</Match>
           </Switch>
         </Button>
       </CardFooter>

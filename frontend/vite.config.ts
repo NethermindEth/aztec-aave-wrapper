@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { defineConfig, Plugin, searchForWorkspaceRoot } from 'vite';
 import solidPlugin from 'vite-plugin-solid';
 import devtools from 'solid-devtools/vite';
@@ -9,6 +10,29 @@ import path from 'path';
 
 // Use workspace root's node_modules (matches Aztec's official vite config approach)
 const nodeModulesPath = `${searchForWorkspaceRoot(process.cwd())}/node_modules`;
+
+// Serve .deployments.local.json from project root during development
+const serveDeploymentsPlugin = (): Plugin => {
+  const deploymentsPath = path.resolve(__dirname, '../.deployments.local.json');
+  return {
+    name: 'serve-deployments',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url === '/.deployments.local.json') {
+          if (fs.existsSync(deploymentsPath)) {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(fs.readFileSync(deploymentsPath, 'utf-8'));
+          } else {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: 'Deployments file not found. Run deploy script first.' }));
+          }
+          return;
+        }
+        next();
+      });
+    },
+  };
+};
 
 // Fix for vite-plugin-node-polyfills in workspace setup
 // Based on https://github.com/AztecProtocol/aztec-packages/blob/master/boxes/boxes/vite/vite.config.ts
@@ -77,6 +101,7 @@ export default defineConfig({
     solidPlugin(),
     wasm(),
     topLevelAwait(),
+    serveDeploymentsPlugin(),
     nodePolyfillsFix({
       // Polyfills for Node.js built-ins (matches Aztec official vite config)
       include: ['buffer', 'path', 'process', 'net', 'tty'],

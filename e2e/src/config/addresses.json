@@ -1,12 +1,12 @@
 {
   "local": {
     "l2": {
-      "aaveWrapper": "0x256523d5a7df1e122ac726985bee2cd9a11c4cd496117c28e2ca2d2a7734af6a"
+      "aaveWrapper": "0x03c036eb13ce6bf9b8c28cbdec371077e64701eda0e3f8cbfff254f0007fa5a1"
     },
     "l1": {
-      "portal": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+      "portal": "0x99bbA657f2BbC93c02D617f8bA121cB8Fc104Acf",
       "mockUsdc": "0x998abeb3E57409262aE5b751f60747921B33613E",
-      "mockLendingPool": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49"
+      "mockLendingPool": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528"
     }
   },
   "testnet": {

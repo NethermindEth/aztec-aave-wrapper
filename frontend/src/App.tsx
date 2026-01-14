@@ -7,7 +7,6 @@
 
 import type { Component } from "solid-js";
 import { createSignal } from "solid-js";
-import { ConnectionStatusBar } from "./components/ConnectionStatusBar";
 import { ContractDeployment } from "./components/ContractDeployment";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { type LogEntry, LogLevel, LogViewer } from "./components/LogViewer";
@@ -15,7 +14,7 @@ import { OperationTabs } from "./components/OperationTabs";
 import type { Position } from "./components/PositionCard";
 import { PositionStatus } from "./components/PositionCard";
 import { PositionsList } from "./components/PositionsList";
-import { WalletInfo } from "./components/WalletInfo";
+import { TopBar } from "./components/TopBar";
 
 /**
  * Main application component
@@ -86,45 +85,49 @@ const App: Component = () => {
   };
 
   return (
-    <div class="container mx-auto max-w-4xl p-4 space-y-6">
-      {/* Header */}
-      <header class="text-center py-4">
-        <h1 class="text-2xl font-bold">Aztec Aave Wrapper</h1>
-        <p class="text-sm text-muted-foreground mt-1">
-          Privacy-preserving Aave lending from Aztec L2
-        </p>
-      </header>
+    <>
+      {/* Fixed TopBar */}
+      <TopBar />
 
-      {/* Connection Status */}
-      <ErrorBoundary>
-        <ConnectionStatusBar />
-      </ErrorBoundary>
+      {/* Main content with top padding for fixed header */}
+      <main class="pt-12 pb-8 min-h-screen bg-zinc-950">
+        <div class="container mx-auto max-w-4xl px-4 space-y-6">
+          {/* Hero section */}
+          <section class="text-center py-6">
+            <h1 class="text-2xl font-semibold tracking-tight text-zinc-100">
+              Privacy-Preserving Lending
+            </h1>
+            <p class="text-sm text-zinc-500 mt-1.5 max-w-md mx-auto">
+              Deposit into Aave V3 from Aztec L2 while keeping your identity private
+            </p>
+          </section>
 
-      {/* Wallet Info */}
-      <ErrorBoundary>
-        <WalletInfo />
-      </ErrorBoundary>
+          {/* Contract Deployment */}
+          <ErrorBoundary>
+            <ContractDeployment />
+          </ErrorBoundary>
 
-      {/* Contract Deployment */}
-      <ErrorBoundary>
-        <ContractDeployment />
-      </ErrorBoundary>
+          {/* Main Operations */}
+          <ErrorBoundary>
+            <OperationTabs
+              defaultTab="deposit"
+              onDeposit={handleDeposit}
+              onWithdraw={handleWithdraw}
+            />
+          </ErrorBoundary>
 
-      {/* Main Operations */}
-      <ErrorBoundary>
-        <OperationTabs defaultTab="deposit" onDeposit={handleDeposit} onWithdraw={handleWithdraw} />
-      </ErrorBoundary>
+          {/* Positions */}
+          <ErrorBoundary>
+            <PositionsList positions={positions()} onWithdraw={handleWithdraw} />
+          </ErrorBoundary>
 
-      {/* Positions */}
-      <ErrorBoundary>
-        <PositionsList positions={positions()} onWithdraw={handleWithdraw} />
-      </ErrorBoundary>
-
-      {/* Logs */}
-      <ErrorBoundary>
-        <LogViewer logs={logs()} title="Operation Logs" maxHeight={300} />
-      </ErrorBoundary>
-    </div>
+          {/* Logs */}
+          <ErrorBoundary>
+            <LogViewer logs={logs()} title="Operation Logs" maxHeight={300} />
+          </ErrorBoundary>
+        </div>
+      </main>
+    </>
   );
 };
 
