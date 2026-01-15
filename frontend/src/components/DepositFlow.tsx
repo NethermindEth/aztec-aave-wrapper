@@ -9,7 +9,7 @@ import { createSignal, Match, Show, Switch } from "solid-js";
 import { DEADLINE_CONSTRAINTS } from "../config/constants.js";
 import { useApp } from "../store/hooks.js";
 import { fromBigIntString } from "../types/state.js";
-import { StepIndicator } from "./StepIndicator";
+import { StepIndicator, type StepConfig } from "./StepIndicator";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
@@ -18,15 +18,39 @@ import { Label } from "./ui/label";
 import { Select, type SelectOption } from "./ui/select";
 
 /**
- * Deposit flow step labels
+ * Deposit flow step configuration with labels, descriptions, and time estimates
  */
-const DEPOSIT_STEP_LABELS = [
-  "Generate secret",
-  "Request deposit on L2",
-  "Wait for L2→L1 message",
-  "Fund portal with USDC",
-  "Execute deposit on L1",
-  "Finalize deposit on L2",
+const DEPOSIT_STEPS: StepConfig[] = [
+  {
+    label: "Generate secret",
+    description: "Creating a random secret for your private position",
+    estimatedSeconds: 2,
+  },
+  {
+    label: "Request deposit on L2",
+    description: "Creating a private intent on Aztec L2",
+    estimatedSeconds: 15,
+  },
+  {
+    label: "Wait for L2→L1 message",
+    description: "Waiting for cross-chain message to propagate",
+    estimatedSeconds: 60,
+  },
+  {
+    label: "Fund portal with USDC",
+    description: "Transferring USDC to the portal contract",
+    estimatedSeconds: 30,
+  },
+  {
+    label: "Execute deposit on L1",
+    description: "Executing Aave deposit on Ethereum",
+    estimatedSeconds: 30,
+  },
+  {
+    label: "Finalize deposit on L2",
+    description: "Creating your private position receipt on Aztec",
+    estimatedSeconds: 15,
+  },
 ];
 
 /**
@@ -139,11 +163,15 @@ export function DepositFlow(props: DepositFlowProps) {
   const isOperationActive = () => state.operation.type === "deposit";
   const isProcessing = () => isOperationActive() && state.operation.status === "pending";
 
-  const currentStepLabel = () => {
-    if (!isOperationActive()) return "";
+  const currentStepConfig = () => {
+    if (!isOperationActive()) return null;
     const step = state.operation.step;
-    return DEPOSIT_STEP_LABELS[step - 1] ?? "";
+    return DEPOSIT_STEPS[step - 1] ?? null;
   };
+
+  const currentStepLabel = () => currentStepConfig()?.label ?? "";
+  const currentStepDescription = () => currentStepConfig()?.description ?? "";
+  const currentStepEstimate = () => currentStepConfig()?.estimatedSeconds;
 
   const maxBalance = () => fromBigIntString(state.wallet.usdcBalance);
 
@@ -282,8 +310,10 @@ export function DepositFlow(props: DepositFlowProps) {
         <Show when={isOperationActive()}>
           <StepIndicator
             currentStep={state.operation.step}
-            totalSteps={DEPOSIT_STEP_LABELS.length}
+            totalSteps={DEPOSIT_STEPS.length}
             stepLabel={currentStepLabel()}
+            description={currentStepDescription()}
+            estimatedSecondsRemaining={currentStepEstimate()}
           />
         </Show>
 

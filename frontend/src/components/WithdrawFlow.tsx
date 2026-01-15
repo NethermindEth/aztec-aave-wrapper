@@ -9,20 +9,36 @@ import { createMemo, createSignal, Match, Show, Switch } from "solid-js";
 import { useApp } from "../store/hooks.js";
 import { IntentStatus } from "../types/index.js";
 import type { PositionDisplay } from "../types/state.js";
-import { StepIndicator } from "./StepIndicator";
+import { StepIndicator, type StepConfig } from "./StepIndicator";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Select, type SelectOption } from "./ui/select";
 
 /**
- * Withdraw flow step labels
+ * Withdraw flow step configuration with labels, descriptions, and time estimates
  */
-const WITHDRAW_STEP_LABELS = [
-  "Request withdrawal on L2",
-  "Wait for L2→L1 message",
-  "Execute withdrawal on L1",
-  "Finalize withdrawal on L2",
+const WITHDRAW_STEPS: StepConfig[] = [
+  {
+    label: "Request withdrawal on L2",
+    description: "Creating a private withdrawal intent on Aztec L2",
+    estimatedSeconds: 15,
+  },
+  {
+    label: "Wait for L2→L1 message",
+    description: "Waiting for cross-chain message to propagate",
+    estimatedSeconds: 60,
+  },
+  {
+    label: "Execute withdrawal on L1",
+    description: "Withdrawing from Aave and sending funds to portal",
+    estimatedSeconds: 30,
+  },
+  {
+    label: "Finalize withdrawal on L2",
+    description: "Completing withdrawal and nullifying position receipt",
+    estimatedSeconds: 15,
+  },
 ];
 
 /**
@@ -81,11 +97,15 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
   const isOperationActive = () => state.operation.type === "withdraw";
   const isProcessing = () => isOperationActive() && state.operation.status === "pending";
 
-  const currentStepLabel = () => {
-    if (!isOperationActive()) return "";
+  const currentStepConfig = () => {
+    if (!isOperationActive()) return null;
     const step = state.operation.step;
-    return WITHDRAW_STEP_LABELS[step - 1] ?? "";
+    return WITHDRAW_STEPS[step - 1] ?? null;
   };
+
+  const currentStepLabel = () => currentStepConfig()?.label ?? "";
+  const currentStepDescription = () => currentStepConfig()?.description ?? "";
+  const currentStepEstimate = () => currentStepConfig()?.estimatedSeconds;
 
   const hasPositions = () => positionOptions().length > 0;
 
@@ -206,8 +226,10 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
         <Show when={isOperationActive()}>
           <StepIndicator
             currentStep={state.operation.step}
-            totalSteps={WITHDRAW_STEP_LABELS.length}
+            totalSteps={WITHDRAW_STEPS.length}
             stepLabel={currentStepLabel()}
+            description={currentStepDescription()}
+            estimatedSecondsRemaining={currentStepEstimate()}
           />
         </Show>
 
