@@ -208,7 +208,7 @@ devnet-down:
 	@echo ""
 	@echo "Stopping local devnet..."
 	@echo ""
-	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down
+	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down --volumes
 	@echo ""
 	@echo "Devnet stopped."
 	@echo ""
