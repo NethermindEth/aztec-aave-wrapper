@@ -4,6 +4,6 @@
  * This module provides a centralized export for all test utilities.
  */
 
-export * from "./test-utils";
 export * from "./assertions";
 export { logger } from "./logger";
+export * from "./test-utils";

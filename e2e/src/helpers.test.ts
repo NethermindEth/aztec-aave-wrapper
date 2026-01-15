@@ -5,28 +5,28 @@
  * without requiring a running devnet or PXE connection.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  computeExpectedIntentId,
-  computeSecretHash,
-  computeSalt,
-  computeOwnerHash,
-  computeDeadline,
-  extractNoteFields,
-  isFieldElement,
-  toFieldBigInt,
-  type PositionReceiptFields,
-} from "./helpers/test-utils";
-import {
+  assertContractError,
+  assertDeadlineInFuture,
+  assertDeadlineInPast,
+  assertIntentIdNonZero,
   assertIntentIdValid,
   assertNoteFields,
   assertSpecificError,
-  assertIntentIdNonZero,
-  assertDeadlineInFuture,
-  assertDeadlineInPast,
-  assertContractError,
   CONTRACT_ERRORS,
 } from "./helpers/assertions";
+import {
+  computeDeadline,
+  computeExpectedIntentId,
+  computeOwnerHash,
+  computeSalt,
+  computeSecretHash,
+  extractNoteFields,
+  isFieldElement,
+  type PositionReceiptFields,
+  toFieldBigInt,
+} from "./helpers/test-utils";
 
 // Dynamic imports for aztec.js (same pattern as integration.test.ts)
 let aztecAvailable = false;
@@ -51,7 +51,9 @@ describe("Helper Functions Tests", () => {
     it("should compute intent_id matching Noir implementation", async () => {
       if (!aztecAvailable) return;
 
-      const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
+      const caller = AztecAddress.fromString(
+        "0x1234567890123456789012345678901234567890123456789012345678901234"
+      );
       const asset = 1n;
       const amount = 1000n;
       const originalDecimals = 6;
@@ -78,8 +80,12 @@ describe("Helper Functions Tests", () => {
     it("should produce different intent_ids for different callers", async () => {
       if (!aztecAvailable) return;
 
-      const caller1 = AztecAddress.fromString("0x1111111111111111111111111111111111111111111111111111111111111111");
-      const caller2 = AztecAddress.fromString("0x2222222222222222222222222222222222222222222222222222222222222222");
+      const caller1 = AztecAddress.fromString(
+        "0x1111111111111111111111111111111111111111111111111111111111111111"
+      );
+      const caller2 = AztecAddress.fromString(
+        "0x2222222222222222222222222222222222222222222222222222222222222222"
+      );
       const asset = 1n;
       const amount = 1000n;
       const originalDecimals = 6;
@@ -110,7 +116,9 @@ describe("Helper Functions Tests", () => {
     it("should produce different intent_ids for different amounts", async () => {
       if (!aztecAvailable) return;
 
-      const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
+      const caller = AztecAddress.fromString(
+        "0x1234567890123456789012345678901234567890123456789012345678901234"
+      );
       const asset = 1n;
       const originalDecimals = 6;
       const deadline = 1700000000n;
@@ -179,7 +187,9 @@ describe("Helper Functions Tests", () => {
     it("should compute salt matching Noir implementation", async () => {
       if (!aztecAvailable) return;
 
-      const caller = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
+      const caller = AztecAddress.fromString(
+        "0x1234567890123456789012345678901234567890123456789012345678901234"
+      );
       const secretHash = 999n;
 
       const salt = await computeSalt(caller, secretHash);
@@ -192,8 +202,12 @@ describe("Helper Functions Tests", () => {
     it("should produce different salts for different callers", async () => {
       if (!aztecAvailable) return;
 
-      const caller1 = AztecAddress.fromString("0x1111111111111111111111111111111111111111111111111111111111111111");
-      const caller2 = AztecAddress.fromString("0x2222222222222222222222222222222222222222222222222222222222222222");
+      const caller1 = AztecAddress.fromString(
+        "0x1111111111111111111111111111111111111111111111111111111111111111"
+      );
+      const caller2 = AztecAddress.fromString(
+        "0x2222222222222222222222222222222222222222222222222222222222222222"
+      );
       const secretHash = 999n;
 
       const salt1 = await computeSalt(caller1, secretHash);
@@ -207,7 +221,9 @@ describe("Helper Functions Tests", () => {
     it("should compute owner hash matching Noir implementation", async () => {
       if (!aztecAvailable) return;
 
-      const owner = AztecAddress.fromString("0x1234567890123456789012345678901234567890123456789012345678901234");
+      const owner = AztecAddress.fromString(
+        "0x1234567890123456789012345678901234567890123456789012345678901234"
+      );
 
       const ownerHash = await computeOwnerHash(owner);
 
@@ -219,8 +235,12 @@ describe("Helper Functions Tests", () => {
     it("should produce different hashes for different owners", async () => {
       if (!aztecAvailable) return;
 
-      const owner1 = AztecAddress.fromString("0x1111111111111111111111111111111111111111111111111111111111111111");
-      const owner2 = AztecAddress.fromString("0x2222222222222222222222222222222222222222222222222222222222222222");
+      const owner1 = AztecAddress.fromString(
+        "0x1111111111111111111111111111111111111111111111111111111111111111"
+      );
+      const owner2 = AztecAddress.fromString(
+        "0x2222222222222222222222222222222222222222222222222222222222222222"
+      );
 
       const hash1 = await computeOwnerHash(owner1);
       const hash2 = await computeOwnerHash(owner2);
@@ -288,9 +308,7 @@ describe("Helper Functions Tests", () => {
         items: [new Fr(1n), new Fr(2n)], // Only 2 fields instead of 6
       };
 
-      expect(() => extractNoteFields(mockNote as any)).toThrow(
-        /Expected at least 6 fields/
-      );
+      expect(() => extractNoteFields(mockNote as any)).toThrow(/Expected at least 6 fields/);
     });
   });
 
@@ -377,21 +395,15 @@ describe("Assertion Helpers Tests", () => {
 
   describe("assertSpecificError", () => {
     it("should pass when expected error is thrown", async () => {
-      await assertSpecificError(
-        async () => {
-          throw new Error("Intent ID already consumed");
-        },
-        "Intent ID already consumed"
-      );
+      await assertSpecificError(async () => {
+        throw new Error("Intent ID already consumed");
+      }, "Intent ID already consumed");
     });
 
     it("should pass with regex pattern", async () => {
-      await assertSpecificError(
-        async () => {
-          throw new Error("Intent ID already consumed");
-        },
-        /Intent ID.*consumed/
-      );
+      await assertSpecificError(async () => {
+        throw new Error("Intent ID already consumed");
+      }, /Intent ID.*consumed/);
     });
 
     it("should fail when no error is thrown", async () => {
@@ -404,12 +416,9 @@ describe("Assertion Helpers Tests", () => {
 
     it("should fail when wrong error is thrown", async () => {
       await expect(
-        assertSpecificError(
-          async () => {
-            throw new Error("Different error");
-          },
-          "Intent ID already consumed"
-        )
+        assertSpecificError(async () => {
+          throw new Error("Different error");
+        }, "Intent ID already consumed")
       ).rejects.toThrow(/Expected error/);
     });
   });
@@ -467,22 +476,16 @@ describe("Assertion Helpers Tests", () => {
 
   describe("assertContractError", () => {
     it("should pass when expected contract error is thrown", async () => {
-      await assertContractError(
-        async () => {
-          throw new Error("Intent ID already consumed");
-        },
-        "INTENT_ALREADY_CONSUMED"
-      );
+      await assertContractError(async () => {
+        throw new Error("Intent ID already consumed");
+      }, "INTENT_ALREADY_CONSUMED");
     });
 
     it("should fail when wrong error is thrown", async () => {
       await expect(
-        assertContractError(
-          async () => {
-            throw new Error("Different error");
-          },
-          "INTENT_ALREADY_CONSUMED"
-        )
+        assertContractError(async () => {
+          throw new Error("Different error");
+        }, "INTENT_ALREADY_CONSUMED")
       ).rejects.toThrow(/Expected error/);
     });
   });

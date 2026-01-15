@@ -13,17 +13,11 @@
  *   const notes = await helper.getPositionNotes(contract, owner);
  */
 
-import type { TestConfig } from "../config";
-
 // =============================================================================
 // Type Definitions (3.0.0 SDK uses subpath exports)
 // =============================================================================
 
 type AztecNode = import("@aztec/stdlib/interfaces/client").AztecNode;
-type Fr = import("@aztec/aztec.js/fields").Fr;
-type AztecAddress = import("@aztec/aztec.js/addresses").AztecAddress;
-type EthAddress = import("@aztec/foundation/eth-address").EthAddress;
-type AccountWithSecretKey = import("@aztec/aztec.js/account").AccountWithSecretKey;
 type ContractInstance = import("@aztec/aztec.js/contracts").Contract;
 type Note = import("@aztec/aztec.js/note").Note;
 
@@ -91,10 +85,6 @@ export interface L2ToL1Message {
  */
 export class AztecHelper {
   private pxe: PXE;
-  private aztec: {
-    Fr: typeof import("@aztec/aztec.js/fields").Fr;
-    AztecAddress: typeof import("@aztec/aztec.js/addresses").AztecAddress;
-  } | null = null;
 
   constructor(pxe: PXE) {
     this.pxe = pxe;
@@ -104,12 +94,7 @@ export class AztecHelper {
    * Initialize Aztec modules (required before use).
    */
   async initialize(): Promise<void> {
-    const fieldsModule = await import("@aztec/aztec.js/fields");
-    const addressesModule = await import("@aztec/aztec.js/addresses");
-    this.aztec = {
-      Fr: fieldsModule.Fr,
-      AztecAddress: addressesModule.AztecAddress,
-    };
+    // Dynamic imports are done on-demand in methods that need them
   }
 
   // ===========================================================================
@@ -184,9 +169,7 @@ export class AztecHelper {
     const items = note.items;
 
     if (items.length < 6) {
-      throw new Error(
-        `Invalid position note: expected 6 fields, got ${items.length}`
-      );
+      throw new Error(`Invalid position note: expected 6 fields, got ${items.length}`);
     }
 
     return {
@@ -210,10 +193,7 @@ export class AztecHelper {
    * @param intentId - Intent ID to query
    * @returns Intent state
    */
-  async getIntentState(
-    contract: ContractInstance,
-    intentId: bigint
-  ): Promise<IntentState> {
+  async getIntentState(contract: ContractInstance, intentId: bigint): Promise<IntentState> {
     try {
       // Call the contract's public getter for intent status
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -244,10 +224,7 @@ export class AztecHelper {
    * @param intentId - Intent ID to check
    * @returns true if intent is consumed/finalized
    */
-  async isIntentConsumed(
-    contract: ContractInstance,
-    intentId: bigint
-  ): Promise<boolean> {
+  async isIntentConsumed(contract: ContractInstance, intentId: bigint): Promise<boolean> {
     const state = await this.getIntentState(contract, intentId);
     return state.exists && state.status === PositionStatus.Consumed;
   }
@@ -278,10 +255,7 @@ export class AztecHelper {
    * @param timeoutMs - Maximum wait time
    * @returns true if message was processed
    */
-  async waitForL1ToL2Message(
-    messageHash: bigint,
-    timeoutMs: number = 60_000
-  ): Promise<boolean> {
+  async waitForL1ToL2Message(_messageHash: bigint, timeoutMs: number = 60_000): Promise<boolean> {
     const startTime = Date.now();
     const pollInterval = 2000;
 
@@ -289,7 +263,7 @@ export class AztecHelper {
       try {
         // Check if message has been added to the inbox
         // Implementation depends on aztec.js version
-        const info = await this.pxe.getNodeInfo();
+        await this.pxe.getNodeInfo();
         // In a real implementation, we'd query the inbox
         await new Promise((resolve) => setTimeout(resolve, pollInterval));
       } catch {
@@ -326,7 +300,9 @@ export class AztecHelper {
         return { success: false, error: `Method ${methodName} not found` };
       }
 
-      const tx = await method(...args).send().wait();
+      const tx = await method(...args)
+        .send()
+        .wait();
 
       return {
         success: true,
@@ -398,9 +374,7 @@ export async function generateSecret(): Promise<bigint> {
  * @returns Secret hash
  */
 export async function computeSecretHash(secret: bigint): Promise<bigint> {
-  const { computeSecretHash: aztecComputeSecretHash } = await import(
-    "@aztec/stdlib/hash"
-  );
+  const { computeSecretHash: aztecComputeSecretHash } = await import("@aztec/stdlib/hash");
   const { Fr } = await import("@aztec/aztec.js/fields");
   // Use Fr constructor directly with bigint - fromString doesn't handle decimal strings properly
   // In 3.0.0, computeSecretHash is async
@@ -442,10 +416,7 @@ export async function computeIntentId(params: {
  * @param secretHash - Secret hash
  * @returns Salt value
  */
-export async function computeSalt(
-  caller: bigint,
-  secretHash: bigint
-): Promise<bigint> {
+export async function computeSalt(caller: bigint, secretHash: bigint): Promise<bigint> {
   const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
   const hash = await poseidon2Hash([caller, secretHash]);
   return hash.toBigInt();

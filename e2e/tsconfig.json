@@ -17,6 +17,6 @@
     "resolveJsonModule": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/**/*.ts", "src/**/*.json"],
+  "include": ["src/**/*.ts", "src/**/*.json", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "../aztec/generated"]
 }

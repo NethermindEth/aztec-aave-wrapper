@@ -14,8 +14,11 @@
  * Run with: npm test -- integration.test.ts
  */
 
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
-import { AaveWrapperContract, AaveWrapperContractArtifact } from "../../aztec/generated/AaveWrapper";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  AaveWrapperContract,
+  AaveWrapperContractArtifact,
+} from "../../aztec/generated/AaveWrapper";
 
 // Dynamic imports to handle Node.js v23+ compatibility issues with aztec.js
 // The aztec packages use `import ... assert { type: 'json' }` which was
@@ -25,7 +28,7 @@ let createPXEClient: typeof import("@aztec/aztec.js/node").createAztecNodeClient
 let Fr: typeof import("@aztec/aztec.js/fields").Fr;
 let AztecAddress: typeof import("@aztec/aztec.js/addresses").AztecAddress;
 let EthAddress: typeof import("@aztec/foundation/eth-address").EthAddress;
-let GrumpkinScalar: typeof import("@aztec/aztec.js/fields").GrumpkinScalar;
+let _GrumpkinScalar: typeof import("@aztec/aztec.js/fields").GrumpkinScalar;
 
 type PXE = import("@aztec/stdlib/interfaces/client").AztecNode;
 
@@ -54,16 +57,12 @@ function computeDeadline(offsetSeconds: number): bigint {
 /**
  * Compute secret hash from a secret (async because SDK hash functions are async in 3.0.0)
  */
-async function computeSecretHashFromFr(secret: InstanceType<typeof Fr>): Promise<InstanceType<typeof Fr>> {
+async function computeSecretHashFromFr(
+  secret: InstanceType<typeof Fr>
+): Promise<InstanceType<typeof Fr>> {
   const { computeSecretHash } = await import("@aztec/stdlib/hash");
   return computeSecretHash(secret);
 }
-
-/**
- * Type helper for contract methods (aztec.js Contract has dynamic method types)
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyMethods = any;
 
 describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => {
   let pxe: PXE | null = null;
@@ -83,7 +82,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
   let userBAddress: InstanceType<typeof AztecAddress>;
 
   // Contract instance (deployed per test suite)
-  let aaveWrapper: AaveWrapperContract;
+  let _aaveWrapper: AaveWrapperContract;
   let contractAddress: InstanceType<typeof AztecAddress>;
 
   // Portal address (mock for tests)
@@ -99,7 +98,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
 
       createPXEClient = nodeModule.createAztecNodeClient;
       Fr = fieldsModule.Fr;
-      GrumpkinScalar = fieldsModule.GrumpkinScalar;
+      _GrumpkinScalar = fieldsModule.GrumpkinScalar;
       AztecAddress = addressesModule.AztecAddress;
       EthAddress = ethAddressModule.EthAddress;
       aztecAvailable = true;
@@ -133,11 +132,8 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
     // Create TestWallets and register pre-funded sandbox accounts
     try {
       // Import the known test account keys from @aztec/accounts/testing
-      const {
-        INITIAL_TEST_SECRET_KEYS,
-        INITIAL_TEST_SIGNING_KEYS,
-        INITIAL_TEST_ACCOUNT_SALTS,
-      } = await import("@aztec/accounts/testing");
+      const { INITIAL_TEST_SECRET_KEYS, INITIAL_TEST_SIGNING_KEYS, INITIAL_TEST_ACCOUNT_SALTS } =
+        await import("@aztec/accounts/testing");
       const { TestWallet } = await import("@aztec/test-wallet/server");
 
       // Verify we have enough accounts
@@ -202,7 +198,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       .send({ from: adminAddress })
       .deployed();
 
-    aaveWrapper = deployedContract;
+    _aaveWrapper = deployedContract;
     contractAddress = deployedContract.address;
 
     // In 3.0.0 SDK, we need to register the deployed contract with other wallets
@@ -241,11 +237,11 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       // User A requests deposit using typed methods
       // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const depositCall = userAContract.methods.request_deposit(
-        1n,                              // asset
-        TEST_CONFIG.depositAmount,       // amount
-        TEST_CONFIG.originalDecimals,    // original_decimals
-        deadline,                        // deadline
-        secretHashA                      // secret_hash
+        1n, // asset
+        TEST_CONFIG.depositAmount, // amount
+        TEST_CONFIG.originalDecimals, // original_decimals
+        deadline, // deadline
+        secretHashA // secret_hash
       );
 
       // Simulate first to get the return value (intent ID)
@@ -311,11 +307,11 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
 
       // Create deposit call
       const depositCall = userAContract.methods.request_deposit(
-        1n,                              // asset
-        TEST_CONFIG.depositAmount,       // amount
-        TEST_CONFIG.originalDecimals,    // original_decimals
-        deadline,                        // deadline
-        secretHash                       // secret_hash
+        1n, // asset
+        TEST_CONFIG.depositAmount, // amount
+        TEST_CONFIG.originalDecimals, // original_decimals
+        deadline, // deadline
+        secretHash // secret_hash
       );
 
       const intentId = await depositCall.simulate({ from: userAAddress });
@@ -328,7 +324,8 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
 
       // After request_deposit, intent status is PENDING_DEPOSIT
       // First call to _finalize_deposit_public should succeed and mark consumed
-      await adminContract.methods._finalize_deposit_public(intentId)
+      await adminContract.methods
+        ._finalize_deposit_public(intentId)
         .send({ from: adminAddress })
         .wait();
 
@@ -337,9 +334,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       // Second call to _finalize_deposit_public should fail with "Intent already consumed"
       // Note: The SDK may not extract the assert message, so we also accept app_logic_reverted
       await expect(
-        adminContract.methods._finalize_deposit_public(intentId)
-          .send({ from: adminAddress })
-          .wait()
+        adminContract.methods._finalize_deposit_public(intentId).send({ from: adminAddress }).wait()
       ).rejects.toThrow(/Intent already consumed|app_logic_reverted/);
     });
 
@@ -359,18 +354,19 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
 
       // Create deposit call
       const depositCall = userAContract.methods.request_deposit(
-        1n,                              // asset
-        TEST_CONFIG.depositAmount,       // amount
-        TEST_CONFIG.originalDecimals,    // original_decimals
-        deadline,                        // deadline
-        secretHash                       // secret_hash
+        1n, // asset
+        TEST_CONFIG.depositAmount, // amount
+        TEST_CONFIG.originalDecimals, // original_decimals
+        deadline, // deadline
+        secretHash // secret_hash
       );
 
       const intentId = await depositCall.simulate({ from: userAAddress });
       await depositCall.send({ from: userAAddress }).wait();
 
       // Finalize the deposit (marks as consumed)
-      await adminContract.methods._finalize_deposit_public(intentId)
+      await adminContract.methods
+        ._finalize_deposit_public(intentId)
         .send({ from: adminAddress })
         .wait();
 
@@ -378,7 +374,8 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       // because consumed_intents is now true
       // Note: The SDK may not extract the assert message, so we also accept app_logic_reverted
       await expect(
-        adminContract.methods._set_intent_pending_deposit(intentId, userAAddress)
+        adminContract.methods
+          ._set_intent_pending_deposit(intentId, userAAddress)
           .send({ from: adminAddress })
           .wait()
       ).rejects.toThrow(/Intent ID already consumed|app_logic_reverted/);
@@ -396,7 +393,8 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       const adminContract = AaveWrapperContract.at(contractAddress, adminWallet);
 
       await expect(
-        adminContract.methods._finalize_deposit_public(fakeIntentId)
+        adminContract.methods
+          ._finalize_deposit_public(fakeIntentId)
           .send({ from: adminAddress })
           .wait()
       ).rejects.toThrow(/Intent not in pending deposit state|app_logic_reverted/);
@@ -446,7 +444,8 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       const userAContract = AaveWrapperContract.at(contractAddress, userAWallet);
 
       await expect(
-        userAContract.methods._finalize_withdraw_public(fakeIntentId)
+        userAContract.methods
+          ._finalize_withdraw_public(fakeIntentId)
           .send({ from: userAAddress })
           .wait()
       ).rejects.toThrow(/Intent not in pending withdraw state|app_logic_reverted/);

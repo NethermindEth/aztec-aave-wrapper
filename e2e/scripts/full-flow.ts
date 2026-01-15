@@ -24,7 +24,6 @@ import {
   createPublicClient,
   createWalletClient,
   http,
-  encodeDeployData,
   keccak256,
   encodePacked,
   encodeAbiParameters,
@@ -32,11 +31,12 @@ import {
   pad,
   type Address,
   type Hex,
-  type PublicClient,
-  type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
+import { foundry as foundryChain } from "viem/chains";
+
+// Cast to any to avoid type mismatch between viem and @aztec/viem
+const foundry = foundryChain as any;
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 
@@ -134,7 +134,7 @@ function logBalanceTable(
 }
 
 async function getAllBalances(
-  publicClient: PublicClient,
+  publicClient: any,
   addresses: L1Addresses,
   erc20Abi: any,
   userAddress?: Address
@@ -193,8 +193,8 @@ async function getAllBalances(
 
   return {
     user: { usdc: userUsdc ?? 0n, aToken: userAToken ?? 0n },
-    portal: { usdc: portalUsdc, aToken: portalAToken },
-    lendingPool: { usdc: poolUsdc, aToken: poolAToken },
+    portal: { usdc: portalUsdc ?? 0n, aToken: portalAToken ?? 0n },
+    lendingPool: { usdc: poolUsdc ?? 0n, aToken: poolAToken ?? 0n },
   };
 }
 
@@ -219,8 +219,8 @@ function loadArtifact(contractPath: string, contractName: string) {
 // ============================================================================
 
 async function deployL1Contracts(
-  publicClient: PublicClient,
-  deployerWallet: WalletClient,
+  publicClient: any,
+  deployerWallet: any,
   l2ContractAddress: Hex
 ): Promise<L1Addresses> {
   log("L1", "Deploying L1 contracts...");
@@ -236,6 +236,8 @@ async function deployL1Contracts(
   // Deploy MockERC20 (USDC)
   log("L1", "Deploying MockERC20 (USDC)...");
   const usdcHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: mockERC20Artifact.abi,
     bytecode: mockERC20Artifact.bytecode,
     args: ["Mock USDC", "USDC", 6],
@@ -247,6 +249,8 @@ async function deployL1Contracts(
   // Deploy MockERC20 (aToken)
   log("L1", "Deploying MockERC20 (aUSDC)...");
   const aTokenHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: mockERC20Artifact.abi,
     bytecode: mockERC20Artifact.bytecode,
     args: ["Aave Mock USDC", "aUSDC", 6],
@@ -258,6 +262,8 @@ async function deployL1Contracts(
   // Deploy MockAztecOutbox
   log("L1", "Deploying MockAztecOutbox...");
   const outboxHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: mockOutboxArtifact.abi,
     bytecode: mockOutboxArtifact.bytecode,
     args: [],
@@ -269,6 +275,8 @@ async function deployL1Contracts(
   // Deploy MockAztecInbox
   log("L1", "Deploying MockAztecInbox...");
   const inboxHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: mockInboxArtifact.abi,
     bytecode: mockInboxArtifact.bytecode,
     args: [],
@@ -280,6 +288,8 @@ async function deployL1Contracts(
   // Deploy MockTokenPortal
   log("L1", "Deploying MockTokenPortal...");
   const tokenPortalHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: mockTokenPortalArtifact.abi,
     bytecode: mockTokenPortalArtifact.bytecode,
     args: [],
@@ -291,6 +301,8 @@ async function deployL1Contracts(
   // Deploy MockAaveLendingPool
   log("L1", "Deploying MockAaveLendingPool...");
   const lendingPoolHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: mockLendingPoolArtifact.abi,
     bytecode: mockLendingPoolArtifact.bytecode,
     args: [mockUsdc, mockAToken],
@@ -303,6 +315,8 @@ async function deployL1Contracts(
   log("L1", "Deploying AztecAavePortalL1...");
   const l2AddressBytes32 = pad(l2ContractAddress as Hex, { size: 32 });
   const portalHash = await deployerWallet.deployContract({
+    account: ACCOUNTS.deployer,
+    chain: foundry,
     abi: portalArtifact.abi,
     bytecode: portalArtifact.bytecode,
     args: [
@@ -333,12 +347,7 @@ async function deployL1Contracts(
 // L1 Setup
 // ============================================================================
 
-async function setupL1Clients(): Promise<{
-  publicClient: PublicClient;
-  deployerWallet: WalletClient;
-  userWallet: WalletClient;
-  relayerWallet: WalletClient;
-}> {
+async function setupL1Clients() {
   log("L1", "Connecting to Anvil...", { rpcUrl: CONFIG.l1RpcUrl });
 
   const publicClient = createPublicClient({
@@ -478,7 +487,7 @@ async function mineAztecBlocks(
   log("L2", "Current block", { blockNumber: currentBlock });
 }
 
-async function mineL1Block(publicClient: PublicClient) {
+async function mineL1Block(publicClient: any) {
   log("L1", "Mining L1 block...");
   await fetch(CONFIG.l1RpcUrl, {
     method: "POST",
@@ -627,6 +636,7 @@ async function executeDepositFlow(
   const userFundAmount = CONFIG.depositAmount * 10n;
   log("L1", `User receives ${formatBalance(userFundAmount)} USDC on L1...`);
   const mintToUserTx = await l1.deployerWallet.writeContract({
+    chain: foundry,
     address: l1Addresses.mockUsdc,
     abi: mockERC20Artifact.abi,
     functionName: "mint",
@@ -645,6 +655,7 @@ async function executeDepositFlow(
   // Step 4c: User approves portal to spend USDC
   log("L1", `User approves portal to spend ${formatBalance(CONFIG.depositAmount)} USDC...`);
   const approveTx = await l1.userWallet.writeContract({
+    chain: foundry,
     address: l1Addresses.mockUsdc,
     abi: mockERC20Artifact.abi,
     functionName: "approve",
@@ -655,6 +666,7 @@ async function executeDepositFlow(
   // Step 4d: User transfers USDC to portal (funding the deposit)
   log("L1", `User transfers ${formatBalance(CONFIG.depositAmount)} USDC to portal...`);
   const transferTx = await l1.userWallet.writeContract({
+    chain: foundry,
     address: l1Addresses.mockUsdc,
     abi: mockERC20Artifact.abi,
     functionName: "transfer",
@@ -704,6 +716,7 @@ async function executeDepositFlow(
 
   const l2BlockNumber = 100n;
   await l1.deployerWallet.writeContract({
+    chain: foundry,
     address: l1Addresses.mockAztecOutbox,
     abi: mockOutboxArtifact.abi,
     functionName: "setMessageValid",
@@ -720,6 +733,7 @@ async function executeDepositFlow(
   try {
     log("L1", `Executing deposit for ${formatBalance(CONFIG.depositAmount)} USDC...`);
     const executeDepositTx = await l1.relayerWallet.writeContract({
+      chain: foundry,
       address: l1Addresses.portal,
       abi: portalArtifact.abi,
       functionName: "executeDeposit",
@@ -749,7 +763,7 @@ async function executeDepositFlow(
       abi: portalArtifact.abi,
       functionName: "intentShares",
       args: [intentIdHex],
-    });
+    }) as bigint;
     log("L1", "Shares recorded for intent", { intentId: intentIdHex.slice(0, 18) + "...", shares: shares.toString() });
   } catch (error) {
     log("L1", "executeDeposit failed", {

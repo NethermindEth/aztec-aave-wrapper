@@ -59,12 +59,7 @@ export const logger = {
   /**
    * Log suite setup information
    */
-  suiteSetup(services: {
-    pxe: boolean;
-    l1: boolean;
-    accounts: boolean;
-    contracts: boolean;
-  }) {
+  suiteSetup(services: { pxe: boolean; l1: boolean; accounts: boolean; contracts: boolean }) {
     console.log();
     console.log(`${COLORS.bright}${"=".repeat(70)}${COLORS.reset}`);
     console.log(`${COLORS.bright}  Aztec Aave Wrapper - E2E Test Suite${COLORS.reset}`);
@@ -151,7 +146,9 @@ export const logger = {
   depositStart(params: { amount: bigint; asset: string; deadline: bigint }) {
     console.log();
     console.log(`${COLORS.bright}${COLORS.green}▶ DEPOSIT FLOW${COLORS.reset}`);
-    console.log(`  ${COLORS.dim}User deposits assets on Aztec L2, receives yield-bearing position${COLORS.reset}`);
+    console.log(
+      `  ${COLORS.dim}User deposits assets on Aztec L2, receives yield-bearing position${COLORS.reset}`
+    );
     console.log(`  Amount: ${formatAmount(params.amount)} ${params.asset}`);
     console.log(`  Deadline: ${new Date(Number(params.deadline) * 1000).toISOString()}`);
     console.log();
@@ -175,7 +172,9 @@ export const logger = {
   withdrawStart(params: { amount: bigint; nonce: string; deadline: bigint }) {
     console.log();
     console.log(`${COLORS.bright}${COLORS.yellow}▶ WITHDRAW FLOW${COLORS.reset}`);
-    console.log(`  ${COLORS.dim}User redeems position on Aztec L2, receives underlying assets${COLORS.reset}`);
+    console.log(
+      `  ${COLORS.dim}User redeems position on Aztec L2, receives underlying assets${COLORS.reset}`
+    );
     console.log(`  Amount: ${formatAmount(params.amount)}`);
     console.log(`  Position nonce: ${formatValue(params.nonce)}`);
     console.log(`  Deadline: ${new Date(Number(params.deadline) * 1000).toISOString()}`);

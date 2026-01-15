@@ -1,3 +1,4 @@
+// biome-ignore-all lint/correctness/noUnusedVariables: T parameter required to match vitest's Assertion interface
 /**
  * Vitest Global Setup
  *
@@ -8,7 +9,7 @@
  * - Global test utilities
  */
 
-import { beforeAll, afterAll, expect } from "vitest";
+import { afterAll, beforeAll, expect } from "vitest";
 import { getConfigFromEnv, type TestConfig } from "./config";
 
 // =============================================================================
@@ -137,8 +138,7 @@ expect.extend({
 
     if (!addressRegex.test(received)) {
       return {
-        message: () =>
-          `Expected ${received} to be a valid address (0x followed by 40 hex chars)`,
+        message: () => `Expected ${received} to be a valid address (0x followed by 40 hex chars)`,
         pass: false,
       };
     }

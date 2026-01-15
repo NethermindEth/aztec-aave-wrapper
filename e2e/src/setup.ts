@@ -13,13 +13,13 @@
  *   await harness.initialize();
  */
 
-import { readFileSync } from "fs";
-import { join } from "path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { LOCAL_PRIVATE_KEYS } from "@aztec-aave-wrapper/shared";
+import type { Chain, PublicClient, WalletClient } from "viem";
 import { createPublicClient, createWalletClient, http, parseEther } from "viem";
-import type { PublicClient, WalletClient, Chain } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { TestConfig } from "./config";
-import { LOCAL_PRIVATE_KEYS } from "@aztec-aave-wrapper/shared";
 
 // =============================================================================
 // Type Definitions
@@ -184,8 +184,7 @@ export class TestHarness {
   }
 
   get l1Client(): ChainClient {
-    if (!this._l1Client)
-      throw new Error("L1 client not initialized. Call initialize() first.");
+    if (!this._l1Client) throw new Error("L1 client not initialized. Call initialize() first.");
     return this._l1Client;
   }
 
@@ -208,8 +207,7 @@ export class TestHarness {
   }
 
   get artifact(): ContractArtifact {
-    if (!this._artifact)
-      throw new Error("Artifact not loaded. Call initialize() first.");
+    if (!this._artifact) throw new Error("Artifact not loaded. Call initialize() first.");
     return this._artifact;
   }
 
@@ -359,16 +357,11 @@ export class TestHarness {
    */
   private loadArtifact(): void {
     try {
-      const artifactPath = join(
-        __dirname,
-        "../../aztec/target/aave_wrapper-AaveWrapper.json"
-      );
+      const artifactPath = join(__dirname, "../../aztec/target/aave_wrapper-AaveWrapper.json");
       const artifactJson = readFileSync(artifactPath, "utf-8");
       this._artifact = JSON.parse(artifactJson) as ContractArtifact;
-    } catch (error) {
-      console.warn(
-        "Contract artifact not found. Run: cd aztec && aztec compile"
-      );
+    } catch (_error) {
+      console.warn("Contract artifact not found. Run: cd aztec && aztec compile");
       this._artifact = null;
     }
   }
@@ -427,11 +420,8 @@ export class TestHarness {
     try {
       // Import TestWallet and pre-funded account keys
       const { TestWallet } = await import("@aztec/test-wallet/server");
-      const {
-        INITIAL_TEST_SECRET_KEYS,
-        INITIAL_TEST_SIGNING_KEYS,
-        INITIAL_TEST_ACCOUNT_SALTS,
-      } = await import("@aztec/accounts/testing");
+      const { INITIAL_TEST_SECRET_KEYS, INITIAL_TEST_SIGNING_KEYS, INITIAL_TEST_ACCOUNT_SALTS } =
+        await import("@aztec/accounts/testing");
 
       // Verify we have enough pre-funded accounts
       if (
@@ -493,10 +483,7 @@ export class TestHarness {
       console.log("  User:", this._accounts.user.address.toString());
       console.log("  User2/Relayer:", this._accounts.user2.address.toString());
     } catch (error) {
-      console.warn(
-        "Failed to create accounts:",
-        error instanceof Error ? error.message : error
-      );
+      console.warn("Failed to create accounts:", error instanceof Error ? error.message : error);
       this._status.accountsCreated = false;
     }
   }
@@ -523,8 +510,9 @@ export class TestHarness {
       console.log("Deploying AaveWrapper contract...");
 
       // Deploy using the generated type-safe contract
+      // Cast wallet to any due to AccountWithSecretKey vs Wallet type mismatch
       const deployedContract = await AaveWrapperContract.deploy(
-        adminWallet,
+        adminWallet as any,
         adminAddress,
         portalAddress
       )
@@ -550,10 +538,7 @@ export class TestHarness {
       this._status.contractsDeployed = true;
       console.log("AaveWrapper deployed at:", deployedContract.address.toString());
     } catch (error) {
-      console.warn(
-        "Failed to deploy contracts:",
-        error instanceof Error ? error.message : error
-      );
+      console.warn("Failed to deploy contracts:", error instanceof Error ? error.message : error);
       this._status.contractsDeployed = false;
     }
   }
@@ -575,22 +560,14 @@ export class TestHarness {
    * Check if the harness is ready for testing.
    */
   isReady(): boolean {
-    return (
-      this._status.aztecAvailable &&
-      this._status.pxeConnected &&
-      this._status.accountsCreated
-    );
+    return this._status.aztecAvailable && this._status.pxeConnected && this._status.accountsCreated;
   }
 
   /**
    * Check if full E2E testing is available (L1 connected and contracts deployed).
    */
   isFullE2EReady(): boolean {
-    return (
-      this.isReady() &&
-      this._status.l1Connected &&
-      this._status.contractsDeployed
-    );
+    return this.isReady() && this._status.l1Connected && this._status.contractsDeployed;
   }
 
   /**
@@ -633,10 +610,7 @@ export class TestHarness {
  * @param timeoutMs - Maximum wait time
  * @returns true if node is ready, false otherwise
  */
-export async function waitForPXE(
-  nodeUrl: string,
-  timeoutMs: number = 60_000
-): Promise<boolean> {
+export async function waitForPXE(nodeUrl: string, timeoutMs: number = 60_000): Promise<boolean> {
   const startTime = Date.now();
   const pollInterval = 2000;
 
@@ -662,10 +636,7 @@ export async function waitForPXE(
  * @param timeoutMs - Maximum wait time
  * @returns true if chain is ready, false otherwise
  */
-export async function waitForChain(
-  rpcUrl: string,
-  timeoutMs: number = 30_000
-): Promise<boolean> {
+export async function waitForChain(rpcUrl: string, timeoutMs: number = 30_000): Promise<boolean> {
   const startTime = Date.now();
   const pollInterval = 1000;
 
@@ -719,10 +690,7 @@ export async function fundAccount(
  * @param rpcUrl - Chain RPC URL
  * @param seconds - Seconds to advance
  */
-export async function advanceChainTime(
-  rpcUrl: string,
-  seconds: number
-): Promise<void> {
+export async function advanceChainTime(rpcUrl: string, seconds: number): Promise<void> {
   // Increase time
   await fetch(rpcUrl, {
     method: "POST",

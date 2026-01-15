@@ -22,7 +22,7 @@
  */
 
 import type { Address, Hex, WalletClient } from "viem";
-import { keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
+import { encodeAbiParameters, keccak256, parseAbiParameters } from "viem";
 import type { ChainClient } from "../setup";
 
 // =============================================================================
@@ -160,7 +160,6 @@ export interface RelayerConfig {
  * ```
  */
 export class DepositFlowOrchestrator {
-  private l1Client: ChainClient;
   private addresses: {
     l1Portal: Address;
     aavePool: Address;
@@ -169,7 +168,7 @@ export class DepositFlowOrchestrator {
   private useMock: boolean;
 
   constructor(
-    l1Client: ChainClient,
+    _l1Client: ChainClient,
     addresses: {
       l1Portal: Address;
       aavePool: Address;
@@ -177,7 +176,6 @@ export class DepositFlowOrchestrator {
     },
     useMock: boolean = true
   ) {
-    this.l1Client = l1Client;
     this.addresses = addresses;
     this.useMock = useMock;
   }
@@ -307,7 +305,7 @@ export class DepositFlowOrchestrator {
    * 3. Sends L1→L2 confirmation message
    */
   private async executeL1Deposit(
-    l1Relayer: WalletClient,
+    _l1Relayer: WalletClient,
     l2Request: DepositRequestResult,
     params: DepositRequestParams,
     _userAddress: Address
@@ -320,10 +318,11 @@ export class DepositFlowOrchestrator {
       // 2. Supply to Aave directly (no Wormhole bridging)
       // 3. Send L1→L2 confirmation
       const mockTxHash = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters("bytes32, uint256, uint256"),
-          [`0x${l2Request.intentId.toString(16).padStart(64, "0")}`, params.amount, params.deadline]
-        )
+        encodeAbiParameters(parseAbiParameters("bytes32, uint256, uint256"), [
+          `0x${l2Request.intentId.toString(16).padStart(64, "0")}`,
+          params.amount,
+          params.deadline,
+        ])
       );
 
       // MVP: shares = amount (no yield accounting in mock)

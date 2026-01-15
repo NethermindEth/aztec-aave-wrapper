@@ -22,9 +22,9 @@
  */
 
 import type { Address, Hex, WalletClient } from "viem";
-import { keccak256, encodeAbiParameters, parseAbiParameters } from "viem";
+import { encodeAbiParameters, keccak256, parseAbiParameters } from "viem";
 import type { ChainClient } from "../setup";
-import { ConfirmationStatus, type RelayerConfig } from "./deposit";
+import type { RelayerConfig } from "./deposit";
 
 // =============================================================================
 // Type Definitions
@@ -148,7 +148,6 @@ export type { RelayerConfig } from "./deposit";
  * ```
  */
 export class WithdrawFlowOrchestrator {
-  private l1Client: ChainClient;
   private addresses: {
     l1Portal: Address;
     aavePool: Address;
@@ -157,7 +156,7 @@ export class WithdrawFlowOrchestrator {
   private useMock: boolean;
 
   constructor(
-    l1Client: ChainClient,
+    _l1Client: ChainClient,
     addresses: {
       l1Portal: Address;
       aavePool: Address;
@@ -165,7 +164,6 @@ export class WithdrawFlowOrchestrator {
     },
     useMock: boolean = true
   ) {
-    this.l1Client = l1Client;
     this.addresses = addresses;
     this.useMock = useMock;
   }
@@ -209,11 +207,7 @@ export class WithdrawFlowOrchestrator {
     const l2Request = await this.executeL2Request(l2Contract, userWallet, params);
 
     // Step 2: Execute L1 portal withdrawal with direct Aave withdrawal (relayer executes, not user)
-    const l1Execute = await this.executeL1Withdraw(
-      relayer.l1Relayer,
-      l2Request,
-      params
-    );
+    const l1Execute = await this.executeL1Withdraw(relayer.l1Relayer, l2Request, params);
 
     // Privacy check: L1 executor should not be the user
     const l1ExecutorAddress = relayer.l1Relayer.account?.address;
@@ -291,7 +285,7 @@ export class WithdrawFlowOrchestrator {
    * 3. Sends L1→L2 confirmation message
    */
   private async executeL1Withdraw(
-    l1Relayer: WalletClient,
+    _l1Relayer: WalletClient,
     l2Request: WithdrawRequestResult,
     params: WithdrawRequestParams
   ): Promise<L1ExecuteWithdrawResult> {
@@ -303,10 +297,11 @@ export class WithdrawFlowOrchestrator {
       // 2. Withdraw from Aave directly (no Wormhole bridging)
       // 3. Send L1→L2 confirmation
       const mockTxHash = keccak256(
-        encodeAbiParameters(
-          parseAbiParameters("bytes32, uint256, uint256"),
-          [`0x${l2Request.intentId.toString(16).padStart(64, "0")}`, params.amount, params.deadline]
-        )
+        encodeAbiParameters(parseAbiParameters("bytes32, uint256, uint256"), [
+          `0x${l2Request.intentId.toString(16).padStart(64, "0")}`,
+          params.amount,
+          params.deadline,
+        ])
       );
 
       // MVP: withdrawnAmount = amount (no yield accounting in mock)

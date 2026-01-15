@@ -5,10 +5,10 @@
  * Run with: bun run test:setup
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
-import { getConfig, getConfigFromEnv, areAddressesDeployed, type TestConfig } from "./config";
+import { beforeAll, describe, expect, it } from "vitest";
+import { areAddressesDeployed, getConfig, getConfigFromEnv, type TestConfig } from "./config";
 import { TestHarness, waitForChain, waitForPXE } from "./setup";
-import { AztecHelper, generateSecret, computeSecretHash, deadlineFromOffset } from "./utils/aztec";
+import { computeSecretHash, deadlineFromOffset, generateSecret } from "./utils/aztec";
 
 describe("E2E Setup Infrastructure", () => {
   let config: TestConfig;
@@ -180,12 +180,12 @@ describe("Custom Vitest Matchers", () => {
   });
 
   it("should validate hashes", () => {
-    const validHash = "0x" + "a".repeat(64);
+    const validHash = `0x${"a".repeat(64)}`;
     expect(validHash).toBeValidHash();
   });
 
   it("should validate addresses", () => {
-    const validAddress = "0x" + "1".repeat(40);
+    const validAddress = `0x${"1".repeat(40)}`;
     expect(validAddress).toBeValidAddress();
   });
 

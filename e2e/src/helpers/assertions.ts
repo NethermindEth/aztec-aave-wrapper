@@ -6,8 +6,8 @@
  * rather than accepting any error.
  */
 
-import { expect } from "vitest";
 import type { Fr } from "@aztec/aztec.js/fields";
+import { expect } from "vitest";
 import type { PositionReceiptFields } from "./test-utils";
 
 /**
@@ -26,7 +26,8 @@ export function assertIntentIdValid(
   message?: string
 ): void {
   const actual = typeof actualIntentId === "bigint" ? actualIntentId : actualIntentId.toBigInt();
-  const expected = typeof expectedIntentId === "bigint" ? expectedIntentId : expectedIntentId.toBigInt();
+  const expected =
+    typeof expectedIntentId === "bigint" ? expectedIntentId : expectedIntentId.toBigInt();
 
   expect(actual, message || "Intent ID should match expected hash").toBe(expected);
 }
@@ -130,7 +131,10 @@ export async function assertSpecificError(
  * @param intentId - The intent_id to validate
  * @param message - Optional custom error message
  */
-export function assertIntentIdNonZero(intentId: Fr | bigint | { toString(): string }, message?: string): void {
+export function assertIntentIdNonZero(
+  intentId: Fr | bigint | { toString(): string },
+  message?: string
+): void {
   // Handle different return types from simulate() in 3.0.0
   const id = typeof intentId === "bigint" ? intentId : BigInt(intentId.toString());
   expect(id, message || "Intent ID must be non-zero").not.toBe(0n);

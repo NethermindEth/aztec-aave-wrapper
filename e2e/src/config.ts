@@ -10,14 +10,8 @@
  *   const config = getConfig('local');
  */
 
-import type {
-  ContractAddresses,
-  ChainConfig,
-} from "@aztec-aave-wrapper/shared";
-import {
-  CHAIN_IDS,
-  LOCAL_RPC_URLS,
-} from "@aztec-aave-wrapper/shared";
+import type { ChainConfig, ContractAddresses } from "@aztec-aave-wrapper/shared";
+import { CHAIN_IDS, LOCAL_RPC_URLS } from "@aztec-aave-wrapper/shared";
 
 // Import deployed addresses (populated by deployment scripts)
 import addresses from "./config/addresses.json" with { type: "json" };
@@ -202,8 +196,7 @@ export function getConfigFromEnv(): TestConfig {
  */
 export function areAddressesDeployed(config: TestConfig): boolean {
   const zeroAddress = "0x0000000000000000000000000000000000000000";
-  const zeroAztecAddress =
-    "0x0000000000000000000000000000000000000000000000000000000000000000";
+  const zeroAztecAddress = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
   return (
     config.addresses.l2.aaveWrapper !== zeroAztecAddress &&

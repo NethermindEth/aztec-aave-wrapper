@@ -10,25 +10,20 @@
  * - addresses.json populated with deployed addresses
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { LOCAL_PRIVATE_KEYS } from "@aztec-aave-wrapper/shared";
-import { createWalletClient, http, type Address, type Hex } from "viem";
+import { type Address, createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-
-// Import test utilities
-import { TestHarness, type ChainClient } from "./setup";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { getConfig } from "./config";
-import { verifyRelayerPrivacy } from "./flows/deposit";
-import { verifyWithdrawRelayerPrivacy } from "./flows/withdraw";
-import { deadlineFromOffset, AztecHelper } from "./utils/aztec";
-import {
-  assertIntentIdNonZero,
-  assertDeadlineInFuture,
-} from "./helpers/assertions";
-import { logger } from "./helpers/logger";
-
 // Import addresses configuration
 import addresses from "./config/addresses.json" with { type: "json" };
+import { verifyRelayerPrivacy } from "./flows/deposit";
+import { verifyWithdrawRelayerPrivacy } from "./flows/withdraw";
+import { assertDeadlineInFuture, assertIntentIdNonZero } from "./helpers/assertions";
+import { logger } from "./helpers/logger";
+// Import test utilities
+import { type ChainClient, TestHarness } from "./setup";
+import { AztecHelper, deadlineFromOffset } from "./utils/aztec";
 
 /**
  * Test configuration
@@ -54,14 +49,14 @@ let aztecAvailable = false;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let Fr: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let AztecAddress: any;
+let _AztecAddress: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let GrumpkinScalar: any;
+let _GrumpkinScalar: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let createPXEClient: any;
+let _createPXEClient: any;
 // Note: getSchnorrAccount removed in 3.0.0-devnet, using TestWallet instead
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let Contract: any;
+let _Contract: any;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type PXE = any;
@@ -82,20 +77,20 @@ type ContractArtifact = any;
 describe("Aztec Aave Wrapper E2E", () => {
   // Test harness
   let harness: TestHarness;
-  let config = getConfig("local", "mock");
+  const config = getConfig("local", "mock");
 
   // Aztec state
   let pxe: PXE | null = null;
-  let artifact: ContractArtifact | null = null;
+  let _artifact: ContractArtifact | null = null;
 
   // Test accounts
-  let adminWallet: AccountWalletInstance;
+  let _adminWallet: AccountWalletInstance;
   let userWallet: AccountWalletInstance;
   let relayerWallet: AccountWalletInstance;
 
   // Account addresses (stored separately since TestWallet doesn't have getAddress())
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let adminAddress: any = null;
+  let _adminAddress: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let userAddress: any = null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,13 +115,13 @@ describe("Aztec Aave Wrapper E2E", () => {
       const addressesModule = await import("@aztec/aztec.js/addresses");
       const nodeModule = await import("@aztec/aztec.js/node");
       const contractsModule = await import("@aztec/aztec.js/contracts");
-      const accounts = await import("@aztec/accounts/schnorr");
+      const _accounts = await import("@aztec/accounts/schnorr");
 
       Fr = fieldsModule.Fr;
-      GrumpkinScalar = fieldsModule.GrumpkinScalar;
-      AztecAddress = addressesModule.AztecAddress;
-      createPXEClient = nodeModule.createAztecNodeClient;
-      Contract = contractsModule.Contract;
+      _GrumpkinScalar = fieldsModule.GrumpkinScalar;
+      _AztecAddress = addressesModule.AztecAddress;
+      _createPXEClient = nodeModule.createAztecNodeClient;
+      _Contract = contractsModule.Contract;
       // Note: getSchnorrAccount removed in 3.0.0-devnet, using TestWallet instead
       aztecAvailable = true;
     } catch (error) {
@@ -155,14 +150,14 @@ describe("Aztec Aave Wrapper E2E", () => {
 
     // Get PXE-dependent resources from harness
     pxe = harness.pxe;
-    artifact = harness.artifact;
+    _artifact = harness.artifact;
 
     if (status.accountsCreated) {
-      adminWallet = harness.accounts.admin.wallet;
+      _adminWallet = harness.accounts.admin.wallet;
       userWallet = harness.accounts.user.wallet;
       relayerWallet = harness.accounts.user2.wallet; // Use user2 as relayer
       // Store addresses separately since TestWallet doesn't have getAddress()
-      adminAddress = harness.accounts.admin.address;
+      _adminAddress = harness.accounts.admin.address;
       userAddress = harness.accounts.user.address;
       relayerAddress = harness.accounts.user2.address;
     }
@@ -330,14 +325,10 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Step 7: Attempt L2 finalization (will fail without real L1→L2 message)
       logger.step(4, "Finalize deposit on L2 (creates private receipt note)");
       try {
-        const finalizeCall = methods.finalize_deposit(
-          intentId,
-          shares,
-          secret
-        );
+        const finalizeCall = methods.finalize_deposit(intentId, shares, secret);
         await finalizeCall.send({ from: userAddress! }).wait();
         logger.l2("Position receipt note created", { status: "Active" });
-      } catch (error) {
+      } catch (_error) {
         // Expected in mock mode - no real L1→L2 message exists
         logger.mockMode("L2 finalization skipped - no real L1→L2 message in mock");
       }
@@ -465,7 +456,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       // The integration tests cover the post-finalization replay protection.
       // Here we just verify the contract accepts or rejects based on current state.
       try {
-        await methods._set_intent_pending_deposit(intentId, userAddress!)
+        await methods
+          ._set_intent_pending_deposit(intentId, userAddress!)
           .send({ from: userAddress! })
           .wait();
         // If it succeeds, the contract doesn't prevent pre-finalization replay
@@ -607,7 +599,10 @@ describe("Aztec Aave Wrapper E2E", () => {
         expect(withdrawTx.txHash).toBeDefined();
 
         // Step 4: Verify L2→L1 message was created (conceptually)
-        logger.step(3, "L1 Portal processes withdrawal with direct Aave withdrawal (relayer executes)");
+        logger.step(
+          3,
+          "L1 Portal processes withdrawal with direct Aave withdrawal (relayer executes)"
+        );
 
         // Step 5: Simulate L1 portal execution (relayer executes, not user)
         const l1RelayerAccount = l1RelayerWallet.account;
@@ -646,7 +641,7 @@ describe("Aztec Aave Wrapper E2E", () => {
           );
           await finalizeCall.send({ from: userAddress! }).wait();
           logger.l2("Receipt note consumed, tokens credited");
-        } catch (error) {
+        } catch (_error) {
           // Expected in mock mode - no real L1→L2 message exists
           logger.mockMode("L2 finalization skipped - no real L1→L2 message");
         }
@@ -705,7 +700,9 @@ describe("Aztec Aave Wrapper E2E", () => {
           .request_withdraw(mockNonce, TEST_CONFIG.withdrawAmount, expiredDeadline, secretHash)
           .send({ from: userAddress! })
           .wait()
-      ).rejects.toThrow(/Deadline expired|Deadline must be in the future|Position receipt note not found|app_logic_reverted/);
+      ).rejects.toThrow(
+        /Deadline expired|Deadline must be in the future|Position receipt note not found|app_logic_reverted/
+      );
     });
 
     /**
@@ -926,7 +923,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       assertIntentIdNonZero(intentId3);
 
       // KEY ASSERTION: All intent IDs must be unique
-      const intentIds = [BigInt(intentId1.toString()), BigInt(intentId2.toString()), BigInt(intentId3.toString())];
+      const intentIds = [
+        BigInt(intentId1.toString()),
+        BigInt(intentId2.toString()),
+        BigInt(intentId3.toString()),
+      ];
       const uniqueIntentIds = new Set(intentIds);
       expect(uniqueIntentIds.size).toBe(3);
 
@@ -1097,7 +1098,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       const allTxs = [...userTxs, ...user2Txs];
 
       // Verify all transactions succeeded
-      allTxs.forEach((tx, i) => {
+      allTxs.forEach((tx, _i) => {
         expect(tx.txHash).toBeDefined();
       });
 
@@ -1197,8 +1198,12 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(BigInt(userIntentId.toString())).not.toBe(BigInt(user2IntentId.toString()));
 
       logger.section("Share Tracking Isolation");
-      logger.info(`User1 deposited ${userAmount.toString()} (ownerHash: ${userOwnerHash.toString().slice(0, 12)}...)`);
-      logger.info(`User2 deposited ${user2Amount.toString()} (ownerHash: ${user2OwnerHash.toString().slice(0, 12)}...)`);
+      logger.info(
+        `User1 deposited ${userAmount.toString()} (ownerHash: ${userOwnerHash.toString().slice(0, 12)}...)`
+      );
+      logger.info(
+        `User2 deposited ${user2Amount.toString()} (ownerHash: ${user2OwnerHash.toString().slice(0, 12)}...)`
+      );
       logger.privacy("Each user's shares tracked independently via unique owner hash");
     });
   });
@@ -1322,8 +1327,13 @@ describe("Aztec Aave Wrapper E2E", () => {
       // 1. No PendingWithdraw note exists with this nonce (mock mode)
       // 2. Even if it did, current_time < deadline should be rejected
       await expect(
-        methods.claim_refund(mockNonce, currentTimeBeforeDeadline).send({ from: userAddress! }).wait()
-      ).rejects.toThrow(/Pending withdraw receipt note not found|Deadline has not expired yet|app_logic_reverted/);
+        methods
+          .claim_refund(mockNonce, currentTimeBeforeDeadline)
+          .send({ from: userAddress! })
+          .wait()
+      ).rejects.toThrow(
+        /Pending withdraw receipt note not found|Deadline has not expired yet|app_logic_reverted/
+      );
 
       logger.info("Refund correctly rejected (deadline not expired or note not found)");
     });
@@ -1400,7 +1410,9 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(newNonce).not.toBe(otherNonce);
 
       logger.info("Nonce generation ensures unique nullifiers for refunds");
-      logger.info(`Original: ${originalNonce.toString().slice(0, 16)}... → Refund: ${newNonce.toString().slice(0, 16)}...`);
+      logger.info(
+        `Original: ${originalNonce.toString().slice(0, 16)}... → Refund: ${newNonce.toString().slice(0, 16)}...`
+      );
     });
 
     /**
