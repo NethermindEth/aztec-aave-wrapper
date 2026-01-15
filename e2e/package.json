@@ -15,7 +15,13 @@
     "full-flow": "bun run scripts/full-flow.ts",
     "full-flow:deploy": "bun run scripts/full-flow.ts --deploy",
     "typecheck": "tsc --noEmit",
-    "clean": "rm -rf dist node_modules/.cache"
+    "clean": "rm -rf dist node_modules/.cache",
+    "lint": "biome lint ./src",
+    "lint:fix": "biome lint --write ./src",
+    "format": "biome format --write ./src",
+    "format:check": "biome format ./src",
+    "check": "biome check ./src",
+    "check:fix": "biome check --write ./src"
   },
   "dependencies": {
     "@aztec/aztec.js": "3.0.0-devnet.20251212",

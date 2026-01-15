@@ -62,3 +62,4 @@ e2e/node_modules
 
 .weld/*
 !.weld/config.toml
+codegenCache.json

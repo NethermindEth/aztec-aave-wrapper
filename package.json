@@ -12,9 +12,12 @@
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
     "typecheck": "bun run --filter '*' typecheck",
-    "clean": "bun run --filter '*' clean"
+    "clean": "bun run --filter '*' clean",
+    "format": "bun run --filter '*' format",
+    "check": "bun run --filter '*' check"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.11",
     "typescript": "^5.3.3"
   },
   "engines": {
