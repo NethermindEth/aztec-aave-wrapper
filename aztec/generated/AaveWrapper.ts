@@ -155,6 +155,15 @@ nonce: {
     /** finalize_withdraw(intent_id: field, asset_id: field, amount: integer, secret: field, message_leaf_index: field) */
     finalize_withdraw: ((intent_id: FieldLike, asset_id: FieldLike, amount: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** get_intent_status(intent_id: field) */
+    get_intent_status: ((intent_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** get_positions(owner: struct) */
+    get_positions: ((owner: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** is_intent_consumed(intent_id: field) */
+    is_intent_consumed: ((intent_id: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 

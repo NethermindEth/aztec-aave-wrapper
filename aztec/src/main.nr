@@ -170,7 +170,12 @@ pub(crate) contract AaveWrapper {
     use dep::aztec::{
         macros::{events::event, functions::{external, initializer}, storage::storage},
         messages::message_delivery::MessageDelivery,
-        note::{note_getter_options::NoteGetterOptions, note_interface::NoteProperties},
+        note::{
+            constants::MAX_NOTES_PER_PAGE,
+            note_getter_options::NoteGetterOptions,
+            note_interface::NoteProperties,
+            note_viewer_options::NoteViewerOptions,
+        },
         protocol_types::{
             address::{AztecAddress, EthAddress},
             hash::poseidon2_hash,
@@ -918,5 +923,54 @@ pub(crate) contract AaveWrapper {
 
         // Emit minimal event - only intent_id and status, no user data
         self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });
+    }
+
+    // =========================================================================
+    // Utility Functions (Unconstrained View Functions)
+    // =========================================================================
+
+    /// Get all position receipts for an owner.
+    ///
+    /// This utility function queries the user's private notes from the PXE.
+    /// Only the owner can decrypt and view their own positions.
+    ///
+    /// # Arguments
+    /// * `owner` - The Aztec address of the position owner
+    ///
+    /// # Returns
+    /// * `BoundedVec<PositionReceiptNote, 10>` - Up to 10 position receipts
+    ///
+    /// # Privacy
+    /// This function runs in the user's PXE and only returns notes encrypted for them.
+    /// No information is revealed on-chain.
+    #[external("utility")]
+    unconstrained fn get_positions(owner: AztecAddress) -> pub BoundedVec<PositionReceiptNote, MAX_NOTES_PER_PAGE> {
+        self.storage.receipts.at(owner).view_notes(NoteViewerOptions::new())
+    }
+
+    /// Get the public status of an intent.
+    ///
+    /// This utility function reads from public storage to check intent status.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent identifier to query
+    ///
+    /// # Returns
+    /// * `u8` - The intent status code (0=Unknown, 1=PendingDeposit, 2=Confirmed, 3=Failed, 4=PendingWithdraw)
+    #[external("utility")]
+    unconstrained fn get_intent_status(intent_id: Field) -> pub u8 {
+        self.storage.intent_status.at(intent_id).read()
+    }
+
+    /// Check if an intent has been consumed.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent identifier to query
+    ///
+    /// # Returns
+    /// * `bool` - True if the intent has been consumed
+    #[external("utility")]
+    unconstrained fn is_intent_consumed(intent_id: Field) -> pub bool {
+        self.storage.consumed_intents.at(intent_id).read()
     }
 }
