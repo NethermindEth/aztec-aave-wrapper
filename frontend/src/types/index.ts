@@ -78,3 +78,16 @@ export {
   getWithdrawStepIndex,
   WITHDRAW_STEPS,
 } from "./operations.js";
+
+// =============================================================================
+// Re-export Error Types
+// =============================================================================
+
+export {
+  isNetworkError,
+  isTimeoutError,
+  isUserRejection,
+  NetworkError,
+  TimeoutError,
+  UserRejectedError,
+} from "./errors.js";

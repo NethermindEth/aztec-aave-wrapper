@@ -61,8 +61,19 @@ import {
 } from "../store/actions.js";
 // Store
 import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
+import {
+  isNetworkError,
+  isTimeoutError,
+  isUserRejection,
+  NetworkError,
+  TimeoutError,
+  UserRejectedError,
+} from "../types/errors.js";
 import { getDepositStepCount } from "../types/operations.js";
 import { formatUSDC } from "../types/state.js";
+
+// Re-export shared error types for consumers importing from this module
+export { NetworkError, TimeoutError, UserRejectedError } from "../types/errors.js";
 
 // =============================================================================
 // Types
@@ -286,6 +297,9 @@ export async function executeDepositFlow(
   const totalSteps = getDepositStepCount();
   const txHashes: DepositResult["txHashes"] = {};
 
+  // Track current step for error reporting
+  let currentStep = 0;
+
   // Initialize operation tracking
   startOperation("deposit", totalSteps);
 
@@ -293,6 +307,7 @@ export async function executeDepositFlow(
     // =========================================================================
     // Step 1: Generate secret and prepare parameters
     // =========================================================================
+    currentStep = 1;
     logStep(1, totalSteps, "Generate secret and prepare parameters");
     setOperationStep(1);
 
@@ -315,6 +330,7 @@ export async function executeDepositFlow(
     // =========================================================================
     // Step 2: Call request_deposit on L2
     // =========================================================================
+    currentStep = 2;
     logStep(2, totalSteps, "Call request_deposit on L2");
     setOperationStep(2);
 
@@ -341,6 +357,7 @@ export async function executeDepositFlow(
     // =========================================================================
     // Step 3: Wait for L2→L1 message to be available
     // =========================================================================
+    currentStep = 3;
     logStep(3, totalSteps, "Wait for L2→L1 message");
     setOperationStep(3);
 
@@ -352,6 +369,7 @@ export async function executeDepositFlow(
     // =========================================================================
     // Step 4: Execute deposit on L1 (fund portal + execute)
     // =========================================================================
+    currentStep = 4;
     logStep(4, totalSteps, "Execute deposit on L1");
     setOperationStep(4);
 
@@ -440,6 +458,7 @@ export async function executeDepositFlow(
     // =========================================================================
     // Step 5: Wait for L1→L2 message
     // =========================================================================
+    currentStep = 5;
     logStep(5, totalSteps, "Wait for L1→L2 message");
     setOperationStep(5);
 
@@ -448,6 +467,7 @@ export async function executeDepositFlow(
     // =========================================================================
     // Step 6: Call finalize_deposit on L2
     // =========================================================================
+    currentStep = 6;
     logStep(6, totalSteps, "Finalize deposit on L2");
     setOperationStep(6);
 
@@ -495,9 +515,33 @@ export async function executeDepositFlow(
       txHashes,
     };
   } catch (error) {
-    const step = 1; // Would track actual step in production
     setOperationError(error instanceof Error ? error.message : "Unknown error");
-    throw new DepositFlowError(step, "deposit", error);
+
+    // Re-throw specific error types without wrapping
+    if (
+      error instanceof DepositFlowError ||
+      error instanceof UserRejectedError ||
+      error instanceof NetworkError ||
+      error instanceof TimeoutError
+    ) {
+      throw error;
+    }
+
+    // Detect and throw specific error types
+    if (isUserRejection(error)) {
+      throw new UserRejectedError(currentStep, "deposit");
+    }
+
+    if (isNetworkError(error)) {
+      throw new NetworkError(currentStep, "deposit", error);
+    }
+
+    if (isTimeoutError(error)) {
+      throw new TimeoutError(currentStep, "deposit");
+    }
+
+    // Fall through to generic deposit flow error
+    throw new DepositFlowError(currentStep, "deposit", error);
   }
 }
 
@@ -525,6 +569,11 @@ export async function executeDepositFlowWithRetry(
       logInfo(`Deposit attempt ${attempt}/${maxRetries}`);
       return await executeDepositFlow(l1Clients, l1Addresses, l2Context, config);
     } catch (error) {
+      // Don't retry user rejections - these are intentional
+      if (error instanceof UserRejectedError) {
+        throw error;
+      }
+
       lastError = error instanceof Error ? error : new Error(String(error));
       logError(`Attempt ${attempt} failed: ${lastError.message}`);
 

@@ -51,8 +51,19 @@ import {
 } from "../store/actions.js";
 // Store
 import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
+import {
+  isNetworkError,
+  isTimeoutError,
+  isUserRejection,
+  NetworkError,
+  TimeoutError,
+  UserRejectedError,
+} from "../types/errors.js";
 import { getWithdrawStepCount } from "../types/operations.js";
 import { formatUSDC } from "../types/state.js";
+
+// Re-export shared error types for consumers importing from this module
+export { NetworkError, TimeoutError, UserRejectedError } from "../types/errors.js";
 
 // =============================================================================
 // Types
@@ -326,6 +337,9 @@ export async function executeWithdrawFlow(
   const totalSteps = getWithdrawStepCount();
   const txHashes: WithdrawResult["txHashes"] = {};
 
+  // Track current step for error reporting
+  let currentStep = 0;
+
   // Extract position data
   const { position, deadlineOffset } = config;
   const withdrawAmount = position.shares; // Full withdrawal only
@@ -340,6 +354,7 @@ export async function executeWithdrawFlow(
     // =========================================================================
     // Step 1: Generate secret and prepare parameters
     // =========================================================================
+    currentStep = 1;
     logStep(1, totalSteps, "Generate secret and prepare parameters");
     setOperationStep(1);
 
@@ -362,6 +377,7 @@ export async function executeWithdrawFlow(
     // =========================================================================
     // Step 2: Call request_withdraw on L2
     // =========================================================================
+    currentStep = 2;
     logStep(2, totalSteps, "Call request_withdraw on L2");
     setOperationStep(2);
 
@@ -408,6 +424,7 @@ export async function executeWithdrawFlow(
     // =========================================================================
     // Step 3: Wait for L2→L1 message to be available
     // =========================================================================
+    currentStep = 3;
     logStep(3, totalSteps, "Wait for L2→L1 message");
     setOperationStep(3);
 
@@ -419,6 +436,7 @@ export async function executeWithdrawFlow(
     // =========================================================================
     // Step 4: Execute withdraw on L1
     // =========================================================================
+    currentStep = 4;
     logStep(4, totalSteps, "Execute withdraw on L1");
     setOperationStep(4);
 
@@ -509,23 +527,43 @@ export async function executeWithdrawFlow(
       txHashes,
     };
   } catch (error) {
-    const step = 1; // Would track actual step in production
     setOperationError(error instanceof Error ? error.message : "Unknown error");
 
-    // Re-throw specific error types
-    if (error instanceof PositionNotFoundError || error instanceof PartialWithdrawError) {
+    // Re-throw specific error types without wrapping
+    if (
+      error instanceof WithdrawFlowError ||
+      error instanceof PositionNotFoundError ||
+      error instanceof PartialWithdrawError ||
+      error instanceof UserRejectedError ||
+      error instanceof NetworkError ||
+      error instanceof TimeoutError
+    ) {
       throw error;
     }
 
-    throw new WithdrawFlowError(step, "withdraw", error);
+    // Detect and throw specific error types
+    if (isUserRejection(error)) {
+      throw new UserRejectedError(currentStep, "withdraw");
+    }
+
+    if (isNetworkError(error)) {
+      throw new NetworkError(currentStep, "withdraw", error);
+    }
+
+    if (isTimeoutError(error)) {
+      throw new TimeoutError(currentStep, "withdraw");
+    }
+
+    // Fall through to generic withdraw flow error
+    throw new WithdrawFlowError(currentStep, "withdraw", error);
   }
 }
 
 /**
  * Execute withdraw flow with automatic retry on transient failures.
  *
- * Note: PositionNotFoundError and PartialWithdrawError are NOT retried
- * as they represent permanent failures.
+ * Note: PositionNotFoundError, PartialWithdrawError, and UserRejectedError
+ * are NOT retried as they represent permanent or intentional failures.
  *
  * @param l1Clients - L1 clients
  * @param l1Addresses - L1 addresses
@@ -548,8 +586,12 @@ export async function executeWithdrawFlowWithRetry(
       logInfo(`Withdraw attempt ${attempt}/${maxRetries}`);
       return await executeWithdrawFlow(l1Clients, l1Addresses, l2Context, config);
     } catch (error) {
-      // Don't retry permanent failures
-      if (error instanceof PositionNotFoundError || error instanceof PartialWithdrawError) {
+      // Don't retry permanent failures or user rejections
+      if (
+        error instanceof PositionNotFoundError ||
+        error instanceof PartialWithdrawError ||
+        error instanceof UserRejectedError
+      ) {
         throw error;
       }
 
