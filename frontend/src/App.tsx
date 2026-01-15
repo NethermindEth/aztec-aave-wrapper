@@ -26,12 +26,13 @@ import {
   type WithdrawL2Context,
 } from "./flows/withdraw";
 import { getPositionStatusLabel, usePositions } from "./hooks/usePositions.js";
-import { createDevnetL1Clients } from "./services/l1/client";
+import { createL1PublicClient, createL1WalletClient, DevnetAccounts } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
 import { balanceOf } from "./services/l1/tokens";
 import { createL2NodeClient } from "./services/l2/client";
 import { loadContractWithAzguard } from "./services/l2/contract";
 import { connectAztecWallet } from "./services/wallet/aztec";
+import { connectEthereumWallet } from "./services/wallet/ethereum";
 import { setATokenBalance, setEthBalance, setUsdcBalance } from "./store";
 import { useApp } from "./store/hooks";
 import { formatUSDC, toBigIntString } from "./types/state.js";
@@ -132,9 +133,19 @@ const App: Component = () => {
     addLog(`Initiating deposit of ${amountFormatted} USDC with ${deadline}s deadline`);
 
     try {
-      // Initialize L1 clients
-      addLog("Connecting to L1...");
-      const l1Clients = createDevnetL1Clients();
+      // Connect to MetaMask for user wallet
+      addLog("Connecting to L1 (MetaMask)...");
+      const ethereumConnection = await connectEthereumWallet();
+      addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
+
+      // Create L1 clients with MetaMask user wallet and hardcoded relayer
+      const publicClient = createL1PublicClient();
+      const relayerWallet = createL1WalletClient({ privateKey: DevnetAccounts.relayer });
+      const l1Clients = {
+        publicClient,
+        userWallet: ethereumConnection.walletClient,
+        relayerWallet,
+      };
 
       // Get mockAztecOutbox from portal contract
       addLog("Fetching portal configuration...");
@@ -180,12 +191,13 @@ const App: Component = () => {
       });
 
       // Update UI with result - add position to store
+      // Status is Active because deposit completed successfully (all steps finished)
       addNewPosition({
         intentId: result.intentId,
         assetId: "0x01", // USDC asset ID
         shares: toBigIntString(result.shares),
         sharesFormatted: formatUSDC(result.shares),
-        status: IntentStatus.PendingDeposit,
+        status: IntentStatus.Active,
       });
       addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
       addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
@@ -245,9 +257,19 @@ const App: Component = () => {
     updatePositionStatus(intentId, IntentStatus.PendingWithdraw);
 
     try {
-      // Initialize L1 clients
-      addLog("Connecting to L1...");
-      const l1Clients = createDevnetL1Clients();
+      // Connect to MetaMask for user wallet
+      addLog("Connecting to L1 (MetaMask)...");
+      const ethereumConnection = await connectEthereumWallet();
+      addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
+
+      // Create L1 clients with MetaMask user wallet and hardcoded relayer
+      const publicClient = createL1PublicClient();
+      const relayerWallet = createL1WalletClient({ privateKey: DevnetAccounts.relayer });
+      const l1Clients = {
+        publicClient,
+        userWallet: ethereumConnection.walletClient,
+        relayerWallet,
+      };
 
       // Get mockAztecOutbox from portal contract
       addLog("Fetching portal configuration...");

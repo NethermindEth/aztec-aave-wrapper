@@ -3,6 +3,7 @@ pragma solidity ^0.8.33;
 
 import { ILendingPool } from "../interfaces/ILendingPool.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { MockERC20 } from "./MockERC20.sol";
 
 /**
  * @title MockLendingPool
@@ -44,6 +45,12 @@ contract MockLendingPool is ILendingPool {
         // Track the deposit
         deposits[onBehalfOf][asset] += amount;
 
+        // Mint aTokens to the depositor (1:1 ratio like Aave)
+        address aToken = aTokenAddresses[asset];
+        if (aToken != address(0)) {
+            MockERC20(aToken).mint(onBehalfOf, amount);
+        }
+
         emit Supply(asset, amount, onBehalfOf, referralCode);
     }
 
@@ -59,6 +66,12 @@ contract MockLendingPool is ILendingPool {
 
         // Update deposit tracking
         deposits[msg.sender][asset] -= amount;
+
+        // Burn aTokens from withdrawer (1:1 ratio like Aave)
+        address aToken = aTokenAddresses[asset];
+        if (aToken != address(0)) {
+            MockERC20(aToken).burn(msg.sender, amount);
+        }
 
         // Transfer tokens back
         IERC20(asset).transfer(to, amount);

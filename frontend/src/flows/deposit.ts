@@ -13,8 +13,6 @@
  * 6. Call finalize_deposit on L2
  */
 
-// Shared types
-import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import {
   type Account,
   type Address,
@@ -52,7 +50,6 @@ import {
 } from "../services/l2/operations.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
 import {
-  addPosition,
   setOperationError,
   setOperationIntentId,
   setOperationStatus,
@@ -494,14 +491,7 @@ export async function executeDepositFlow(
       logInfo(error instanceof Error ? error.message.slice(0, 100) : "Unknown error");
     }
 
-    // Add position to store
-    addPosition({
-      intentId: intentIdStr,
-      assetId: config.assetId.toString(),
-      shares: shares.toString(),
-      sharesFormatted: `${formatUSDC(shares)} USDC`,
-      status: IntentStatus.PendingDeposit,
-    });
+    // Note: Position is added by caller (App.tsx) after flow completes
 
     // Mark operation as successful
     setOperationStatus("success");

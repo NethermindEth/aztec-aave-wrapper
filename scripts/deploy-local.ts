@@ -155,6 +155,38 @@ function mintTokens(
 }
 
 // =============================================================================
+// Lending Pool Configuration Helper
+// =============================================================================
+
+function configureAToken(
+  lendingPoolAddress: string,
+  assetAddress: string,
+  aTokenAddress: string,
+  rpcUrl: string
+): void {
+  console.log(`  Configuring aToken for ${assetAddress.slice(0, 10)}...`);
+
+  try {
+    // Use cast to call setATokenAddress(address,address) on the lending pool
+    const cmd = [
+      "cast send",
+      lendingPoolAddress,
+      '"setATokenAddress(address,address)"',
+      assetAddress,
+      aTokenAddress,
+      "--rpc-url", rpcUrl,
+      "--private-key", DEPLOYER_PRIVATE_KEY,
+    ].join(" ");
+
+    execSync(cmd, { encoding: "utf-8", stdio: "pipe" });
+    console.log(`    ✓ aToken configured: ${aTokenAddress.slice(0, 10)}...`);
+  } catch (error) {
+    console.error(`    ✗ Config failed:`, error instanceof Error ? error.message : error);
+    throw error;
+  }
+}
+
+// =============================================================================
 // Service Health Checks
 // =============================================================================
 
@@ -359,15 +391,51 @@ async function main() {
     "eth"
   );
 
+  // Deploy mock aToken for USDC (same decimals as USDC)
+  // In a real Aave setup, aTokens are minted by the pool on supply
+  console.log("\n  Deploying mock aToken...");
+  const mockAToken = deployWithForge(
+    "contracts/mocks/MockERC20.sol:MockERC20",
+    ['"Mock aUSDC"', '"aUSDC"', "6"],
+    L1_RPC,
+    "eth"
+  );
+
+  // Configure the lending pool to return aToken address for USDC
+  configureAToken(addresses.l1.mockLendingPool, addresses.l1.mockUsdc, mockAToken, L1_RPC);
+
+  // ---------------------------------------------------------------------------
+  // Deploy Aztec Mock Contracts
+  // ---------------------------------------------------------------------------
+  console.log("\n  Deploying Aztec mock contracts...");
+
+  // Deploy MockAztecOutbox (from test file)
+  const aztecOutbox = deployWithForge(
+    "test/Portal.t.sol:MockAztecOutbox",
+    [],
+    L1_RPC,
+    "eth"
+  );
+
+  // Deploy MockAztecInbox (from test file)
+  const aztecInbox = deployWithForge(
+    "test/Portal.t.sol:MockAztecInbox",
+    [],
+    L1_RPC,
+    "eth"
+  );
+
+  // Deploy MockTokenPortal (from test file)
+  const tokenPortal = deployWithForge(
+    "test/Portal.t.sol:MockTokenPortal",
+    [],
+    L1_RPC,
+    "eth"
+  );
+
   // ---------------------------------------------------------------------------
   // Deploy AztecAavePortalL1
   // ---------------------------------------------------------------------------
-
-  // For local dev, use placeholder addresses for Aztec inbox/outbox
-  // These would come from the Aztec sandbox in a real deployment
-  const aztecOutbox = "0x0000000000000000000000000000000000000001";
-  const aztecInbox = "0x0000000000000000000000000000000000000002";
-  const tokenPortal = "0x0000000000000000000000000000000000000003";
 
   // L2 contract address placeholder (will be updated after L2 deployment)
   const l2ContractPlaceholder = "0x" + "00".repeat(32);
