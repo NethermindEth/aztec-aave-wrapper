@@ -24,7 +24,7 @@ describe("E2E Setup Infrastructure", () => {
       expect(localConfig.environment).toBe("local");
       expect(localConfig.mode).toBe("mock");
       expect(localConfig.chains.l1.rpcUrl).toBe("http://localhost:8545");
-      expect(localConfig.chains.l2.rpcUrl).toBe("http://localhost:8081");
+      expect(localConfig.chains.l2.rpcUrl).toBe("http://localhost:8080");
     });
 
     it("should load testnet configuration", () => {

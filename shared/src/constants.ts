@@ -24,7 +24,7 @@ export const CHAIN_IDS = {
 
 export const AZTEC_CONFIG = {
   // Local sandbox defaults
-  LOCAL_PXE_URL: "http://localhost:8081",
+  LOCAL_PXE_URL: "http://localhost:8080",
   LOCAL_ETHEREUM_RPC: "http://localhost:8545",
 
   // Testnet (devnet) - placeholder, update when available
@@ -104,7 +104,7 @@ export const ERROR_CODES = {
 
 export const LOCAL_RPC_URLS = {
   L1: "http://localhost:8545",
-  PXE: "http://localhost:8081",
+  PXE: "http://localhost:8080",
 } as const;
 
 export const LOCAL_PRIVATE_KEYS = {
