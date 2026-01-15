@@ -43,6 +43,7 @@ export {
   setATokenBalance,
   // Contract actions
   setContracts,
+  setEthBalance,
   setL1Address,
   setL1BlockNumber,
   // L1 connection actions

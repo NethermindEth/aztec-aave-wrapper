@@ -14,12 +14,14 @@ import { type Accessor, createEffect, createMemo, createSignal, on, onCleanup } 
 import type { Account, Address, Chain, PublicClient, Transport, WalletClient } from "viem";
 import type { L1Clients } from "../services/l1/client.js";
 import { createL1WalletClient, DevnetAccounts } from "../services/l1/client.js";
+import { balanceOf } from "../services/l1/tokens.js";
 import type { AztecNodeClient } from "../services/l2/client.js";
 import { createL2NodeClientNoWait, waitForL2Node } from "../services/l2/client.js";
 import type { AaveWrapperContract, AztecAddress } from "../services/l2/contract.js";
 import { loadContractWithAzguard } from "../services/l2/contract.js";
 import type { AzguardWallet } from "../services/wallet/aztec.js";
 import type { EthereumWalletConnection } from "../services/wallet/ethereum.js";
+import { setEthBalance, setUsdcBalance, setATokenBalance } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 
 // =============================================================================
@@ -65,6 +67,8 @@ export interface UseFlowClientsResult {
   error: Accessor<string | null>;
   /** Re-initialize clients (useful after reconnection) */
   reinitialize: () => Promise<void>;
+  /** Refresh wallet balances from L1 (useful after deposit/withdraw) */
+  refreshBalances: () => Promise<void>;
 }
 
 // =============================================================================
@@ -294,11 +298,48 @@ export function useFlowClients(
     initializationVersion++;
   });
 
+  /**
+   * Refresh wallet balances from L1.
+   * Queries ETH, USDC, and aToken balances for the connected L1 wallet.
+   * Safe to call during ongoing operations - uses read-only queries.
+   */
+  async function refreshBalances(): Promise<void> {
+    const flowClients = clients();
+    const l1 = l1Connection();
+
+    if (!flowClients || !l1) {
+      return; // No clients available, nothing to refresh
+    }
+
+    const { publicClient } = flowClients.l1;
+    const userAddress = l1.address;
+    const { mockUsdc } = appState.contracts;
+
+    try {
+      // Query ETH balance
+      const ethBalance = await publicClient.getBalance({ address: userAddress });
+      setEthBalance(ethBalance.toString());
+
+      // Query token balances only if contract addresses are available
+      if (mockUsdc) {
+        const usdcBalance = await balanceOf(publicClient, mockUsdc, userAddress);
+        setUsdcBalance(usdcBalance.toString());
+        // In MVP, aToken uses same address as USDC (mock lending pool doesn't
+        // issue separate aTokens). In production, query actual aToken contract.
+        setATokenBalance(usdcBalance.toString());
+      }
+    } catch (err) {
+      // Balance refresh failures are non-critical - log but don't throw
+      console.warn("Failed to refresh balances:", err);
+    }
+  }
+
   return {
     status,
     clients,
     error,
     reinitialize: initializeClients,
+    refreshBalances,
   };
 }
 

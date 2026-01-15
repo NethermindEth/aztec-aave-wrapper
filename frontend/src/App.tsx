@@ -8,6 +8,7 @@
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import type { Component } from "solid-js";
 import { createSignal } from "solid-js";
+import type { Address, Chain, PublicClient, Transport } from "viem";
 import { ContractDeployment } from "./components/ContractDeployment";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { type LogEntry, LogLevel, LogViewer } from "./components/LogViewer";
@@ -27,9 +28,11 @@ import {
 import { getPositionStatusLabel, usePositions } from "./hooks/usePositions.js";
 import { createDevnetL1Clients } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
+import { balanceOf } from "./services/l1/tokens";
 import { createL2NodeClient } from "./services/l2/client";
 import { loadContractWithAzguard } from "./services/l2/contract";
 import { connectAztecWallet } from "./services/wallet/aztec";
+import { setATokenBalance, setEthBalance, setUsdcBalance } from "./store";
 import { useApp } from "./store/hooks";
 import { formatUSDC, toBigIntString } from "./types/state.js";
 
@@ -73,6 +76,33 @@ const App: Component = () => {
     const decimalPart = amount % 1_000_000n;
     const decimalStr = decimalPart.toString().padStart(6, "0").slice(0, 2);
     return `${wholePart}.${decimalStr}`;
+  };
+
+  /**
+   * Refresh wallet balances from L1 after operations complete.
+   * Non-blocking - failures are logged but don't throw.
+   */
+  const refreshBalances = async (
+    publicClient: PublicClient<Transport, Chain>,
+    userAddress: Address,
+    mockUsdc: Address | null
+  ) => {
+    try {
+      // Query ETH balance
+      const ethBalance = await publicClient.getBalance({ address: userAddress });
+      setEthBalance(ethBalance.toString());
+
+      // Query token balances if contract address available
+      if (mockUsdc) {
+        const usdcBalance = await balanceOf(publicClient, mockUsdc, userAddress);
+        setUsdcBalance(usdcBalance.toString());
+        // In MVP, aToken balance mirrors USDC balance (mock lending pool)
+        setATokenBalance(usdcBalance.toString());
+      }
+    } catch (error) {
+      // Balance refresh is non-critical - log but don't throw
+      console.warn("Failed to refresh balances:", error);
+    }
   };
 
   /**
@@ -185,6 +215,13 @@ const App: Component = () => {
       addLog(
         `Shares received: ${formatAmount(result.shares)}`,
         LogLevel.SUCCESS,
+      );
+
+      // Refresh wallet balances after successful deposit
+      await refreshBalances(
+        l1Clients.publicClient,
+        l1Clients.userWallet.account.address,
+        mockUsdc,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -312,6 +349,13 @@ const App: Component = () => {
       addLog(
         `Amount withdrawn: ${formatAmount(result.amount)}`,
         LogLevel.SUCCESS,
+      );
+
+      // Refresh wallet balances after successful withdrawal
+      await refreshBalances(
+        l1Clients.publicClient,
+        l1Clients.userWallet.account.address,
+        state.contracts.mockUsdc,
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
