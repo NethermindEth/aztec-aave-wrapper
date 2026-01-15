@@ -399,9 +399,7 @@ contract PortalTest is Test {
         bytes32 secretHash = keccak256("secret");
 
         vm.expectEmit(true, true, false, true);
-        emit AztecAavePortalL1.WithdrawExecuted(
-            withdrawIntent.intentId, address(token), 1000e18
-        );
+        emit AztecAavePortalL1.WithdrawExecuted(withdrawIntent.intentId, address(token), 1000e18);
 
         vm.expectEmit(true, false, false, true);
         emit AztecAavePortalL1.WithdrawConfirmed(

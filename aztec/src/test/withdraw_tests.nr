@@ -316,14 +316,7 @@ unconstrained fn test_position_receipt_note_active_position() {
     let shares: u128 = 100_000_000;
     let status: u8 = PositionStatus::ACTIVE;
 
-    let receipt = PositionReceiptNote {
-        owner,
-        nonce,
-        asset_id,
-        shares,
-        aave_market_id: 0,
-        status,
-    };
+    let receipt = PositionReceiptNote { owner, nonce, asset_id, shares, aave_market_id: 0, status };
 
     assert(receipt.owner == owner, "Owner mismatch");
     assert(receipt.nonce == nonce, "Nonce mismatch");

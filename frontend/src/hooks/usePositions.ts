@@ -10,10 +10,19 @@
  * - Persistence to localStorage to survive page refreshes
  * - Duplicate position prevention during retry flows
  * - Position lookup by intent ID for withdrawal initiation
+ * - Encrypted secret storage for withdrawal finalization
  */
 
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import { type Accessor, createEffect, createMemo, on, onMount } from "solid-js";
+import {
+  clearAllSecrets,
+  getSecret,
+  hasSecret,
+  removeSecret,
+  type SecretEntry,
+  storeSecret,
+} from "../services/secrets.js";
 import { addPosition, removePosition, setPositions, updatePosition } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 import type { PositionDisplay } from "../types/state.js";
@@ -47,6 +56,8 @@ export interface Position {
   sharesFormatted: string;
   /** Current status of the position */
   status: IntentStatus;
+  /** Whether a secret is stored for this position (for withdrawal finalization) */
+  hasStoredSecret: boolean;
 }
 
 /**
@@ -71,6 +82,16 @@ export interface UsePositionsResult {
   totalValue: Accessor<bigint>;
   /** Clear all positions */
   clearAllPositions: () => void;
+
+  // Secret management for withdrawal finalization
+  /** Store a secret for a position (call after successful deposit) */
+  storePositionSecret: (intentId: string, secretHex: string, l2AddressHex: string) => Promise<void>;
+  /** Retrieve a secret for withdrawal finalization */
+  getPositionSecret: (intentId: string, l2AddressHex: string) => Promise<SecretEntry | null>;
+  /** Check if a secret exists for a position */
+  hasPositionSecret: (intentId: string) => boolean;
+  /** Remove a secret after successful withdrawal */
+  removePositionSecret: (intentId: string) => void;
 }
 
 // =============================================================================
@@ -140,6 +161,7 @@ function toPosition(display: PositionDisplay): Position {
     shares: fromBigIntString(display.shares),
     sharesFormatted: display.sharesFormatted,
     status: display.status,
+    hasStoredSecret: hasSecret(display.intentId),
   };
 }
 
@@ -254,10 +276,13 @@ export function usePositions(): UsePositionsResult {
   }
 
   /**
-   * Remove position by intent ID
+   * Remove position by intent ID.
+   * Also removes any associated secret to prevent orphaned data.
    */
   function removePositionById(intentId: string): void {
     removePosition(intentId);
+    // Clean up associated secret to prevent orphaned data
+    removeSecret(intentId);
   }
 
   /**
@@ -268,13 +293,67 @@ export function usePositions(): UsePositionsResult {
   }
 
   /**
-   * Clear all positions (also clears storage)
+   * Clear all positions (also clears storage and secrets)
    */
   function clearAllPositions(): void {
     setPositions([]);
     clearPositionsFromStorage();
+    clearAllSecrets();
     // Reset loading flag so positions can be reloaded if needed
     hasLoadedFromStorage = false;
+  }
+
+  // =========================================================================
+  // Secret Management Functions
+  // =========================================================================
+
+  /**
+   * Store a secret for a position (call after successful deposit).
+   * The secret is encrypted using the user's L2 address as the key.
+   *
+   * @param intentId - The position's intent ID
+   * @param secretHex - The secret value as hex string (Fr.toString())
+   * @param l2AddressHex - The user's L2 address as hex string
+   */
+  async function storePositionSecret(
+    intentId: string,
+    secretHex: string,
+    l2AddressHex: string
+  ): Promise<void> {
+    await storeSecret(intentId, secretHex, l2AddressHex);
+  }
+
+  /**
+   * Retrieve a secret for withdrawal finalization.
+   *
+   * @param intentId - The position's intent ID
+   * @param l2AddressHex - The user's L2 address as hex string
+   * @returns The decrypted secret entry, or null if not found
+   */
+  async function getPositionSecret(
+    intentId: string,
+    l2AddressHex: string
+  ): Promise<SecretEntry | null> {
+    return getSecret(intentId, l2AddressHex);
+  }
+
+  /**
+   * Check if a secret exists for a position.
+   *
+   * @param intentId - The position's intent ID
+   * @returns True if a secret is stored
+   */
+  function hasPositionSecret(intentId: string): boolean {
+    return hasSecret(intentId);
+  }
+
+  /**
+   * Remove a secret after successful withdrawal.
+   *
+   * @param intentId - The position's intent ID
+   */
+  function removePositionSecret(intentId: string): void {
+    removeSecret(intentId);
   }
 
   return {
@@ -287,6 +366,11 @@ export function usePositions(): UsePositionsResult {
     withdrawablePositions,
     totalValue,
     clearAllPositions,
+    // Secret management
+    storePositionSecret,
+    getPositionSecret,
+    hasPositionSecret,
+    removePositionSecret,
   };
 }
 
