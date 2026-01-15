@@ -42,7 +42,14 @@ import { formatUSDC, toBigIntString } from "./types/state.js";
  */
 const App: Component = () => {
   const { state } = useApp();
-  const { addNewPosition, updatePositionStatus, getPosition, removePositionById } = usePositions();
+  const {
+    addNewPosition,
+    updatePositionStatus,
+    getPosition,
+    removePositionById,
+    refreshFromL2,
+    isRefreshing,
+  } = usePositions();
 
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
   const [isDepositing, setIsDepositing] = createSignal(false);
@@ -72,6 +79,38 @@ const App: Component = () => {
     const decimalPart = amount % 1_000_000n;
     const decimalStr = decimalPart.toString().padStart(6, "0").slice(0, 2);
     return `${wholePart}.${decimalStr}`;
+  };
+
+  /**
+   * Refresh positions from L2 contract.
+   * This fetches the user's private notes (positions) from the L2 Aztec contract.
+   */
+  const handleRefreshPositions = async () => {
+    // Validate contracts are loaded
+    if (!state.contracts.l2Wrapper) {
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+      return;
+    }
+
+    const l2WrapperAddress = state.contracts.l2Wrapper;
+
+    addLog("Refreshing positions from L2...");
+
+    try {
+      // Connect to Aztec wallet
+      const { wallet, address: walletAddress } = await connectAztecWallet();
+
+      // Load contract
+      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      // Refresh positions from L2
+      await refreshFromL2(contract, wallet, walletAddress);
+
+      addLog("Positions refreshed from L2", LogLevel.SUCCESS);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Failed to refresh positions: ${message}`, LogLevel.ERROR);
+    }
   };
 
   /**
@@ -368,7 +407,11 @@ const App: Component = () => {
 
           {/* Positions */}
           <ErrorBoundary>
-            <PositionsList onWithdraw={handleWithdraw} />
+            <PositionsList
+              onWithdraw={handleWithdraw}
+              onRefresh={handleRefreshPositions}
+              isRefreshing={isRefreshing()}
+            />
           </ErrorBoundary>
 
           {/* Logs */}

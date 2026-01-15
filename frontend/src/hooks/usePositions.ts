@@ -1,20 +1,26 @@
 /**
  * Positions Hook
  *
- * Custom hook for managing user Aave positions with persistence and withdrawal initiation.
- * Coordinates with the app store for reactive position state and provides helper functions
- * for position lifecycle management.
+ * Custom hook for managing user Aave positions with L2 as the ONLY source of truth.
+ * NO localStorage caching - positions come exclusively from on-chain L2 queries.
  *
  * Features:
  * - Reactive access to positions from app state
- * - Persistence to localStorage to survive page refreshes
+ * - L2 contract queries as the ONLY source of position data
  * - Duplicate position prevention during retry flows
  * - Position lookup by intent ID for withdrawal initiation
- * - Encrypted secret storage for withdrawal finalization
+ * - Encrypted secret storage for withdrawal finalization (secrets still use localStorage)
+ *
+ * Data Flow:
+ * 1. On mount: Empty positions (no cache)
+ * 2. User clicks "Refresh from L2": Queries private notes from L2 contract
+ * 3. After deposit/withdraw: Position added/removed in memory, refresh from L2 to sync
  */
 
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
-import { type Accessor, createEffect, createMemo, on, onMount } from "solid-js";
+import { type Accessor, createMemo, createSignal } from "solid-js";
+import type { AaveWrapperContract } from "../services/l2/contract.js";
+import { L2PositionStatus, queryL2Positions } from "../services/l2/positions.js";
 import {
   clearAllSecrets,
   getSecret,
@@ -23,20 +29,17 @@ import {
   type SecretEntry,
   storeSecret,
 } from "../services/secrets.js";
+import type { AzguardWallet } from "../services/wallet/aztec.js";
 import { addPosition, removePosition, setPositions, updatePosition } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 import type { PositionDisplay } from "../types/state.js";
-import { fromBigIntString } from "../types/state.js";
+import { formatUSDC, fromBigIntString, toBigIntString } from "../types/state.js";
 
 // =============================================================================
 // Constants
 // =============================================================================
 
-/** LocalStorage key for position persistence */
-const POSITIONS_STORAGE_KEY = "aztec-aave-positions";
-
-/** Flag to track if positions have been loaded from localStorage (prevents duplicate loading across hook instances) */
-let hasLoadedFromStorage = false;
+// No localStorage - positions come only from L2 on-chain data
 
 // =============================================================================
 // Types
@@ -83,6 +86,18 @@ export interface UsePositionsResult {
   /** Clear all positions */
   clearAllPositions: () => void;
 
+  // L2 refresh
+  /** Refresh positions from L2 contract (source of truth) */
+  refreshFromL2: (
+    contract: AaveWrapperContract,
+    wallet: AzguardWallet,
+    ownerAddress: string
+  ) => Promise<void>;
+  /** Whether L2 refresh is in progress */
+  isRefreshing: Accessor<boolean>;
+  /** Error from last L2 refresh attempt */
+  refreshError: Accessor<string | null>;
+
   // Secret management for withdrawal finalization
   /** Store a secret for a position (call after successful deposit) */
   storePositionSecret: (intentId: string, secretHex: string, l2AddressHex: string) => Promise<void>;
@@ -95,55 +110,52 @@ export interface UsePositionsResult {
 }
 
 // =============================================================================
-// Storage Utilities
+// Storage Utilities (secrets only, no position caching)
 // =============================================================================
 
 /**
- * Load positions from localStorage
- * @returns Array of PositionDisplay or empty array if none exist
+ * Get all stored secret keys (intent IDs) from localStorage.
+ * Secrets are still stored locally as they're needed for withdrawal finalization.
  */
-function loadPositionsFromStorage(): PositionDisplay[] {
+function getAllStoredSecretKeys(): string[] {
   try {
-    const stored = localStorage.getItem(POSITIONS_STORAGE_KEY);
-    if (!stored) return [];
-
-    const parsed = JSON.parse(stored) as PositionDisplay[];
-    // Validate structure
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      (p) =>
-        typeof p.intentId === "string" &&
-        typeof p.assetId === "string" &&
-        typeof p.shares === "string" &&
-        typeof p.status === "number"
-    );
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("aztec-aave-secret-")) {
+        // Extract intent ID from key
+        keys.push(key.replace("aztec-aave-secret-", ""));
+      }
+    }
+    return keys;
   } catch {
     return [];
   }
 }
 
-/**
- * Save positions to localStorage
- * @param positions - Positions to persist
- */
-function savePositionsToStorage(positions: PositionDisplay[]): void {
-  try {
-    localStorage.setItem(POSITIONS_STORAGE_KEY, JSON.stringify(positions));
-  } catch {
-    // Storage may be full or unavailable
-    console.warn("Failed to persist positions to localStorage");
-  }
-}
+// =============================================================================
+// Status Mapping
+// =============================================================================
 
 /**
- * Clear positions from localStorage
+ * Map L2 position status to IntentStatus enum.
+ *
+ * L2 PositionReceiptNote status values:
+ * - 0: PendingDeposit - Deposit initiated, awaiting L1 confirmation
+ * - 1: Active - Position is active on L1 Aave pool
+ * - 2: PendingWithdraw - Withdrawal initiated, awaiting completion
  */
-function clearPositionsFromStorage(): void {
-  try {
-    localStorage.removeItem(POSITIONS_STORAGE_KEY);
-  } catch {
-    // Ignore errors
+function mapL2StatusToIntentStatus(l2Status: number): IntentStatus {
+  switch (l2Status) {
+    case L2PositionStatus.PendingDeposit:
+      return IntentStatus.PendingDeposit;
+    case L2PositionStatus.Active:
+      return IntentStatus.Active;
+    case L2PositionStatus.PendingWithdraw:
+      return IntentStatus.PendingWithdraw;
+    default:
+      // Unknown status, default to PendingDeposit
+      return IntentStatus.PendingDeposit;
   }
 }
 
@@ -206,6 +218,10 @@ function toPosition(display: PositionDisplay): Position {
 export function usePositions(): UsePositionsResult {
   const state = useAppState();
 
+  // L2 refresh state
+  const [isRefreshing, setIsRefreshing] = createSignal(false);
+  const [refreshError, setRefreshError] = createSignal<string | null>(null);
+
   // Convert store positions (string shares) to Position (bigint shares)
   const positions = createMemo<Position[]>(() => state.positions.map(toPosition));
 
@@ -217,36 +233,63 @@ export function usePositions(): UsePositionsResult {
   // Calculate total value across all positions
   const totalValue = createMemo<bigint>(() => positions().reduce((sum, p) => sum + p.shares, 0n));
 
-  // Load positions from localStorage on mount (only once across all hook instances)
-  onMount(() => {
-    // Prevent duplicate loading when multiple components use this hook
-    if (hasLoadedFromStorage) {
-      return;
-    }
-    hasLoadedFromStorage = true;
+  // No localStorage loading - positions come only from L2 on-chain calls
 
-    const storedPositions = loadPositionsFromStorage();
-    if (storedPositions.length > 0) {
-      // Merge with any existing positions, avoiding duplicates
-      const existingIds = new Set(state.positions.map((p) => p.intentId));
-      const newPositions = storedPositions.filter((p) => !existingIds.has(p.intentId));
+  /**
+   * Refresh positions from L2 contract.
+   *
+   * This queries the user's private notes from the L2 contract via the PXE.
+   * L2 is the source of truth - positions not found on L2 are removed from local state.
+   *
+   * @param contract - AaveWrapper contract instance
+   * @param wallet - Connected Azguard wallet
+   * @param ownerAddress - L2 address of the position owner
+   */
+  async function refreshFromL2(
+    contract: AaveWrapperContract,
+    wallet: AzguardWallet,
+    ownerAddress: string
+  ): Promise<void> {
+    setIsRefreshing(true);
+    setRefreshError(null);
 
-      if (newPositions.length > 0) {
-        setPositions([...state.positions, ...newPositions]);
+    try {
+      const result = await queryL2Positions(contract, wallet, ownerAddress);
+
+      if (!result.success) {
+        setRefreshError(result.error ?? "Failed to query positions from L2");
+        return;
       }
-    }
-  });
 
-  // Persist positions to localStorage whenever they change
-  createEffect(
-    on(
-      () => [...state.positions],
-      (currentPositions) => {
-        savePositionsToStorage(currentPositions);
-      },
-      { defer: true }
-    )
-  );
+      // Convert L2 positions to PositionDisplay format
+      const l2Positions: PositionDisplay[] = result.positions.map((p) => ({
+        intentId: p.intentId,
+        assetId: p.assetId,
+        shares: toBigIntString(p.shares),
+        sharesFormatted: formatUSDC(p.shares),
+        status: mapL2StatusToIntentStatus(p.status),
+      }));
+
+      // Replace all positions with L2 data (L2 is source of truth)
+      setPositions(l2Positions);
+
+      // Clean up secrets for positions that no longer exist
+      const l2IntentIds = new Set(l2Positions.map((p) => p.intentId));
+      const allSecretKeys = getAllStoredSecretKeys();
+      for (const key of allSecretKeys) {
+        if (!l2IntentIds.has(key)) {
+          removeSecret(key);
+        }
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error refreshing positions";
+      setRefreshError(errorMessage);
+      console.error("Failed to refresh positions from L2:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
 
   /**
    * Get position by intent ID
@@ -293,14 +336,11 @@ export function usePositions(): UsePositionsResult {
   }
 
   /**
-   * Clear all positions (also clears storage and secrets)
+   * Clear all positions and secrets
    */
   function clearAllPositions(): void {
     setPositions([]);
-    clearPositionsFromStorage();
     clearAllSecrets();
-    // Reset loading flag so positions can be reloaded if needed
-    hasLoadedFromStorage = false;
   }
 
   // =========================================================================
@@ -366,6 +406,10 @@ export function usePositions(): UsePositionsResult {
     withdrawablePositions,
     totalValue,
     clearAllPositions,
+    // L2 refresh
+    refreshFromL2,
+    isRefreshing,
+    refreshError,
     // Secret management
     storePositionSecret,
     getPositionSecret,
