@@ -1,7 +1,7 @@
 # Docker Compose configuration for Aztec Aave Wrapper local development
 # This configuration runs:
 # - anvil-l1: Ethereum L1 simulation (port 8545)
-# - aztec-sandbox: Full Aztec sandbox with PXE (port 8081)
+# - aztec-sandbox: Full Aztec sandbox with PXE (port 8080)
 
 services:
   # ============================================================================
@@ -58,7 +58,7 @@ services:
     container_name: aztec-aave-sandbox
     ports:
       # PXE HTTP endpoint
-      - "${PXE_PORT:-8081}:8080"
+      - "${PXE_PORT:-8080}:8080"
     environment:
       # L1 RPC URLs - point to our L1 anvil instance
       # The Aztec CLI uses ETHEREUM_HOSTS for the L1 RPC URL(s)

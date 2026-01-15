@@ -8,7 +8,7 @@
  *   - MockLendingPool
  *   - AztecAavePortalL1
  *
- * L2 (Aztec Sandbox port 8081):
+ * L2 (Aztec Sandbox port 8080):
  *   - AaveWrapper contract
  *
  * Usage:
@@ -28,7 +28,7 @@ import { join } from "path";
 // =============================================================================
 
 const L1_RPC = process.env.L1_RPC || "http://localhost:8545";
-const PXE_URL = process.env.PXE_URL || "http://localhost:8081";
+const PXE_URL = process.env.PXE_URL || "http://localhost:8080";
 
 // Anvil default deployer account (DO NOT use in production!)
 const DEPLOYER_PRIVATE_KEY =
@@ -434,7 +434,7 @@ async function main() {
   console.log(`  MockLendingPool:       ${addresses.l1.mockLendingPool}`);
   console.log(`  AztecAavePortal:       ${addresses.l1.portal}`);
 
-  console.log("\nL2 Contracts (Aztec :8081):");
+  console.log("\nL2 Contracts (Aztec :8080):");
   console.log(`  AaveWrapper:         ${addresses.l2.aaveWrapper || "(not deployed)"}`);
 
   console.log("\nTest Tokens:");

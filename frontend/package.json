@@ -38,6 +38,7 @@
     "@aztec/accounts": "3.0.1",
     "@aztec/aztec.js": "3.0.1",
     "@aztec/foundation": "3.0.1",
+    "@aztec/noir-contracts.js": "3.0.1",
     "@aztec/pxe": "3.0.1",
     "@aztec/stdlib": "3.0.1",
     "@aztec/test-wallet": "3.0.0-devnet.20251212",

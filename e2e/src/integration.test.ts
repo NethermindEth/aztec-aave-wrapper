@@ -34,7 +34,7 @@ type PXE = import("@aztec/stdlib/interfaces/client").AztecNode;
  */
 const TEST_CONFIG = {
   /** PXE URL for local devnet */
-  pxeUrl: process.env.PXE_URL || "http://localhost:8081",
+  pxeUrl: process.env.PXE_URL || "http://localhost:8080",
   /** Test amounts */
   depositAmount: 1000n,
   withdrawAmount: 500n,

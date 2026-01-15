@@ -46,7 +46,7 @@ import { join } from "path";
 
 const CONFIG = {
   l1RpcUrl: process.env.L1_RPC_URL ?? "http://localhost:8545",
-  l2RpcUrl: process.env.L2_RPC_URL ?? "http://localhost:8081",
+  l2RpcUrl: process.env.L2_RPC_URL ?? "http://localhost:8080",
   depositAmount: 1_000_000n, // 1 USDC (6 decimals)
   withdrawAmount: 1_000_000n,
   assetId: 1n,

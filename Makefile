@@ -31,8 +31,9 @@ DOCKER_COMPOSE := docker compose
 DOCKER_COMPOSE_FILE := docker-compose.yml
 
 # Anvil ports (from docker-compose.yml defaults)
-ANVIL_L1_PORT ?= 8545
-PXE_PORT ?= 8080
+# Export these so docker-compose can use them
+export ANVIL_L1_PORT ?= 8545
+export PXE_PORT ?= 8080
 
 # ==============================================================================
 # PHONY Targets Declaration

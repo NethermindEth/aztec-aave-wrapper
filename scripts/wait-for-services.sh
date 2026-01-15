@@ -26,7 +26,7 @@ NC='\033[0m' # No Color
 
 # Service configuration
 ANVIL_L1_PORT=${ANVIL_L1_PORT:-8545}
-PXE_PORT=${PXE_PORT:-8081}
+PXE_PORT=${PXE_PORT:-8080}
 
 # =============================================================================
 # Helper Functions
