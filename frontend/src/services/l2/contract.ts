@@ -60,11 +60,32 @@ export async function loadContractWithAzguard(
 
   try {
     // Dynamically import the generated contract and AztecAddress
-    const { AaveWrapperContract } = await import("@generated/AaveWrapper");
+    const { AaveWrapperContract, AaveWrapperContractArtifact } = await import(
+      "@generated/AaveWrapper"
+    );
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
 
     // Parse the contract address string
     const contractAddress = AztecAddress.fromString(contractAddressString);
+
+    // Register the contract artifact with the wallet so it knows how to interact with it
+    // This is required for the wallet to simulate and execute transactions
+    logInfo("Registering contract artifact with wallet...");
+
+    // Fetch the actual contract instance from the network via the wallet
+    const contractMetadata = await wallet.getContractMetadata(contractAddress);
+
+    if (!contractMetadata.contractInstance) {
+      throw new Error(
+        `Contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
+      );
+    }
+
+    // Register with wallet: instance first, then artifact
+    await wallet.registerContract(
+      contractMetadata.contractInstance,
+      AaveWrapperContractArtifact as Parameters<typeof wallet.registerContract>[1]
+    );
 
     // Load the contract with Azguard wallet.
     // Note: We use `as unknown as` cast because AzguardWallet from @azguardwallet/aztec-wallet
