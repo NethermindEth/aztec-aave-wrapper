@@ -15,7 +15,7 @@ import type {
   Transport,
   WalletClient,
 } from "viem";
-import { logInfo, logSuccess } from "../../store/logger.js";
+import { logError, logInfo, logSuccess } from "../../store/logger.js";
 import type { DepositIntent, WithdrawIntent } from "./intent.js";
 
 // =============================================================================
@@ -443,4 +443,117 @@ export async function getAztecOutbox(
     args: [],
   });
   return outbox as Address;
+}
+
+// =============================================================================
+// Transaction Polling
+// =============================================================================
+
+/**
+ * Configuration for L1 transaction polling
+ */
+export interface L1TransactionPollingConfig {
+  /** Maximum time to wait in milliseconds (default: 120000 = 2 min) */
+  timeout?: number;
+  /** Interval between polls in milliseconds (default: 1000 = 1 sec) */
+  interval?: number;
+  /** Number of confirmations required (default: 1) */
+  confirmations?: number;
+}
+
+/**
+ * L1 Transaction status result
+ */
+export interface L1TransactionStatus {
+  /** Whether the transaction has been confirmed */
+  confirmed: boolean;
+  /** Transaction hash */
+  txHash: Hex;
+  /** Block number if confirmed */
+  blockNumber?: bigint;
+  /** Transaction status ("success" | "reverted") */
+  status?: "success" | "reverted";
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
+ * Wait for an L1 transaction to be confirmed by polling for receipt.
+ *
+ * Use this when the wallet doesn't immediately report transaction status,
+ * or when you need to poll for confirmation separately from the initial send.
+ *
+ * @param publicClient - Viem public client for reading chain state
+ * @param txHash - Transaction hash to poll for
+ * @param config - Polling configuration
+ * @returns Transaction status with confirmation details
+ *
+ * @example
+ * ```ts
+ * const status = await waitForTransaction(publicClient, txHash, {
+ *   timeout: 60000,
+ *   confirmations: 2,
+ * });
+ * if (status.confirmed && status.status === "success") {
+ *   console.log(`Confirmed in block ${status.blockNumber}`);
+ * }
+ * ```
+ */
+export async function waitForTransaction(
+  publicClient: PublicClient<Transport, Chain>,
+  txHash: Hex,
+  config: L1TransactionPollingConfig = {}
+): Promise<L1TransactionStatus> {
+  const { timeout = 120000, interval = 1000, confirmations = 1 } = config;
+
+  const startTime = Date.now();
+
+  logInfo(`Polling for L1 transaction ${txHash.slice(0, 16)}...`);
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+
+      if (receipt) {
+        // Check if we have enough confirmations
+        const currentBlock = await publicClient.getBlockNumber();
+        const txConfirmations = currentBlock - receipt.blockNumber + 1n;
+
+        if (txConfirmations >= BigInt(confirmations)) {
+          const status = receipt.status === "success" ? "success" : "reverted";
+
+          if (status === "success") {
+            logSuccess(`L1 transaction confirmed in block ${receipt.blockNumber}`);
+          } else {
+            logError(`L1 transaction reverted in block ${receipt.blockNumber}`);
+          }
+
+          return {
+            confirmed: true,
+            txHash,
+            blockNumber: receipt.blockNumber,
+            status,
+          };
+        }
+
+        // Not enough confirmations yet, wait and retry
+        await new Promise((resolve) => setTimeout(resolve, interval));
+        continue;
+      }
+
+      // Receipt not found yet, wait and retry
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    } catch {
+      // Transaction not found or error, continue polling
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+  }
+
+  // Timeout reached
+  logError(`L1 transaction polling timed out after ${timeout}ms`);
+  return {
+    confirmed: false,
+    txHash,
+    error: `Polling timed out after ${timeout}ms`,
+  };
 }

@@ -491,6 +491,109 @@ export async function executeFinalizeWithdraw(
 }
 
 // =============================================================================
+// Transaction Polling
+// =============================================================================
+
+/**
+ * Configuration for transaction polling
+ */
+export interface TransactionPollingConfig {
+  /** Maximum time to wait in milliseconds (default: 120000 = 2 min) */
+  timeout?: number;
+  /** Interval between polls in milliseconds (default: 1000 = 1 sec) */
+  interval?: number;
+}
+
+/**
+ * Transaction status result
+ */
+export interface TransactionStatus {
+  /** Whether the transaction has been confirmed */
+  confirmed: boolean;
+  /** Transaction hash */
+  txHash: string;
+  /** Block number if confirmed */
+  blockNumber?: bigint;
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
+ * Wait for an L2 transaction to be confirmed by polling status.
+ *
+ * Use this when the wallet doesn't immediately report transaction status.
+ * The function polls the PXE for transaction receipt until confirmed or timeout.
+ *
+ * @param pxe - PXE client instance (from wallet.getPXE())
+ * @param txHash - Transaction hash to poll for
+ * @param config - Polling configuration
+ * @returns Transaction status
+ *
+ * @example
+ * ```ts
+ * const status = await waitForTransaction(pxe, txHash, {
+ *   timeout: 60000,
+ *   interval: 2000,
+ * });
+ * if (status.confirmed) {
+ *   console.log(`Confirmed in block ${status.blockNumber}`);
+ * }
+ * ```
+ */
+export async function waitForTransaction(
+  pxe: { getTxReceipt: (hash: unknown) => Promise<{ status: string; blockNumber?: bigint }> },
+  txHash: string,
+  config: TransactionPollingConfig = {}
+): Promise<TransactionStatus> {
+  const { timeout = 120000, interval = 1000 } = config;
+
+  const startTime = Date.now();
+
+  logInfo(`Polling for transaction ${txHash.slice(0, 16)}...`);
+
+  while (Date.now() - startTime < timeout) {
+    try {
+      // Pass txHash directly - PXE implementations accept string or TxHash
+      const receipt = await pxe.getTxReceipt(txHash);
+
+      // Check for confirmed status (success or mined)
+      if (receipt.status === "success" || receipt.status === "mined") {
+        logSuccess(`Transaction confirmed in block ${receipt.blockNumber}`);
+        return {
+          confirmed: true,
+          txHash,
+          blockNumber: receipt.blockNumber,
+        };
+      }
+
+      // Check for failed status
+      if (receipt.status === "dropped" || receipt.status === "failed") {
+        logError(`Transaction failed with status: ${receipt.status}`);
+        return {
+          confirmed: false,
+          txHash,
+          error: `Transaction ${receipt.status}`,
+        };
+      }
+
+      // Still pending, wait and retry
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    } catch {
+      // Receipt not found yet, continue polling
+      await new Promise((resolve) => setTimeout(resolve, interval));
+    }
+  }
+
+  // Timeout reached
+  logError(`Transaction polling timed out after ${timeout}ms`);
+  return {
+    confirmed: false,
+    txHash,
+    error: `Polling timed out after ${timeout}ms`,
+  };
+}
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 
