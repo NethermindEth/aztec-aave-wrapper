@@ -29,7 +29,11 @@ function getUserFriendlyMessage(error: string): {
   }
 
   // Transaction rejected by user
-  if (errorLower.includes("rejected") || errorLower.includes("denied") || errorLower.includes("cancelled")) {
+  if (
+    errorLower.includes("rejected") ||
+    errorLower.includes("denied") ||
+    errorLower.includes("cancelled")
+  ) {
     return {
       title: "Transaction Cancelled",
       description: "The transaction was cancelled.",
@@ -95,7 +99,8 @@ function getUserFriendlyMessage(error: string): {
   return {
     title: "Operation Failed",
     description: "An unexpected error occurred.",
-    suggestion: "Please try again. If the issue persists, the error details may help diagnose the problem.",
+    suggestion:
+      "Please try again. If the issue persists, the error details may help diagnose the problem.",
   };
 }
 
@@ -160,12 +165,7 @@ export function ErrorRecovery(props: ErrorRecoveryProps) {
           {/* Action buttons */}
           <div class="flex gap-2 pt-2">
             <Show when={props.canRetry !== false && props.onRetry}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => props.onRetry?.()}
-                class="flex-1"
-              >
+              <Button variant="outline" size="sm" onClick={() => props.onRetry?.()} class="flex-1">
                 Try Again
               </Button>
             </Show>

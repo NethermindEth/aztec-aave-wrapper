@@ -61,11 +61,7 @@ export interface TxLogOptions {
  * Add a log entry to the operation log.
  * Automatically enforces MAX_LOG_ENTRIES limit.
  */
-export function log(
-  level: LogLevel,
-  message: string,
-  options?: TxLogOptions,
-): void {
+export function log(level: LogLevel, message: string, options?: TxLogOptions): void {
   const entry = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
@@ -117,11 +113,7 @@ export function logError(message: string, options?: TxLogOptions): void {
  * Log a step in the operation process.
  * Format: "Step X/Y: description"
  */
-export function logStep(
-  step: number,
-  totalSteps: number,
-  description: string,
-): void {
+export function logStep(step: number, totalSteps: number, description: string): void {
   log("info", `Step ${step}/${totalSteps}: ${description}`);
 }
 
@@ -129,11 +121,7 @@ export function logStep(
  * Log with section prefix.
  * Format: "[section] message"
  */
-export function logSection(
-  section: string,
-  message: string,
-  level: LogLevel = "info",
-): void {
+export function logSection(section: string, message: string, level: LogLevel = "info"): void {
   log(level, `[${section}] ${message}`);
 }
 

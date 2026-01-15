@@ -69,13 +69,9 @@ export interface SecretEntry {
  */
 async function deriveKey(seed: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(seed),
-    "PBKDF2",
-    false,
-    ["deriveKey"]
-  );
+  const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(seed), "PBKDF2", false, [
+    "deriveKey",
+  ]);
 
   // Use a fixed salt - the security comes from the seed (user's L2 address)
   const salt = encoder.encode("aztec-aave-wrapper-secrets-v1");
@@ -115,11 +111,7 @@ async function encryptSecret(
   // Generate random IV for each encryption
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
 
-  const encrypted = await crypto.subtle.encrypt(
-    { name: ENCRYPTION_ALGORITHM, iv },
-    key,
-    data
-  );
+  const encrypted = await crypto.subtle.encrypt({ name: ENCRYPTION_ALGORITHM, iv }, key, data);
 
   return {
     encryptedSecret: arrayBufferToBase64(encrypted),
@@ -135,11 +127,7 @@ async function encryptSecret(
  * @param key - Encryption key
  * @returns Decrypted secret as hex string
  */
-async function decryptSecret(
-  encryptedSecret: string,
-  iv: string,
-  key: CryptoKey
-): Promise<string> {
+async function decryptSecret(encryptedSecret: string, iv: string, key: CryptoKey): Promise<string> {
   const encryptedData = base64ToArrayBuffer(encryptedSecret);
   const ivData = base64ToArrayBuffer(iv);
 

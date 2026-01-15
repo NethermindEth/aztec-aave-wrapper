@@ -9,7 +9,7 @@ import { createMemo, createSignal, Match, Show, Switch } from "solid-js";
 import { useApp } from "../store/hooks.js";
 import { IntentStatus } from "../types/index.js";
 import type { PositionDisplay } from "../types/state.js";
-import { StepIndicator, type StepConfig } from "./StepIndicator";
+import { type StepConfig, StepIndicator } from "./StepIndicator";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";

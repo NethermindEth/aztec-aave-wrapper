@@ -11,7 +11,7 @@
  */
 
 import { type Accessor, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
-import type { Account, Address, Chain, PublicClient, Transport, WalletClient } from "viem";
+import type { Account, WalletClient } from "viem";
 import type { L1Clients } from "../services/l1/client.js";
 import { createL1WalletClient, DevnetAccounts } from "../services/l1/client.js";
 import { balanceOf } from "../services/l1/tokens.js";
@@ -21,7 +21,7 @@ import type { AaveWrapperContract, AztecAddress } from "../services/l2/contract.
 import { loadContractWithAzguard } from "../services/l2/contract.js";
 import type { AzguardWallet } from "../services/wallet/aztec.js";
 import type { EthereumWalletConnection } from "../services/wallet/ethereum.js";
-import { setEthBalance, setUsdcBalance, setATokenBalance } from "../store/actions.js";
+import { setATokenBalance, setEthBalance, setUsdcBalance } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 
 // =============================================================================
@@ -239,10 +239,7 @@ export function useFlowClients(
     await waitForL2Node(node);
 
     // Load the contract with Azguard wallet
-    const { contract, address: contractAddress } = await loadContractWithAzguard(
-      wallet,
-      wrapperAddress
-    );
+    const { contract } = await loadContractWithAzguard(wallet, wrapperAddress);
 
     // Get the user's L2 address from the wallet
     const accounts = await wallet.getAccounts();

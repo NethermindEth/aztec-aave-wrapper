@@ -9,7 +9,7 @@ import { createSignal, Match, Show, Switch } from "solid-js";
 import { DEADLINE_CONSTRAINTS } from "../config/constants.js";
 import { useApp } from "../store/hooks.js";
 import { fromBigIntString } from "../types/state.js";
-import { StepIndicator, type StepConfig } from "./StepIndicator";
+import { type StepConfig, StepIndicator } from "./StepIndicator";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";

@@ -5,8 +5,8 @@
  * Supports multiple chains with appropriate explorer URLs.
  */
 
-import { Show } from "solid-js";
 import { CHAIN_IDS } from "@aztec-aave-wrapper/shared";
+import { Show } from "solid-js";
 
 /**
  * Block explorer URLs by chain ID
@@ -69,16 +69,13 @@ function truncateHash(hash: string): string {
 export function TransactionLink(props: TransactionLinkProps) {
   const chainId = () => props.chainId ?? CHAIN_IDS.ANVIL_L1;
   const explorerUrl = () => getExplorerUrl(chainId(), props.txHash);
-  const displayHash = () =>
-    props.truncate ? truncateHash(props.txHash) : props.txHash;
+  const displayHash = () => (props.truncate ? truncateHash(props.txHash) : props.txHash);
 
   return (
     <Show
       when={explorerUrl()}
       fallback={
-        <span
-          class={`font-mono text-blue-600 dark:text-blue-400 ${props.class ?? ""}`}
-        >
+        <span class={`font-mono text-blue-600 dark:text-blue-400 ${props.class ?? ""}`}>
           {displayHash()}
         </span>
       }

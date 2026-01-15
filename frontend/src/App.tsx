@@ -41,12 +41,7 @@ import { formatUSDC, toBigIntString } from "./types/state.js";
  */
 const App: Component = () => {
   const { state } = useApp();
-  const {
-    addNewPosition,
-    updatePositionStatus,
-    getPosition,
-    removePositionById,
-  } = usePositions();
+  const { addNewPosition, updatePositionStatus, getPosition, removePositionById } = usePositions();
 
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
   const [isDepositing, setIsDepositing] = createSignal(false);
@@ -122,10 +117,7 @@ const App: Component = () => {
       !state.contracts.mockLendingPool ||
       !state.contracts.l2Wrapper
     ) {
-      addLog(
-        "Contracts not loaded. Please wait for deployment.",
-        LogLevel.ERROR,
-      );
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
       return;
     }
 
@@ -137,9 +129,7 @@ const App: Component = () => {
 
     setIsDepositing(true);
     const amountFormatted = formatAmount(amount);
-    addLog(
-      `Initiating deposit of ${amountFormatted} USDC with ${deadline}s deadline`,
-    );
+    addLog(`Initiating deposit of ${amountFormatted} USDC with ${deadline}s deadline`);
 
     try {
       // Initialize L1 clients
@@ -148,10 +138,7 @@ const App: Component = () => {
 
       // Get mockAztecOutbox from portal contract
       addLog("Fetching portal configuration...");
-      const mockAztecOutbox = await getAztecOutbox(
-        l1Clients.publicClient,
-        portal,
-      );
+      const mockAztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
 
       // Build L1 addresses
       // Note: In MVP, mockAToken uses the same address as mockUsdc since mock lending
@@ -173,10 +160,7 @@ const App: Component = () => {
       const { wallet, address: walletAddress } = await connectAztecWallet();
 
       addLog("Loading AaveWrapper contract...");
-      const { contract } = await loadContractWithAzguard(
-        wallet,
-        l2WrapperAddress,
-      );
+      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       // Build L2 context - need to parse address
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
@@ -188,17 +172,12 @@ const App: Component = () => {
 
       // Execute the deposit flow
       addLog("Executing deposit flow...");
-      const result = await executeDepositFlow(
-        l1Clients,
-        l1Addresses,
-        l2Context,
-        {
-          assetId: 1n, // USDC asset ID
-          amount,
-          originalDecimals: 6,
-          deadlineOffset: deadline,
-        },
-      );
+      const result = await executeDepositFlow(l1Clients, l1Addresses, l2Context, {
+        assetId: 1n, // USDC asset ID
+        amount,
+        originalDecimals: 6,
+        deadlineOffset: deadline,
+      });
 
       // Update UI with result - add position to store
       addNewPosition({
@@ -208,21 +187,11 @@ const App: Component = () => {
         sharesFormatted: formatUSDC(result.shares),
         status: IntentStatus.PendingDeposit,
       });
-      addLog(
-        `Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`,
-        LogLevel.SUCCESS,
-      );
-      addLog(
-        `Shares received: ${formatAmount(result.shares)}`,
-        LogLevel.SUCCESS,
-      );
+      addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
 
       // Refresh wallet balances after successful deposit
-      await refreshBalances(
-        l1Clients.publicClient,
-        l1Clients.userWallet.account.address,
-        mockUsdc,
-      );
+      await refreshBalances(l1Clients.publicClient, l1Clients.userWallet.account.address, mockUsdc);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       addLog(`Deposit failed: ${message}`, LogLevel.ERROR);
@@ -252,21 +221,14 @@ const App: Component = () => {
     if (position.status !== IntentStatus.Active) {
       addLog(
         `Position is not in Active status (current: ${getPositionStatusLabel(position.status)}). Cannot withdraw.`,
-        LogLevel.ERROR,
+        LogLevel.ERROR
       );
       return;
     }
 
     // Validate contracts are loaded
-    if (
-      !state.contracts.portal ||
-      !state.contracts.mockUsdc ||
-      !state.contracts.l2Wrapper
-    ) {
-      addLog(
-        "Contracts not loaded. Please wait for deployment.",
-        LogLevel.ERROR,
-      );
+    if (!state.contracts.portal || !state.contracts.mockUsdc || !state.contracts.l2Wrapper) {
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
       return;
     }
 
@@ -289,10 +251,7 @@ const App: Component = () => {
 
       // Get mockAztecOutbox from portal contract
       addLog("Fetching portal configuration...");
-      const mockAztecOutbox = await getAztecOutbox(
-        l1Clients.publicClient,
-        portal,
-      );
+      const mockAztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
 
       // Build L1 addresses for withdraw (simpler than deposit)
       const l1Addresses: WithdrawL1Addresses = {
@@ -308,10 +267,7 @@ const App: Component = () => {
       const { wallet, address: walletAddress } = await connectAztecWallet();
 
       addLog("Loading AaveWrapper contract...");
-      const { contract } = await loadContractWithAzguard(
-        wallet,
-        l2WrapperAddress,
-      );
+      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       // Build L2 context
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
@@ -327,35 +283,24 @@ const App: Component = () => {
 
       // Execute the withdraw flow
       addLog("Executing withdraw flow...");
-      const result = await executeWithdrawFlow(
-        l1Clients,
-        l1Addresses,
-        l2Context,
-        {
-          position: {
-            depositIntentId,
-            shares: position.shares,
-          },
-          deadlineOffset: 3600, // 1 hour default
+      const result = await executeWithdrawFlow(l1Clients, l1Addresses, l2Context, {
+        position: {
+          depositIntentId,
+          shares: position.shares,
         },
-      );
+        deadlineOffset: 3600, // 1 hour default
+      });
 
       // Remove position from store (full withdrawal consumes it)
       removePositionById(intentId);
-      addLog(
-        `Withdrawal complete! Intent: ${result.intentId.slice(0, 16)}...`,
-        LogLevel.SUCCESS,
-      );
-      addLog(
-        `Amount withdrawn: ${formatAmount(result.amount)}`,
-        LogLevel.SUCCESS,
-      );
+      addLog(`Withdrawal complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Amount withdrawn: ${formatAmount(result.amount)}`, LogLevel.SUCCESS);
 
       // Refresh wallet balances after successful withdrawal
       await refreshBalances(
         l1Clients.publicClient,
         l1Clients.userWallet.account.address,
-        state.contracts.mockUsdc,
+        state.contracts.mockUsdc
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -381,8 +326,7 @@ const App: Component = () => {
               Privacy-Preserving Lending
             </h1>
             <p class="text-sm text-zinc-500 mt-1.5 max-w-md mx-auto">
-              Deposit into Aave V3 from Aztec L2 while keeping your identity
-              private
+              Deposit into Aave V3 from Aztec L2 while keeping your identity private
             </p>
           </section>
 

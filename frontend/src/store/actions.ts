@@ -211,11 +211,7 @@ const MAX_LOG_ENTRIES = 100;
 /**
  * Add log entry to operation
  */
-export function addOperationLog(
-  level: LogLevel,
-  message: string,
-  options?: TxLogOptions,
-): void {
+export function addOperationLog(level: LogLevel, message: string, options?: TxLogOptions): void {
   const entry: LogEntry = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
@@ -297,10 +293,7 @@ export function addPosition(position: PositionDisplay): void {
 /**
  * Update an existing position by intent ID
  */
-export function updatePosition(
-  intentId: string,
-  updates: Partial<PositionDisplay>,
-): void {
+export function updatePosition(intentId: string, updates: Partial<PositionDisplay>): void {
   setState("positions", (pos) => pos.intentId === intentId, updates);
 }
 
@@ -308,9 +301,7 @@ export function updatePosition(
  * Remove a position by intent ID
  */
 export function removePosition(intentId: string): void {
-  setState("positions", (positions) =>
-    positions.filter((p) => p.intentId !== intentId),
-  );
+  setState("positions", (positions) => positions.filter((p) => p.intentId !== intentId));
 }
 
 // =============================================================================
