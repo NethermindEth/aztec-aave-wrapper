@@ -17,7 +17,11 @@ import type {
   PositionDisplay,
   WalletState,
 } from "../types/state.js";
+import type { TxLogOptions } from "./logger.js";
 import { setState } from "./state.js";
+
+/** Re-export TxLogOptions from logger for API consumers */
+export type { TxLogOptions } from "./logger.js";
 
 // =============================================================================
 // L1 Connection Actions
@@ -207,12 +211,18 @@ const MAX_LOG_ENTRIES = 100;
 /**
  * Add log entry to operation
  */
-export function addOperationLog(level: LogLevel, message: string, txHash?: string): void {
+export function addOperationLog(
+  level: LogLevel,
+  message: string,
+  options?: TxLogOptions,
+): void {
   const entry: LogEntry = {
+    id: crypto.randomUUID(),
     timestamp: Date.now(),
     level,
     message,
-    txHash,
+    txHash: options?.txHash,
+    chainId: options?.chainId,
   };
   setState("operation", "logs", (logs) => {
     const newLogs = [...logs, entry];
@@ -287,7 +297,10 @@ export function addPosition(position: PositionDisplay): void {
 /**
  * Update an existing position by intent ID
  */
-export function updatePosition(intentId: string, updates: Partial<PositionDisplay>): void {
+export function updatePosition(
+  intentId: string,
+  updates: Partial<PositionDisplay>,
+): void {
   setState("positions", (pos) => pos.intentId === intentId, updates);
 }
 
@@ -295,7 +308,9 @@ export function updatePosition(intentId: string, updates: Partial<PositionDispla
  * Remove a position by intent ID
  */
 export function removePosition(intentId: string): void {
-  setState("positions", (positions) => positions.filter((p) => p.intentId !== intentId));
+  setState("positions", (positions) =>
+    positions.filter((p) => p.intentId !== intentId),
+  );
 }
 
 // =============================================================================

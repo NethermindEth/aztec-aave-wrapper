@@ -16,7 +16,11 @@ export { setState, state } from "./state.js";
 // Context and Provider
 // =============================================================================
 
-export type { AppActions, AppContextValue, AppProviderProps } from "./context.js";
+export type {
+  AppActions,
+  AppContextValue,
+  AppProviderProps,
+} from "./context.js";
 export { AppContext, AppProvider } from "./context.js";
 
 // =============================================================================
@@ -66,7 +70,7 @@ export {
 // Logger
 // =============================================================================
 
-export type { LogEntry, LogLevel } from "./logger.js";
+export type { LogEntry, LogLevel, TxLogOptions } from "./logger.js";
 export {
   clearLogs,
   // Timestamp formatting

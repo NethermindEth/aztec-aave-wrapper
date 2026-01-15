@@ -5,7 +5,11 @@
  * Bigint values are stored as strings to support SolidJS stores and JSON serialization.
  */
 
-import type { Address, AztecAddress, IntentStatus } from "@aztec-aave-wrapper/shared";
+import type {
+  Address,
+  AztecAddress,
+  IntentStatus,
+} from "@aztec-aave-wrapper/shared";
 import type { OperationStatus, OperationType } from "./operations.js";
 
 // =============================================================================
@@ -63,6 +67,8 @@ export type LogLevel = "info" | "success" | "warning" | "error";
  * Single log entry for operation tracking
  */
 export interface LogEntry {
+  /** Unique identifier for the log entry */
+  id: string;
   /** Timestamp of the log entry */
   timestamp: number;
   /** Log level */
@@ -71,6 +77,8 @@ export interface LogEntry {
   message: string;
   /** Optional transaction hash */
   txHash?: string;
+  /** Optional chain ID for block explorer links */
+  chainId?: number;
 }
 
 // =============================================================================

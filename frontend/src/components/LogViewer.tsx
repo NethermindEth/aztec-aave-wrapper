@@ -7,6 +7,7 @@
 
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { TransactionLink } from "./TransactionLink";
 
 /**
  * Log level for categorizing log messages
@@ -30,6 +31,10 @@ export interface LogEntry {
   message: string;
   /** Log level for styling */
   level: LogLevel;
+  /** Optional transaction hash for linking to block explorer */
+  txHash?: string;
+  /** Optional chain ID for selecting correct block explorer */
+  chainId?: number;
 }
 
 /**
@@ -172,11 +177,16 @@ export function LogViewer(props: LogViewerProps) {
           >
             <For each={props.logs}>
               {(log) => (
-                <div class="flex gap-2 py-0.5">
+                <div class="flex flex-wrap items-start gap-2 py-0.5">
                   <span class="shrink-0 text-muted-foreground">
                     [{formatTimestamp(log.timestamp)}]
                   </span>
                   <span class={getLogLevelClasses(log.level)}>{log.message}</span>
+                  <Show when={log.txHash}>
+                    <span class="shrink-0 text-muted-foreground">
+                      tx: <TransactionLink txHash={log.txHash!} chainId={log.chainId} truncate />
+                    </span>
+                  </Show>
                 </div>
               )}
             </For>
