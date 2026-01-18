@@ -1,0 +1,410 @@
+use dep::aztec::macros::aztec;
+
+#[aztec]
+pub(crate) contract BridgedToken {
+    use dep::aztec::{
+        macros::{events::event, functions::{external, initializer}, notes::note, storage::storage},
+        messages::message_delivery::MessageDelivery,
+        note::{
+            constants::MAX_NOTES_PER_PAGE, note_getter_options::NoteGetterOptions,
+            note_viewer_options::NoteViewerOptions,
+        },
+        protocol_types::{
+            address::AztecAddress,
+            traits::{Deserialize, FromField, Packable, Serialize, ToField},
+        },
+        state_vars::{Map, Owned, PrivateSet, PublicImmutable, PublicMutable},
+    };
+
+    /// A private balance note representing token ownership.
+    ///
+    /// Each note represents a portion of a user's token balance.
+    /// Notes are encrypted for the owner and can only be decrypted by them.
+    #[derive(Deserialize, Eq, Packable, Serialize)]
+    #[note]
+    pub struct TokenNote {
+        /// The Aztec address that owns this balance
+        pub owner: AztecAddress,
+        /// The amount of tokens in this note
+        pub amount: u128,
+        /// Random value for uniqueness (prevents note collision)
+        pub randomness: Field,
+    }
+
+    /// Storage layout for the BridgedToken contract.
+    #[storage]
+    struct Storage<Context> {
+        /// Admin address with privileged access
+        admin: PublicMutable<AztecAddress, Context>,
+
+        /// The AaveWrapper contract address authorized to mint/burn
+        minter: PublicMutable<AztecAddress, Context>,
+
+        /// Token name (public, immutable after initialization)
+        name: PublicImmutable<Field, Context>,
+
+        /// Token symbol (public, immutable after initialization)
+        symbol: PublicImmutable<Field, Context>,
+
+        /// Token decimals (public, immutable after initialization)
+        decimals: PublicImmutable<u8, Context>,
+
+        /// Total supply of the token (public)
+        total_supply: PublicMutable<u128, Context>,
+
+        /// Private balances for each user
+        /// Uses Owned wrapper per aztec-nr conventions
+        balances: Map<AztecAddress, Owned<PrivateSet<TokenNote, Context>, Context>, Context>,
+    }
+
+    /// Event emitted when tokens are minted
+    #[event]
+    struct MintEvent {
+        amount: u128,
+    }
+
+    /// Event emitted when tokens are burned
+    #[event]
+    struct BurnEvent {
+        amount: u128,
+    }
+
+    /// Event emitted when the minter is updated
+    #[event]
+    struct MinterUpdatedEvent {
+        old_minter: AztecAddress,
+        new_minter: AztecAddress,
+    }
+
+    /// Initializes the BridgedToken contract.
+    ///
+    /// # Arguments
+    /// * `admin` - The initial admin address
+    /// * `name` - Token name as a Field
+    /// * `symbol` - Token symbol as a Field
+    /// * `decimals` - Token decimals
+    #[external("public")]
+    #[initializer]
+    fn constructor(admin: AztecAddress, name: Field, symbol: Field, decimals: u8) {
+        self.storage.admin.write(admin);
+        self.storage.minter.write(AztecAddress::from_field(0));
+        self.storage.name.initialize(name);
+        self.storage.symbol.initialize(symbol);
+        self.storage.decimals.initialize(decimals);
+        self.storage.total_supply.write(0);
+    }
+
+    /// Sets the minter address (only admin can call).
+    ///
+    /// The minter is the AaveWrapper contract that is authorized to mint and burn tokens.
+    ///
+    /// # Arguments
+    /// * `new_minter` - The new minter address
+    #[external("public")]
+    fn set_minter(new_minter: AztecAddress) {
+        // Only admin can set minter
+        let admin = self.storage.admin.read();
+        let sender = self.msg_sender().unwrap();
+        assert(sender.to_field() == admin.to_field(), "Only admin can set minter");
+
+        let old_minter = self.storage.minter.read();
+        self.storage.minter.write(new_minter);
+
+        self.emit(MinterUpdatedEvent { old_minter, new_minter });
+    }
+
+    /// Mints new tokens to a recipient (private).
+    ///
+    /// This function is called by the authorized minter (AaveWrapper) to create new
+    /// bridged tokens when assets are bridged from L1.
+    ///
+    /// # Arguments
+    /// * `to` - The recipient's Aztec address
+    /// * `amount` - Amount of tokens to mint
+    /// * `randomness` - Random value for note uniqueness
+    ///
+    /// # Privacy
+    /// - The recipient and amount are private (in the note)
+    /// - Only total supply change is visible publicly
+    ///
+    /// # Authorization
+    /// The caller must be the authorized minter. This is verified by passing
+    /// the caller address to the public function which checks against the minter.
+    #[external("private")]
+    fn mint_private(to: AztecAddress, amount: u128, randomness: Field) {
+        assert(amount > 0, "Amount must be greater than zero");
+
+        // Get the caller for authorization check
+        let caller = self.msg_sender().unwrap();
+
+        // Create a new token note for the recipient
+        let note = TokenNote { owner: to, amount, randomness };
+
+        // Insert the note into the recipient's private balance set
+        self.storage.balances.at(to).at(to).insert(note).deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+
+        // Enqueue public call to verify minter authorization and update total supply
+        // Pass the original caller for authorization verification
+        BridgedToken::at(self.context.this_address())._mint_public(caller, amount).enqueue(
+            self.context,
+        );
+    }
+
+    /// Internal public function to verify minter and update total supply.
+    ///
+    /// # Arguments
+    /// * `caller` - The address that called mint_private (for authorization)
+    /// * `amount` - Amount being minted
+    #[external("public")]
+    fn _mint_public(caller: AztecAddress, amount: u128) {
+        // Verify the caller of mint_private is the authorized minter
+        let minter = self.storage.minter.read();
+        assert(minter.to_field() != 0, "Minter not set");
+        assert(caller.to_field() == minter.to_field(), "Only minter can mint");
+
+        // Update total supply
+        let current_supply = self.storage.total_supply.read();
+        self.storage.total_supply.write(current_supply + amount);
+
+        self.emit(MintEvent { amount });
+    }
+
+    /// Burns tokens from the caller's private balance.
+    ///
+    /// Any user can burn their own tokens. This is typically called when assets are
+    /// being bridged back to L1.
+    ///
+    /// # Arguments
+    /// * `amount` - Amount of tokens to burn
+    ///
+    /// # Privacy
+    /// - The burn operation happens privately
+    /// - Only total supply change is visible publicly
+    ///
+    /// Maximum number of notes to process in a single operation
+    global MAX_NOTES: u32 = 10;
+
+    #[external("private")]
+    fn burn_private(amount: u128) {
+        assert(amount > 0, "Amount must be greater than zero");
+
+        let owner = self.msg_sender().unwrap();
+
+        // Collect notes to burn the required amount
+        let mut remaining = amount;
+        let options = NoteGetterOptions::new().set_limit(MAX_NOTES);
+        let notes = self.storage.balances.at(owner).at(owner).pop_notes(options);
+        let notes_len = notes.len();
+
+        let mut total_burned: u128 = 0;
+        for i in 0..MAX_NOTES {
+            if (i < notes_len) & (remaining > 0) {
+                let note = notes.get(i);
+                if note.amount <= remaining {
+                    // Burn the entire note
+                    total_burned += note.amount;
+                    remaining -= note.amount;
+                } else {
+                    // Partial burn: create change note
+                    total_burned += remaining;
+                    let change = note.amount - remaining;
+                    remaining = 0;
+
+                    // Create change note with new randomness
+                    let change_randomness = dep::aztec::protocol_types::hash::poseidon2_hash([
+                        note.randomness,
+                        change as Field,
+                    ]);
+                    let change_note =
+                        TokenNote { owner, amount: change, randomness: change_randomness };
+                    self.storage.balances.at(owner).at(owner).insert(change_note).deliver(
+                        MessageDelivery.CONSTRAINED_ONCHAIN,
+                    );
+                }
+            }
+        }
+
+        assert(remaining == 0, "Insufficient balance to burn");
+
+        // Enqueue public call to update total supply
+        BridgedToken::at(self.context.this_address())._burn_public(total_burned).enqueue(
+            self.context,
+        );
+    }
+
+    /// Internal public function to update total supply for burn.
+    ///
+    /// Note: No authorization check is needed here because any user can burn their own
+    /// tokens. The private function already ensures the user owns the tokens being burned
+    /// (via pop_notes on the owner's balance set).
+    ///
+    /// # Arguments
+    /// * `amount` - Amount being burned
+    #[external("public")]
+    fn _burn_public(amount: u128) {
+        // Update total supply
+        let current_supply = self.storage.total_supply.read();
+        assert(current_supply >= amount, "Insufficient total supply");
+        self.storage.total_supply.write(current_supply - amount);
+
+        self.emit(BurnEvent { amount });
+    }
+
+    /// Transfers tokens privately from caller to recipient.
+    ///
+    /// # Arguments
+    /// * `to` - The recipient's Aztec address
+    /// * `amount` - Amount of tokens to transfer
+    ///
+    /// # Privacy
+    /// - The entire transfer is private
+    /// - No public state is modified
+    #[external("private")]
+    fn transfer(to: AztecAddress, amount: u128) {
+        assert(amount > 0, "Amount must be greater than zero");
+        assert(to.to_field() != 0, "Cannot transfer to zero address");
+
+        let from = self.msg_sender().unwrap();
+        assert(from.to_field() != to.to_field(), "Cannot transfer to self");
+
+        // Collect notes to transfer the required amount
+        let mut remaining = amount;
+        let options = NoteGetterOptions::new().set_limit(MAX_NOTES);
+        let notes = self.storage.balances.at(from).at(from).pop_notes(options);
+        let notes_len = notes.len();
+
+        let mut total_transferred: u128 = 0;
+        for i in 0..MAX_NOTES {
+            if (i < notes_len) & (remaining > 0) {
+                let note = notes.get(i);
+                if note.amount <= remaining {
+                    // Transfer the entire note amount
+                    total_transferred += note.amount;
+                    remaining -= note.amount;
+                } else {
+                    // Partial transfer: create change note for sender
+                    total_transferred += remaining;
+                    let change = note.amount - remaining;
+                    remaining = 0;
+
+                    // Create change note with new randomness
+                    let change_randomness = dep::aztec::protocol_types::hash::poseidon2_hash([
+                        note.randomness,
+                        change as Field,
+                    ]);
+                    let change_note =
+                        TokenNote { owner: from, amount: change, randomness: change_randomness };
+                    self.storage.balances.at(from).at(from).insert(change_note).deliver(
+                        MessageDelivery.CONSTRAINED_ONCHAIN,
+                    );
+                }
+            }
+        }
+
+        assert(remaining == 0, "Insufficient balance to transfer");
+
+        // Create note for recipient
+        let recipient_randomness = dep::aztec::protocol_types::hash::poseidon2_hash([
+            from.to_field(),
+            to.to_field(),
+            amount as Field,
+        ]);
+        let recipient_note =
+            TokenNote { owner: to, amount: total_transferred, randomness: recipient_randomness };
+        self.storage.balances.at(to).at(to).insert(recipient_note).deliver(
+            MessageDelivery.CONSTRAINED_ONCHAIN,
+        );
+    }
+
+    // =========================================================================
+    // Utility Functions (Unconstrained View Functions)
+    // =========================================================================
+
+    /// Get the private balance of an owner.
+    ///
+    /// This utility function queries the user's private notes from the PXE.
+    /// Only the owner can decrypt and view their own balance.
+    ///
+    /// # Arguments
+    /// * `owner` - The Aztec address to query
+    ///
+    /// # Returns
+    /// * `u128` - The total balance across all notes
+    #[external("utility")]
+    unconstrained fn balance_of_private(owner: AztecAddress) -> pub u128 {
+        let notes = self.storage.balances.at(owner).at(owner).view_notes(NoteViewerOptions::new());
+        let mut total: u128 = 0;
+        for i in 0..notes.len() {
+            total += notes.get(i).amount;
+        }
+        total
+    }
+
+    /// Get all token notes for an owner (for debugging/inspection).
+    ///
+    /// # Arguments
+    /// * `owner` - The Aztec address to query
+    ///
+    /// # Returns
+    /// * `BoundedVec<TokenNote, MAX_NOTES_PER_PAGE>` - The user's token notes
+    #[external("utility")]
+    unconstrained fn get_notes(
+        owner: AztecAddress,
+    ) -> pub BoundedVec<TokenNote, MAX_NOTES_PER_PAGE> {
+        self.storage.balances.at(owner).at(owner).view_notes(NoteViewerOptions::new())
+    }
+
+    /// Get the total supply of the token.
+    ///
+    /// # Returns
+    /// * `u128` - The total supply
+    #[external("utility")]
+    unconstrained fn total_supply() -> pub u128 {
+        self.storage.total_supply.read()
+    }
+
+    /// Get the token name.
+    ///
+    /// # Returns
+    /// * `Field` - The token name
+    #[external("utility")]
+    unconstrained fn name() -> pub Field {
+        self.storage.name.read()
+    }
+
+    /// Get the token symbol.
+    ///
+    /// # Returns
+    /// * `Field` - The token symbol
+    #[external("utility")]
+    unconstrained fn symbol() -> pub Field {
+        self.storage.symbol.read()
+    }
+
+    /// Get the token decimals.
+    ///
+    /// # Returns
+    /// * `u8` - The token decimals
+    #[external("utility")]
+    unconstrained fn decimals() -> pub u8 {
+        self.storage.decimals.read()
+    }
+
+    /// Get the minter address.
+    ///
+    /// # Returns
+    /// * `AztecAddress` - The authorized minter address
+    #[external("utility")]
+    unconstrained fn minter() -> pub AztecAddress {
+        self.storage.minter.read()
+    }
+
+    /// Get the admin address.
+    ///
+    /// # Returns
+    /// * `AztecAddress` - The admin address
+    #[external("utility")]
+    unconstrained fn admin() -> pub AztecAddress {
+        self.storage.admin.read()
+    }
+}
