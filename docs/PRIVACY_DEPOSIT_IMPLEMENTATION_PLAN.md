@@ -422,7 +422,7 @@ cd e2e && bun run test --match setup
 
 ---
 
-### Step 19: Create bridge helper for E2E tests
+### Step 19: Create bridge helper for E2E tests **COMPLETE**
 
 #### Goal
 Create test helper function for bridging USDC from L1 to L2 as prerequisite for deposit tests.

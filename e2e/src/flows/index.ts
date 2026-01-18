@@ -6,5 +6,6 @@
  * - Withdraw: L2 → L1 → Target (Aave withdraw) → L1 → L2
  */
 
+export * from "./bridge";
 export * from "./deposit";
 export * from "./withdraw";
