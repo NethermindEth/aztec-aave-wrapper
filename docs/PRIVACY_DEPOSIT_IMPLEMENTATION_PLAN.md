@@ -351,7 +351,7 @@ make test-l1 && make test-l2
 
 ---
 
-### Step 16: Update DepositIntent to include burn context
+### Step 16: Update DepositIntent to include burn context **COMPLETE**
 
 #### Goal
 Add burn_amount field to DepositIntent if needed for TokenPortal withdraw authorization.
