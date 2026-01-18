@@ -281,7 +281,7 @@ cd eth && forge test --match-test test_executeDeposit -vvv
 
 ---
 
-### Step 13: Remove pre-funded token expectation from tests
+### Step 13: Remove pre-funded token expectation from tests **COMPLETE**
 
 #### Goal
 Update Portal.t.sol tests to not pre-fund portal with tokens, instead configure TokenPortal with sufficient balance.
