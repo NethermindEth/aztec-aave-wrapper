@@ -206,7 +206,7 @@ cd aztec && aztec test --match fee
 
 ---
 
-### Step 10: Implement cancel_deposit for timeout refunds
+### Step 10: Implement cancel_deposit for timeout refunds **COMPLETE**
 
 #### Goal
 Add cancel_deposit function allowing users to reclaim tokens if L1 execution never happens after deadline passes.

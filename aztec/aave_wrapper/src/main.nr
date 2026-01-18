@@ -260,7 +260,7 @@ pub(crate) contract AaveWrapper {
 
     /// Intent status constants for public state tracking.
     /// These mirror the private PositionStatus but are for public intent lifecycle.
-    mod IntentStatus {
+    pub mod IntentStatus {
         /// Intent has not been submitted or is unknown
         pub global UNKNOWN: u8 = 0;
         /// Intent submitted, awaiting execution on target chain
@@ -271,6 +271,8 @@ pub(crate) contract AaveWrapper {
         pub global FAILED: u8 = 3;
         /// Withdrawal has been requested, awaiting execution on target chain
         pub global PENDING_WITHDRAW: u8 = 4;
+        /// Deposit was cancelled by user after deadline passed without L1 execution
+        pub global CANCELLED: u8 = 5;
     }
 
     /// Storage layout for the AaveWrapper contract.
@@ -310,9 +312,14 @@ pub(crate) contract AaveWrapper {
         intent_owners: Map<Field, PublicMutable<AztecAddress, Context>, Context>,
 
         /// Mapping from intent_id to deadline timestamp.
-        /// Used to validate refund claims for expired withdrawal requests.
-        /// Only set for withdrawal intents.
+        /// Used to validate cancel/refund claims for expired deposit or withdrawal requests.
+        /// Set for both deposit and withdrawal intents.
         intent_deadlines: Map<Field, PublicMutable<u64, Context>, Context>,
+
+        /// Mapping from intent_id to net deposit amount (after fee deduction).
+        /// Used by cancel_deposit to refund the correct amount to the user.
+        /// Only set for deposit intents.
+        intent_net_amounts: Map<Field, PublicMutable<u128, Context>, Context>,
 
         /// The admin address with privileged access to contract configuration.
         /// Can update portal address, pause operations, etc.
@@ -494,9 +501,11 @@ pub(crate) contract AaveWrapper {
         self.context.message_portal(portal, content);
 
         // Enqueue public call to update intent status and store owner mapping
-        // The owner address is passed to enable finalization routing
+        // The owner address, deadline, and net_amount are passed to enable:
+        // - Finalization routing (owner)
+        // - Cancel/refund claims (deadline, net_amount)
         AaveWrapper::at(self.context.this_address())
-            ._set_intent_pending_deposit(intent_id, caller)
+            ._set_intent_pending_deposit(intent_id, caller, deadline, net_amount)
             .enqueue(self.context);
 
         intent_id
@@ -505,7 +514,7 @@ pub(crate) contract AaveWrapper {
     /// Internal public function to set intent status to pending deposit.
     ///
     /// # Privacy
-    /// This function receives the intent_id and owner address.
+    /// This function receives the intent_id, owner address, deadline, and net_amount.
     /// The owner mapping enables finalization routing but doesn't reveal identity
     /// to observers since the intent_id is a one-way hash.
     /// The public state update and event reveal only that an intent exists.
@@ -513,14 +522,27 @@ pub(crate) contract AaveWrapper {
     /// # Arguments
     /// * `intent_id` - The unique intent identifier
     /// * `owner` - The L2 address that created this intent
+    /// * `deadline` - The deadline timestamp for the deposit intent
+    /// * `net_amount` - The net deposit amount (after fee deduction) for refunds
     #[external("public")]
-    fn _set_intent_pending_deposit(intent_id: Field, owner: AztecAddress) {
+    fn _set_intent_pending_deposit(
+        intent_id: Field,
+        owner: AztecAddress,
+        deadline: u64,
+        net_amount: u128,
+    ) {
         // Verify this intent hasn't been used before (replay protection)
         let already_consumed = self.storage.consumed_intents.at(intent_id).read();
         assert(!already_consumed, "Intent ID already consumed");
 
         // Store the intent owner mapping for finalization routing
         self.storage.intent_owners.at(intent_id).write(owner);
+
+        // Store the deadline for cancel_deposit validation
+        self.storage.intent_deadlines.at(intent_id).write(deadline);
+
+        // Store the net_amount for cancel_deposit refund
+        self.storage.intent_net_amounts.at(intent_id).write(net_amount);
 
         // Set intent status to pending deposit
         self.storage.intent_status.at(intent_id).write(IntentStatus::PENDING_DEPOSIT);
@@ -633,6 +655,10 @@ pub(crate) contract AaveWrapper {
         // Clear the intent owner mapping to reclaim storage
         // This is safe because the intent is now consumed and won't be reused
         self.storage.intent_owners.at(intent_id).write(AztecAddress::from_field(0));
+
+        // Clear the deadline and net_amount mappings to reclaim storage
+        self.storage.intent_deadlines.at(intent_id).write(0);
+        self.storage.intent_net_amounts.at(intent_id).write(0);
 
         // Emit minimal event - only intent_id and status, no user data
         self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });
@@ -1038,6 +1064,134 @@ pub(crate) contract AaveWrapper {
 
         // Emit minimal event - only intent_id and status, no user data
         self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CONFIRMED });
+    }
+
+    /// Cancels a pending deposit after the deadline has passed.
+    ///
+    /// If a deposit request has passed its deadline without being executed on L1,
+    /// the user can cancel it and reclaim their tokens. This function:
+    /// 1. Verifies the caller owns the intent via intent_owners mapping
+    /// 2. Verifies the deadline has passed (current_time > deadline)
+    /// 3. Verifies the intent status is still PENDING_DEPOSIT
+    /// 4. Mints the net_amount back to the user via bridged_token.mint_private
+    /// 5. Sets the intent status to CANCELLED
+    ///
+    /// # Arguments
+    /// * `intent_id` - The unique identifier of the deposit intent to cancel
+    /// * `current_time` - Current timestamp for deadline validation
+    /// * `net_amount` - The net deposit amount to be refunded (verified against stored value)
+    ///
+    /// # Privacy
+    /// - The minting happens privately (note is encrypted for user)
+    /// - The public state update reveals only that an intent was cancelled
+    /// - No user identity, amounts, or asset information is revealed publicly
+    ///
+    /// # Failure Modes
+    /// - Not owner: If the caller doesn't own the intent
+    /// - Deadline not expired: If current_time <= deadline
+    /// - Wrong status: If the intent status is not PENDING_DEPOSIT (L1 execution may have started)
+    /// - Double cancel: If the intent was already cancelled or consumed
+    /// - Amount mismatch: If net_amount doesn't match the stored value
+    #[external("private")]
+    fn cancel_deposit(intent_id: Field, current_time: u64, net_amount: u128) {
+        // Validate current_time is non-zero
+        assert(current_time > 0, "Current time must be greater than zero");
+
+        // Validate net_amount is non-zero
+        assert(net_amount > 0, "Net amount must be greater than zero");
+
+        // Get the caller's address (must be the owner of the intent)
+        let caller = self.msg_sender().unwrap();
+
+        // Get the bridged token address for minting refund
+        let bridged_token_address = self.storage.bridged_token.read();
+
+        // Mint the refund to the user before state changes
+        // Use a deterministic randomness based on intent_id for the note
+        let randomness = poseidon2_hash([intent_id, caller.to_field()]);
+        BridgedToken::at(bridged_token_address).mint_private(caller, net_amount, randomness).call(
+            self.context,
+        );
+
+        // Enqueue public call to verify ownership, deadline, status, and net_amount
+        // The public function will verify:
+        // - Caller owns the intent (caller == intent_owners[intent_id])
+        // - Deadline has passed (current_time > intent_deadlines[intent_id])
+        // - Status is PENDING_DEPOSIT
+        // - Intent is not already consumed
+        // - net_amount matches stored value (prevents minting wrong amount)
+        // Then it will update status to CANCELLED
+        AaveWrapper::at(self.context.this_address())
+            ._cancel_deposit_public(intent_id, caller, current_time, net_amount)
+            .enqueue(self.context);
+    }
+
+    /// Internal public function to verify cancel_deposit parameters and update state.
+    ///
+    /// This function verifies:
+    /// - Caller owns the intent
+    /// - Deadline has passed
+    /// - Status is PENDING_DEPOSIT
+    /// - Intent is not already consumed
+    /// - net_amount matches the stored value
+    ///
+    /// Then updates status to CANCELLED and clears associated storage.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent to cancel
+    /// * `caller` - The address requesting cancellation (for ownership verification)
+    /// * `current_time` - Current timestamp for deadline validation
+    /// * `net_amount` - The net amount that was minted (for verification)
+    #[external("public")]
+    fn _cancel_deposit_public(
+        intent_id: Field,
+        caller: AztecAddress,
+        current_time: u64,
+        net_amount: u128,
+    ) {
+        // Verify the intent is in PENDING_DEPOSIT status
+        let status = self.storage.intent_status.at(intent_id).read();
+        assert(status == IntentStatus::PENDING_DEPOSIT, "Intent not in pending deposit state");
+
+        // Verify the intent hasn't already been consumed
+        let already_consumed = self.storage.consumed_intents.at(intent_id).read();
+        assert(!already_consumed, "Intent already consumed");
+
+        // Verify the caller owns this intent
+        let owner = self.storage.intent_owners.at(intent_id).read();
+        assert(caller.to_field() == owner.to_field(), "Caller is not the intent owner");
+
+        // Read the stored deadline for this intent
+        let deadline = self.storage.intent_deadlines.at(intent_id).read();
+        assert(deadline > 0, "No deadline stored for this intent");
+
+        // Verify the deadline has passed (current_time must be greater than deadline)
+        // Note: We use > (strict greater than) unlike claim_refund which uses >=
+        // This ensures L1 execution has truly timed out
+        assert(current_time > deadline, "Deadline has not expired yet");
+
+        // Verify the net_amount matches the stored value
+        // This ensures the private function minted the correct amount
+        let stored_net_amount = self.storage.intent_net_amounts.at(intent_id).read();
+        assert(net_amount == stored_net_amount, "Net amount mismatch");
+
+        // Mark the intent as consumed to prevent replay/double-cancel
+        self.storage.consumed_intents.at(intent_id).write(true);
+
+        // Update intent status to CANCELLED
+        self.storage.intent_status.at(intent_id).write(IntentStatus::CANCELLED);
+
+        // Clear the intent owner mapping to reclaim storage
+        self.storage.intent_owners.at(intent_id).write(AztecAddress::from_field(0));
+
+        // Clear the deadline mapping to reclaim storage
+        self.storage.intent_deadlines.at(intent_id).write(0);
+
+        // Clear the net_amount mapping to reclaim storage
+        self.storage.intent_net_amounts.at(intent_id).write(0);
+
+        // Emit minimal event - only intent_id and status, no user data
+        self.emit(IntentStatusChangedEvent { intent_id, new_status: IntentStatus::CANCELLED });
     }
 
     // =========================================================================
