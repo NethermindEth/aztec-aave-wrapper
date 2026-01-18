@@ -504,8 +504,11 @@ export class TestHarness {
       const adminWallet = this._accounts.admin.wallet;
       const adminAddress = this._accounts.admin.address;
 
-      // Use a mock portal address for testing
+      // Use mock addresses for testing
       const portalAddress = EthAddress.fromString("0x1234567890123456789012345678901234567890");
+      // Use admin address as mock bridged token and fee treasury for testing
+      const mockBridgedToken = adminAddress;
+      const mockFeeTreasury = adminAddress;
 
       console.log("Deploying AaveWrapper contract...");
 
@@ -514,7 +517,9 @@ export class TestHarness {
       const deployedContract = await AaveWrapperContract.deploy(
         adminWallet as any,
         adminAddress,
-        portalAddress
+        portalAddress,
+        mockBridgedToken,
+        mockFeeTreasury
       )
         .send({ from: adminAddress })
         .deployed();

@@ -190,10 +190,15 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
 
     // Use the generated AaveWrapperContract for type-safe deployment
     // Use adminWallet (TestWallet instance) for deployment
+    // Use admin address as mock bridged token and fee treasury for testing
+    const mockBridgedToken = adminAddress;
+    const mockFeeTreasury = adminAddress;
     const deployedContract = await AaveWrapperContract.deploy(
       adminWallet,
       adminAddress,
-      portalAddress
+      portalAddress,
+      mockBridgedToken,
+      mockFeeTreasury
     )
       .send({ from: adminAddress })
       .deployed();

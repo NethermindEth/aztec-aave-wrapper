@@ -23,6 +23,10 @@ export type EthAddress = InstanceType<typeof import("@aztec/foundation/eth-addre
 export interface L2DeploymentConfig {
   /** L1 portal contract address (Ethereum address) */
   portalAddress: string;
+  /** L2 bridged token contract address */
+  bridgedTokenAddress: AztecAddress;
+  /** L2 fee treasury address */
+  feeTreasuryAddress: AztecAddress;
 }
 
 /**
@@ -63,7 +67,9 @@ export type AaveWrapperContract = Awaited<
  * const deployedContract = await AaveWrapperContract.deploy(
  *   wallet,
  *   walletAddress,
- *   portalEthAddress
+ *   portalEthAddress,
+ *   bridgedTokenAddress,
+ *   feeTreasuryAddress
  * )
  *   .send({ from: walletAddress })
  *   .deployed();
@@ -71,7 +77,7 @@ export type AaveWrapperContract = Awaited<
  *
  * @param wallet - Test wallet for deployment
  * @param walletAddress - L2 address of the wallet (becomes admin)
- * @param config - Deployment configuration with portal address
+ * @param config - Deployment configuration with portal, token, and treasury addresses
  * @returns Deployed contract and its address
  *
  * @example
@@ -80,7 +86,11 @@ export type AaveWrapperContract = Awaited<
  * const { contract, address: contractAddress } = await deployL2Contract(
  *   wallet,
  *   address,
- *   { portalAddress: "0x..." }
+ *   {
+ *     portalAddress: "0x...",
+ *     bridgedTokenAddress: tokenAddress,
+ *     feeTreasuryAddress: treasuryAddress
+ *   }
  * );
  * console.log('Contract deployed at:', contractAddress.toString());
  * ```
@@ -104,7 +114,9 @@ export async function deployL2Contract(
     const deployedContract = await AaveWrapperContract.deploy(
       wallet,
       walletAddress,
-      portalEthAddress
+      portalEthAddress,
+      config.bridgedTokenAddress,
+      config.feeTreasuryAddress
     )
       .send({ from: walletAddress })
       .deployed();

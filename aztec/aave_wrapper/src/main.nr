@@ -311,6 +311,16 @@ pub(crate) contract AaveWrapper {
         /// Global nonce counter for generating unique intent IDs.
         /// Incremented with each new deposit/withdraw request.
         nonce: PublicMutable<Field, Context>,
+
+        /// The bridged token contract address (L2).
+        /// This is the token that users deposit/withdraw through the wrapper.
+        /// Immutable after initialization.
+        bridged_token: PublicImmutable<AztecAddress, Context>,
+
+        /// The fee treasury address (L2).
+        /// Receives protocol fees from deposit/withdraw operations.
+        /// Immutable after initialization.
+        fee_treasury: PublicImmutable<AztecAddress, Context>,
     }
 
     /// Event emitted when a deposit intent status changes.
@@ -325,16 +335,31 @@ pub(crate) contract AaveWrapper {
         new_status: u8,
     }
 
-    /// Initializes the AaveWrapper contract with admin and portal configuration.
+    /// Initializes the AaveWrapper contract with admin, portal, token, and treasury configuration.
     ///
     /// # Arguments
     /// * `admin` - The initial admin address with privileged access
     /// * `portal_address` - The L1 portal contract address (immutable after set)
+    /// * `bridged_token` - The L2 bridged token contract address (immutable after set)
+    /// * `fee_treasury` - The L2 fee treasury address (immutable after set)
     #[external("public")]
     #[initializer]
-    fn constructor(admin: AztecAddress, portal_address: EthAddress) {
+    fn constructor(
+        admin: AztecAddress,
+        portal_address: EthAddress,
+        bridged_token: AztecAddress,
+        fee_treasury: AztecAddress,
+    ) {
+        // Validate required addresses are non-zero
+        assert(!admin.is_zero(), "Admin address cannot be zero");
+        assert(!portal_address.is_zero(), "Portal address cannot be zero");
+        assert(!bridged_token.is_zero(), "Bridged token address cannot be zero");
+        assert(!fee_treasury.is_zero(), "Fee treasury address cannot be zero");
+
         self.storage.admin.write(admin);
         self.storage.portal_address.initialize(portal_address);
+        self.storage.bridged_token.initialize(bridged_token);
+        self.storage.fee_treasury.initialize(fee_treasury);
         self.storage.nonce.write(0);
     }
 

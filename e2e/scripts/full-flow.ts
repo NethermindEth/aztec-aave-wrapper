@@ -449,11 +449,16 @@ async function deployL2Contract(
   const { EthAddress } = await import("@aztec/foundation/eth-address");
 
   const portalEthAddress = EthAddress.fromString(portalAddress);
+  // Use wallet address as mock bridged token and fee treasury for testing
+  const mockBridgedToken = walletAddress;
+  const mockFeeTreasury = walletAddress;
 
   const deployedContract = await AaveWrapperContract.deploy(
     wallet,
     walletAddress,
-    portalEthAddress
+    portalEthAddress,
+    mockBridgedToken,
+    mockFeeTreasury
   )
     .send({ from: walletAddress })
     .deployed();

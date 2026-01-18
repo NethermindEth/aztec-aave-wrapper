@@ -283,7 +283,10 @@ async function deployL2Contract(portalAddress: string): Promise<string> {
 
       // Deploy AaveWrapper
       const portalEthAddress = EthAddress.fromString("${portalAddress}");
-      const contract = await AaveWrapperContract.deploy(wallet, adminAddress, portalEthAddress)
+      // Use admin address as mock bridged token and fee treasury for local deployment
+      const mockBridgedToken = adminAddress;
+      const mockFeeTreasury = adminAddress;
+      const contract = await AaveWrapperContract.deploy(wallet, adminAddress, portalEthAddress, mockBridgedToken, mockFeeTreasury)
         .send({ from: adminAddress })
         .deployed();
 

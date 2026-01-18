@@ -515,11 +515,16 @@ async function deployL2Contract(wallet, walletAddress, portalAddress: Address) {
   const { EthAddress } = await import("@aztec/foundation/eth-address");
 
   const portalEthAddress = EthAddress.fromString(portalAddress);
+  // bridgedToken and feeTreasury are L2 AztecAddress types
+  const bridgedToken = walletAddress; // Replace with actual bridged token address
+  const feeTreasury = walletAddress;  // Replace with actual fee treasury address
 
   const deployedContract = await AaveWrapperContract.deploy(
     wallet,
     walletAddress,
-    portalEthAddress
+    portalEthAddress,
+    bridgedToken,
+    feeTreasury
   )
     .send({ from: walletAddress })
     .deployed();

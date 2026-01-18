@@ -67,7 +67,7 @@ cd aztec && aztec test --match mint
 
 ---
 
-## Phase 2: L1 TokenPortal Deployment
+## Phase 2: L1 TokenPortal Deployment **COMPLETE**
 
 Deploy a TokenPortal contract on L1 that holds USDC and enables L1<->L2 token bridging following the Aztec reference pattern.
 
@@ -144,7 +144,7 @@ Modify the L2 AaveWrapper to burn tokens instead of expecting L1 transfers, impl
 cd aztec && aztec test
 ```
 
-### Step 7: Add token and treasury references to AaveWrapper storage
+### Step 7: Add token and treasury references to AaveWrapper storage **COMPLETE**
 
 #### Goal
 Add storage for the bridged token contract address and fee treasury address that AaveWrapper will interact with.

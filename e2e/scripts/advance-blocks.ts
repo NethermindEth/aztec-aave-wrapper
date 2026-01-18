@@ -65,10 +65,13 @@ async function main() {
   // Deploy a fresh contract instance - deployment creates a block
   console.log(`  Deploying AaveWrapper contract (creates block)...`);
   const mockPortal = EthAddress.fromString("0x1234567890123456789012345678901234567890");
+  // Use account address as mock bridged token and fee treasury for testing
+  const mockBridgedToken = account.address;
+  const mockFeeTreasury = account.address;
 
   let contract;
   try {
-    contract = await AaveWrapperContract.deploy(wallet, account.address, mockPortal)
+    contract = await AaveWrapperContract.deploy(wallet, account.address, mockPortal, mockBridgedToken, mockFeeTreasury)
       .send({ from: account.address })
       .deployed();
     console.log(`  ✓ Contract deployed at ${contract.address.toString().slice(0, 20)}...`);
@@ -97,7 +100,7 @@ async function main() {
       console.log(`  [${blocksFromDeployment + i + 1}/${numBlocks}] Block ${currentBlock} → deploying another instance...`);
 
       try {
-        const extraContract = await AaveWrapperContract.deploy(wallet, account.address, mockPortal)
+        const extraContract = await AaveWrapperContract.deploy(wallet, account.address, mockPortal, mockBridgedToken, mockFeeTreasury)
           .send({ from: account.address })
           .deployed();
         console.log(`    ✓ Deployed at ${extraContract.address.toString().slice(0, 20)}...`);
