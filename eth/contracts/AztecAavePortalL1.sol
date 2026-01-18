@@ -203,14 +203,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Step 5: Construct L2ToL1Msg and consume from Aztec outbox
         DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
-            sender: DataStructures.L2Actor({
-                actor: l2ContractAddress,
-                version: aztecVersion
-            }),
-            recipient: DataStructures.L1Actor({
-                actor: address(this),
-                chainId: block.chainid
-            }),
+            sender: DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion }),
+            recipient: DataStructures.L1Actor({ actor: address(this), chainId: block.chainid }),
             content: intentHash
         });
         IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
@@ -256,10 +250,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Construct L2 recipient and send message with the user's secretHash
         // This ensures only the user who knows the secret can consume the L1→L2 message
-        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({
-            actor: l2ContractAddress,
-            version: aztecVersion
-        });
+        DataStructures.L2Actor memory recipient =
+            DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion });
         (bytes32 messageLeaf, uint256 messageIndex) =
             IAztecInbox(aztecInbox).sendL2Message(recipient, messageContent, intent.secretHash);
 
@@ -319,14 +311,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Step 6: Construct L2ToL1Msg and consume from Aztec outbox
         DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
-            sender: DataStructures.L2Actor({
-                actor: l2ContractAddress,
-                version: aztecVersion
-            }),
-            recipient: DataStructures.L1Actor({
-                actor: address(this),
-                chainId: block.chainid
-            }),
+            sender: DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion }),
+            recipient: DataStructures.L1Actor({ actor: address(this), chainId: block.chainid }),
             content: intentHash
         });
         IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
@@ -374,10 +360,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         );
 
         // Construct L2 recipient and send message
-        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({
-            actor: l2ContractAddress,
-            version: aztecVersion
-        });
+        DataStructures.L2Actor memory recipient =
+            DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion });
         (bytes32 messageLeaf, uint256 confirmationMessageIndex) =
             IAztecInbox(aztecInbox).sendL2Message(recipient, messageContent, bytes32(0));
 
@@ -495,7 +479,9 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
      * @dev Only callable by owner. Required when L2 contract is deployed after L1 portal.
      * @param _l2ContractAddress The new L2 contract address (bytes32 for Aztec addresses)
      */
-    function setL2ContractAddress(bytes32 _l2ContractAddress) external onlyOwner {
+    function setL2ContractAddress(
+        bytes32 _l2ContractAddress
+    ) external onlyOwner {
         bytes32 oldAddress = l2ContractAddress;
         l2ContractAddress = _l2ContractAddress;
         emit L2ContractAddressUpdated(oldAddress, _l2ContractAddress);

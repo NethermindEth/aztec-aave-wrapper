@@ -332,12 +332,12 @@ contract PortalTest is Test {
         // executing withdraw with the same intentId as a consumed deposit
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(3))), // slot 3 = intentShares
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentAssets
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -383,12 +383,12 @@ contract PortalTest is Test {
         // Simulate having shares from a previous deposit
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(3))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -444,12 +444,12 @@ contract PortalTest is Test {
         // Simulate having shares
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(3))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -491,12 +491,12 @@ contract PortalTest is Test {
         // Simulate having shares
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(3))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -523,12 +523,12 @@ contract PortalTest is Test {
         // Simulate having shares
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(3))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))),
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -747,7 +747,8 @@ contract MockAztecInbox is IAztecInbox {
         lastSecretHash = _secretHash;
 
         messageCount++;
-        entryKey = keccak256(abi.encode(_recipient.actor, _recipient.version, _content, _secretHash));
+        entryKey =
+            keccak256(abi.encode(_recipient.actor, _recipient.version, _content, _secretHash));
         index = messageCount - 1;
 
         return (entryKey, index);

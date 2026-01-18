@@ -1,4 +1,4 @@
-## Phase 1: L2 Token Infrastructure
+## Phase 1: L2 Token Infrastructure **COMPLETE**
 
 Deploy the bridged USDC token contract on L2 that supports burn/mint operations required for the privacy-preserving flow.
 
@@ -13,9 +13,8 @@ cd aztec && aztec test
 Create a Noir contract implementing a private token with burn and mint capabilities that can be authorized to the AaveWrapper contract.
 
 #### Files
-- `aztec/bridged_token/src/main.nr` - New bridged token contract with private balance, transfer, burn_private, and mint_private functions
-- `aztec/bridged_token/Nargo.toml` - Contract package definition
-- `aztec/Nargo.toml` - Workspace members list
+- `aztec/src/bridged_token.nr` - New bridged token contract with private balance, transfer, burn_private, and mint_private functions
+- `aztec/Nargo.toml` - Add bridged_token to contract list
 
 #### Validation
 ```bash
@@ -35,7 +34,7 @@ cd aztec && aztec compile && ls target/aave_wrapper-BridgedToken.json
 Implement an authorization mechanism allowing AaveWrapper to call burn_private on behalf of users during deposit requests.
 
 #### Files
-- `aztec/bridged_token/src/main.nr` - Added `authorized_burners` storage map, `authorize_burner` admin function, and `burn_from` function callable by authorized contracts
+- `aztec/src/bridged_token.nr` - Add authorized_burners storage map and burn_from function callable by authorized contracts
 
 #### Validation
 ```bash
@@ -55,7 +54,7 @@ cd aztec && aztec test --match burn
 Implement mint_private function that AaveWrapper can call to refund tokens when deposit timeouts occur.
 
 #### Files
-- `aztec/bridged_token/src/main.nr` - Added `minter` storage variable and `set_minter` function for admin to authorize the AaveWrapper, plus `mint_private` function that creates private token notes
+- `aztec/src/bridged_token.nr` - Add authorized_minters storage map and mint_to_private function
 
 #### Validation
 ```bash
@@ -77,7 +76,7 @@ Deploy a TokenPortal contract on L1 that holds USDC and enables L1<->L2 token br
 cd eth && forge test --match-contract TokenPortalTest
 ```
 
-### Step 4: Create L1 TokenPortal contract
+### Step 4: Create L1 TokenPortal contract **COMPLETE**
 
 #### Goal
 Implement TokenPortal.sol following Aztec's reference token bridge pattern with depositToAztecPublic, depositToAztecPrivate, and withdraw functions.
@@ -151,8 +150,8 @@ cd aztec && aztec test
 Add storage for the bridged token contract address and fee treasury address that AaveWrapper will interact with.
 
 #### Files
-- `aztec/aave_wrapper/src/main.nr` - Add `bridged_token: PublicImmutable<AztecAddress>` and `fee_treasury: PublicImmutable<AztecAddress>` to Storage struct at line 270
-- `aztec/aave_wrapper/src/main.nr` - Update constructor at line 320 to accept and store bridged_token and fee_treasury addresses
+- `aztec/src/main.nr` - Add `bridged_token: PublicImmutable<AztecAddress>` and `fee_treasury: PublicImmutable<AztecAddress>` to Storage struct at line 270
+- `aztec/src/main.nr` - Update constructor at line 320 to accept and store bridged_token and fee_treasury addresses
 
 #### Validation
 ```bash
@@ -171,7 +170,7 @@ cd aztec && aztec compile
 Update request_deposit at line 372 to burn the user's L2 tokens via the BridgedToken contract instead of expecting tokens on L1.
 
 #### Files
-- `aztec/aave_wrapper/src/main.nr` - In request_deposit: import BridgedToken, call bridged_token.burn_from(caller, net_amount) before sending L2->L1 message
+- `aztec/src/main.nr` - In request_deposit: import BridgedToken, call bridged_token.burn_from(caller, net_amount) before sending L2->L1 message
 
 #### Validation
 ```bash
@@ -191,9 +190,9 @@ cd aztec && aztec test --match request_deposit
 Implement fixed percentage fee deduction (0.1% = 10 basis points) from deposit amount before burning, with fee tokens transferred to protocol treasury.
 
 #### Files
-- `aztec/aave_wrapper/src/main.nr` - Add FEE_BASIS_POINTS constant (10 = 0.1%)
-- `aztec/aave_wrapper/src/main.nr` - In request_deposit: calculate fee = amount * FEE_BASIS_POINTS / 10000, net_amount = amount - fee
-- `aztec/aave_wrapper/src/main.nr` - Transfer fee to treasury via bridged_token.transfer_from(caller, treasury, fee)
+- `aztec/src/main.nr` - Add FEE_BASIS_POINTS constant (10 = 0.1%)
+- `aztec/src/main.nr` - In request_deposit: calculate fee = amount * FEE_BASIS_POINTS / 10000, net_amount = amount - fee
+- `aztec/src/main.nr` - Transfer fee to treasury via bridged_token.transfer_from(caller, treasury, fee)
 
 #### Validation
 ```bash
@@ -213,7 +212,7 @@ cd aztec && aztec test --match fee
 Add cancel_deposit function allowing users to reclaim tokens if L1 execution never happens after deadline passes.
 
 #### Files
-- `aztec/aave_wrapper/src/main.nr` - Add cancel_deposit(intent_id: Field, current_time: u64) function that:
+- `aztec/src/main.nr` - Add cancel_deposit(intent_id: Field, current_time: u64) function that:
   1. Verifies caller owns intent via intent_owners mapping
   2. Verifies deadline has passed (current_time > intent_deadlines[intent_id])
   3. Verifies intent status is still PENDING_DEPOSIT
@@ -238,9 +237,9 @@ cd aztec && aztec test --match cancel_deposit
 Add storage to track the net deposit amount per intent so cancel_deposit can mint back the correct amount.
 
 #### Files
-- `aztec/aave_wrapper/src/main.nr` - Add `intent_amounts: Map<Field, PublicMutable<u128>>` to Storage struct
-- `aztec/aave_wrapper/src/main.nr` - In request_deposit: store intent_amounts[intent_id] = net_amount
-- `aztec/aave_wrapper/src/main.nr` - In cancel_deposit: read and use stored amount for mint
+- `aztec/src/main.nr` - Add `intent_amounts: Map<Field, PublicMutable<u128>>` to Storage struct
+- `aztec/src/main.nr` - In request_deposit: store intent_amounts[intent_id] = net_amount
+- `aztec/src/main.nr` - In cancel_deposit: read and use stored amount for mint
 
 #### Validation
 ```bash
@@ -338,7 +337,7 @@ make test
 Ensure the L2->L1 deposit message hash computation in Noir matches what Solidity expects after the flow change.
 
 #### Files
-- `aztec/aave_wrapper/src/main.nr` - Review compute_deposit_message_content at line 66
+- `aztec/src/main.nr` - Review compute_deposit_message_content at line 66
 - `eth/contracts/types/Intent.sol` - Review hashDepositIntent at line 56
 
 #### Validation
@@ -358,7 +357,7 @@ make test-l1 && make test-l2
 Add burn_amount field to DepositIntent if needed for TokenPortal withdraw authorization.
 
 #### Files
-- `aztec/aave_wrapper/src/types/intent.nr` - Consider if burn_amount or burn_nonce field needed
+- `aztec/src/types/intent.nr` - Consider if burn_amount or burn_nonce field needed
 - `eth/contracts/types/Intent.sol` - Add corresponding field if needed
 - `eth/contracts/AztecAavePortalL1.sol` - Update hashDepositIntent usage
 
