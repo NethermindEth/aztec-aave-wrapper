@@ -322,7 +322,7 @@ cd eth && forge test --match-contract PortalTest -vvv
 
 ---
 
-## Phase 5: Message Content Updates
+## Phase 5: Message Content Updates **COMPLETE**
 
 Update L2->L1 deposit message to work with the new burn-based flow.
 
@@ -381,7 +381,7 @@ Create end-to-end tests validating the complete privacy-preserving deposit flow.
 make e2e
 ```
 
-### Step 17: Update deployment script for TokenPortal
+### Step 17: Update deployment script for TokenPortal **COMPLETE**
 
 #### Goal
 Update deploy-local.ts to deploy real TokenPortal instead of mock and configure with MockUSDC.

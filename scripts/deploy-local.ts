@@ -49,6 +49,7 @@ interface DeploymentAddresses {
   l1: {
     mockUsdc: string;
     mockLendingPool: string;
+    tokenPortal: string;
     portal: string;
   };
   l2: {
@@ -349,6 +350,7 @@ function updateAddressesJson(addresses: DeploymentAddresses): void {
       },
       l1: {
         portal: addresses.l1.portal,
+        tokenPortal: addresses.l1.tokenPortal,
         mockUsdc: addresses.l1.mockUsdc,
         mockLendingPool: addresses.l1.mockLendingPool,
       },
@@ -360,6 +362,7 @@ function updateAddressesJson(addresses: DeploymentAddresses): void {
       },
       l1: {
         portal: "0x0000000000000000000000000000000000000000",
+        tokenPortal: "0x0000000000000000000000000000000000000000",
         mockUsdc: "0x0000000000000000000000000000000000000000",
         mockLendingPool: "0x0000000000000000000000000000000000000000",
       },
@@ -404,6 +407,7 @@ async function main() {
     l1: {
       mockUsdc: "",
       mockLendingPool: "",
+      tokenPortal: "",
       portal: "",
     },
     l2: {
@@ -477,11 +481,20 @@ async function main() {
   const aztecInbox = sandboxAddresses.inboxAddress;
   console.log(`    ✓ Inbox: ${aztecInbox}`);
 
-  // Deploy MockTokenPortal (still needed for withdrawal token bridging back to L2)
-  // TODO: Replace with real token portal when available
-  const tokenPortal = deployWithForge(
-    "test/Portal.t.sol:MockTokenPortal",
-    [],
+  // Deploy TokenPortal for L1<->L2 token bridging
+  // TokenPortal locks USDC on L1 when depositing to L2 and releases when withdrawing
+  // Note: We deploy without authorized withdrawer initially, then add the portal after deployment
+  const l2BridgePlaceholder = "0x" + "00".repeat(32); // L2 bridge address (will be configured later)
+  addresses.l1.tokenPortal = deployWithForge(
+    "contracts/TokenPortal.sol:TokenPortal",
+    [
+      addresses.l1.mockUsdc,        // underlying token
+      aztecInbox,                    // Aztec inbox for L1->L2 messages
+      aztecOutbox,                   // Aztec outbox for L2->L1 messages
+      l2BridgePlaceholder,           // L2 bridge address (placeholder)
+      "0x0000000000000000000000000000000000000000", // No authorized withdrawer initially
+      DEPLOYER_ADDRESS,              // Initial owner
+    ],
     L1_RPC,
     "eth"
   );
@@ -498,7 +511,7 @@ async function main() {
     [
       aztecOutbox,
       aztecInbox,
-      tokenPortal,
+      addresses.l1.tokenPortal,
       addresses.l1.mockLendingPool,
       l2ContractPlaceholder,
       DEPLOYER_ADDRESS,
@@ -506,6 +519,26 @@ async function main() {
     L1_RPC,
     "eth"
   );
+
+  // Authorize the portal to withdraw from TokenPortal
+  // This is done after portal deployment since we needed the portal address
+  console.log("\n  Configuring TokenPortal authorized withdrawer...");
+  const setAuthorizedWithdrawerCmd = [
+    "cast send",
+    addresses.l1.tokenPortal,
+    '"setAuthorizedWithdrawer(address,bool)"',
+    addresses.l1.portal,
+    "true",
+    "--rpc-url", L1_RPC,
+    "--private-key", DEPLOYER_PRIVATE_KEY,
+  ].join(" ");
+  execSync(setAuthorizedWithdrawerCmd, { encoding: "utf-8", stdio: "pipe" });
+  console.log(`    ✓ Portal authorized: ${addresses.l1.portal.slice(0, 10)}...`);
+
+  // Mint USDC to TokenPortal for testing
+  // In production, users deposit USDC to the TokenPortal when bridging to L2
+  console.log("\n  Funding TokenPortal with USDC for testing...");
+  mintTokens(addresses.l1.mockUsdc, addresses.l1.tokenPortal, INITIAL_USDC_MINT, L1_RPC);
 
   // ---------------------------------------------------------------------------
   // Deploy L2 AaveWrapper
@@ -567,6 +600,7 @@ async function main() {
   console.log("\nL1 Contracts (Anvil :8545):");
   console.log(`  MockUSDC:              ${addresses.l1.mockUsdc}`);
   console.log(`  MockLendingPool:       ${addresses.l1.mockLendingPool}`);
+  console.log(`  TokenPortal:           ${addresses.l1.tokenPortal}`);
   console.log(`  AztecAavePortal:       ${addresses.l1.portal}`);
 
   console.log("\nL2 Contracts (Aztec :8080):");
