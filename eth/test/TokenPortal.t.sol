@@ -103,7 +103,8 @@ contract TokenPortalTest is Test {
         assertEq(inbox.lastSecretHash(), testSecretHash);
 
         // Verify message content (public deposit includes recipient)
-        bytes32 expectedContent = Hash.sha256ToField(abi.encodePacked(testTo, testAmount, testSecretHash));
+        bytes32 expectedContent =
+            Hash.sha256ToField(abi.encodePacked(testTo, testAmount, testSecretHash));
         assertEq(inbox.lastContent(), expectedContent);
 
         // Verify return values
@@ -114,11 +115,14 @@ contract TokenPortalTest is Test {
     function test_depositToAztecPublic_EmitsEvent() public {
         vm.expectEmit(true, false, false, true);
         // We need to compute expected values
-        bytes32 expectedContent = Hash.sha256ToField(abi.encodePacked(testTo, testAmount, testSecretHash));
+        bytes32 expectedContent =
+            Hash.sha256ToField(abi.encodePacked(testTo, testAmount, testSecretHash));
         bytes32 expectedMessageKey =
             keccak256(abi.encode(l2Bridge, inbox.VERSION(), expectedContent, testSecretHash));
 
-        emit TokenPortal.DepositToAztecPublic(testTo, testAmount, testSecretHash, expectedMessageKey, 0);
+        emit TokenPortal.DepositToAztecPublic(
+            testTo, testAmount, testSecretHash, expectedMessageKey, 0
+        );
 
         vm.prank(depositor);
         portal.depositToAztecPublic(testTo, testAmount, testSecretHash);
@@ -512,7 +516,8 @@ contract TokenPortalTest is Test {
         vm.assume(amount <= token.balanceOf(depositor));
 
         vm.prank(depositor);
-        (bytes32 messageKey, uint256 messageIndex) = portal.depositToAztecPublic(to, amount, secretHash);
+        (bytes32 messageKey, uint256 messageIndex) =
+            portal.depositToAztecPublic(to, amount, secretHash);
 
         assertEq(token.balanceOf(address(portal)), amount);
         assertTrue(messageKey != bytes32(0));
@@ -524,7 +529,8 @@ contract TokenPortalTest is Test {
         vm.assume(amount <= token.balanceOf(depositor));
 
         vm.prank(depositor);
-        (bytes32 messageKey, uint256 messageIndex) = portal.depositToAztecPrivate(amount, secretHash);
+        (bytes32 messageKey, uint256 messageIndex) =
+            portal.depositToAztecPrivate(amount, secretHash);
 
         assertEq(token.balanceOf(address(portal)), amount);
         assertTrue(messageKey != bytes32(0));
@@ -542,9 +548,8 @@ contract TokenPortalTest is Test {
         uint256 leafIndex = 5;
         bytes32[] memory siblingPath = new bytes32[](0);
 
-        bytes32 content = Hash.sha256ToField(
-            abi.encodePacked(bytes32(uint256(uint160(to))), amount, bytes32(0))
-        );
+        bytes32 content =
+            Hash.sha256ToField(abi.encodePacked(bytes32(uint256(uint160(to))), amount, bytes32(0)));
         outbox.setMessageValid(content, l2BlockNumber, true);
 
         vm.prank(relayer);
@@ -585,7 +590,8 @@ contract MockAztecInboxForPortal is IAztecInbox {
         lastContent = _content;
         lastSecretHash = _secretHash;
 
-        entryKey = keccak256(abi.encode(_recipient.actor, _recipient.version, _content, _secretHash));
+        entryKey =
+            keccak256(abi.encode(_recipient.actor, _recipient.version, _content, _secretHash));
         index = messageCount;
         messageCount++;
 
@@ -631,7 +637,9 @@ contract MockAztecOutboxForPortal is IAztecOutbox {
         return consumedAtCheckpoint[_l2BlockNumber][_leafIndex];
     }
 
-    function getRootData(uint256) external pure override returns (bytes32, uint256) {
+    function getRootData(
+        uint256
+    ) external pure override returns (bytes32, uint256) {
         return (bytes32(0), 0);
     }
 }

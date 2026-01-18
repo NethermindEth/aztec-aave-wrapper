@@ -184,7 +184,7 @@ cd aztec && aztec test --match request_deposit
 
 ---
 
-### Step 9: Add fee deduction logic
+### Step 9: Add fee deduction logic **COMPLETE**
 
 #### Goal
 Implement fixed percentage fee deduction (0.1% = 10 basis points) from deposit amount before burning, with fee tokens transferred to protocol treasury.

@@ -494,3 +494,158 @@ unconstrained fn test_deposit_intent_deadline_sensitivity() {
     assert(hash_short != hash_medium, "Different deadlines should produce different hashes");
     assert(hash_medium != hash_long, "Different deadlines should produce different hashes");
 }
+
+// ============================================================================
+// Fee Calculation Tests
+// ============================================================================
+
+use crate::AaveWrapper::FeeConfig;
+
+/// Test that fee constants are set correctly.
+///
+/// FEE_BASIS_POINTS = 10 (0.1% fee)
+/// BASIS_POINTS_DENOMINATOR = 10000 (100% = 10000)
+/// MIN_DEPOSIT_AMOUNT = 100
+#[test]
+unconstrained fn test_fee_config_constants() {
+    assert(FeeConfig::FEE_BASIS_POINTS == 10, "FEE_BASIS_POINTS should be 10");
+    assert(
+        FeeConfig::BASIS_POINTS_DENOMINATOR == 10000,
+        "BASIS_POINTS_DENOMINATOR should be 10000",
+    );
+    assert(FeeConfig::MIN_DEPOSIT_AMOUNT == 100, "MIN_DEPOSIT_AMOUNT should be 100");
+}
+
+/// Test fee calculation produces correct results.
+///
+/// With 10 basis points (0.1%):
+/// - 1000 tokens -> 1 token fee, 999 net
+/// - 10000 tokens -> 10 token fee, 9990 net
+/// - 100000 tokens -> 100 token fee, 99900 net
+#[test]
+unconstrained fn test_fee_calculation_basic() {
+    // Test 1000 tokens
+    let amount1: u128 = 1000;
+    let fee1 = (amount1 * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    let net1 = amount1 - fee1;
+    assert(fee1 == 1, "Fee for 1000 tokens should be 1");
+    assert(net1 == 999, "Net for 1000 tokens should be 999");
+
+    // Test 10000 tokens
+    let amount2: u128 = 10000;
+    let fee2 = (amount2 * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    let net2 = amount2 - fee2;
+    assert(fee2 == 10, "Fee for 10000 tokens should be 10");
+    assert(net2 == 9990, "Net for 10000 tokens should be 9990");
+
+    // Test 100000 tokens (100 USDC with 6 decimals stored as u128)
+    let amount3: u128 = 100000;
+    let fee3 = (amount3 * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    let net3 = amount3 - fee3;
+    assert(fee3 == 100, "Fee for 100000 tokens should be 100");
+    assert(net3 == 99900, "Net for 100000 tokens should be 99900");
+}
+
+/// Test fee calculation at minimum deposit amount.
+///
+/// With MIN_DEPOSIT_AMOUNT = 100 and 0.1% fee:
+/// - fee = 100 * 10 / 10000 = 0 (integer division)
+/// - net = 100 - 0 = 100
+///
+/// This edge case shows that very small deposits have zero fee due to rounding.
+#[test]
+unconstrained fn test_fee_calculation_minimum_amount() {
+    let amount: u128 = FeeConfig::MIN_DEPOSIT_AMOUNT; // 100
+    let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    let net = amount - fee;
+
+    // With integer division: 100 * 10 / 10000 = 0
+    assert(fee == 0, "Fee for minimum amount should be 0 due to integer division");
+    assert(net == 100, "Net should equal original amount when fee rounds to 0");
+    assert(net > 0, "Net amount must always be positive");
+}
+
+/// Test fee calculation ensures net_amount is always positive.
+///
+/// This verifies that the fee never exceeds the deposit amount.
+#[test]
+unconstrained fn test_fee_never_exceeds_amount() {
+    // Test at various amounts
+    let amounts: [u128; 5] = [100, 1000, 10000, 1000000, 1000000000000000000];
+
+    for i in 0..5 {
+        let amount = amounts[i];
+        let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+        let net = amount - fee;
+
+        assert(fee <= amount, "Fee should never exceed amount");
+        assert(net > 0, "Net amount must always be positive");
+    }
+}
+
+/// Test that fee percentage is exactly 0.1%.
+///
+/// Verify: FEE_BASIS_POINTS / BASIS_POINTS_DENOMINATOR = 10 / 10000 = 0.001 = 0.1%
+#[test]
+unconstrained fn test_fee_percentage_is_point_one_percent() {
+    // For 1,000,000 tokens, 0.1% = 1,000 tokens fee
+    let amount: u128 = 1000000;
+    let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+
+    // 1000000 * 10 / 10000 = 1000
+    assert(fee == 1000, "0.1% of 1,000,000 should be 1,000");
+
+    // Double check: fee * 1000 should equal original amount (for exact 0.1%)
+    // fee * 1000 = amount means fee = amount / 1000 = 0.1%
+    assert(fee * 1000 == amount, "Fee should be exactly 0.1% of amount");
+}
+
+/// Test fee calculation with realistic USDC deposit (100 USDC = 100,000,000 units).
+#[test]
+unconstrained fn test_fee_realistic_usdc_deposit() {
+    // 100 USDC with 6 decimals = 100,000,000 smallest units
+    let amount: u128 = 100_000_000;
+    let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    let net = amount - fee;
+
+    // 100,000,000 * 10 / 10000 = 100,000 (0.1 USDC fee)
+    assert(fee == 100_000, "Fee for 100 USDC should be 0.1 USDC (100,000 units)");
+    assert(net == 99_900_000, "Net for 100 USDC should be 99.9 USDC (99,900,000 units)");
+}
+
+/// Test fee calculation with large deposit (1 billion USDC).
+#[test]
+unconstrained fn test_fee_large_deposit() {
+    // 1 billion USDC = 1,000,000,000,000,000 smallest units (6 decimals)
+    let amount: u128 = 1_000_000_000_000_000;
+    let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    let net = amount - fee;
+
+    // 0.1% of 1 billion = 1 million USDC fee
+    assert(fee == 1_000_000_000_000, "Fee for 1B USDC should be 1M USDC");
+    assert(net == 999_000_000_000_000, "Net should be 999M USDC");
+}
+
+/// Test that fee rounding truncates (floor division).
+///
+/// Integer division truncates towards zero, which means the protocol
+/// receives slightly less fee on small amounts. This is acceptable
+/// and more fair to users.
+#[test]
+unconstrained fn test_fee_rounding_truncates() {
+    // Test amounts that don't divide evenly
+    // 999 * 10 / 10000 = 9990 / 10000 = 0 (truncated)
+    let amount1: u128 = 999;
+    let fee1 = (amount1 * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    assert(fee1 == 0, "999 should have 0 fee due to truncation");
+
+    // 1001 * 10 / 10000 = 10010 / 10000 = 1 (truncated)
+    let amount2: u128 = 1001;
+    let fee2 = (amount2 * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    assert(fee2 == 1, "1001 should have 1 fee due to truncation");
+
+    // 9999 * 10 / 10000 = 99990 / 10000 = 9 (truncated from 9.999)
+    let amount3: u128 = 9999;
+    let fee3 = (amount3 * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+    assert(fee3 == 9, "9999 should have 9 fee due to truncation");
+}

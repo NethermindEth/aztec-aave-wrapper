@@ -403,6 +403,120 @@ pub contract BridgedToken {
         self.emit(BurnEvent { amount });
     }
 
+    /// Transfers tokens from a specified user's private balance (authorized caller only).
+    ///
+    /// This function allows authorized contracts (like AaveWrapper) to transfer tokens
+    /// during deposit operations for fee collection. The calling contract must be an
+    /// authorized burner (same authorization as burn_from).
+    ///
+    /// # Arguments
+    /// * `from` - The address whose tokens will be transferred
+    /// * `to` - The recipient's Aztec address
+    /// * `amount` - Amount of tokens to transfer
+    ///
+    /// # Authorization
+    /// The caller must be an authorized burner (set via authorize_burner by admin).
+    /// This is checked in the public function _transfer_from_public.
+    ///
+    /// # Privacy
+    /// - The transfer operation happens privately
+    /// - No public state is modified (total supply unchanged)
+    /// - The `from` and `to` addresses are revealed to the contract but not publicly
+    ///
+    /// # Security
+    /// - Authorization is verified in public context to prevent bypass
+    /// - Notes are transferred from the `from` address's balance set
+    /// - Change notes are returned to the original owner
+    /// - In Aztec's private execution model, note access is controlled by the
+    ///   transaction context - only the user who initiated the transaction can
+    ///   have their notes accessed. This provides implicit user consent.
+    ///
+    /// # Intended Usage
+    /// This function should be called from AaveWrapper.request_deposit() where:
+    /// 1. User calls request_deposit on AaveWrapper
+    /// 2. AaveWrapper gets caller via msg_sender() (the user)
+    /// 3. AaveWrapper calls transfer_from(caller, treasury, fee) - transferring only the initiating user's tokens
+    #[external("private")]
+    fn transfer_from(from: AztecAddress, to: AztecAddress, amount: u128) {
+        assert(amount > 0, "Amount must be greater than zero");
+        assert(from.to_field() != 0, "Cannot transfer from zero address");
+        assert(to.to_field() != 0, "Cannot transfer to zero address");
+        assert(from.to_field() != to.to_field(), "Cannot transfer to self");
+
+        // Get the caller for authorization check
+        let caller = self.msg_sender().unwrap();
+
+        // Collect notes to transfer the required amount from the `from` address
+        let mut remaining = amount;
+        let options = NoteGetterOptions::new().set_limit(MAX_NOTES);
+        let notes = self.storage.balances.at(from).at(from).pop_notes(options);
+        let notes_len = notes.len();
+
+        let mut total_transferred: u128 = 0;
+        for i in 0..MAX_NOTES {
+            if (i < notes_len) & (remaining > 0) {
+                let note = notes.get(i);
+                if note.amount <= remaining {
+                    // Transfer the entire note amount
+                    total_transferred += note.amount;
+                    remaining -= note.amount;
+                } else {
+                    // Partial transfer: create change note for the original owner
+                    total_transferred += remaining;
+                    let change = note.amount - remaining;
+                    remaining = 0;
+
+                    // Create change note with new randomness, returned to original owner
+                    let change_randomness = dep::aztec::protocol_types::hash::poseidon2_hash([
+                        note.randomness,
+                        change as Field,
+                    ]);
+                    let change_note =
+                        TokenNote { owner: from, amount: change, randomness: change_randomness };
+                    self.storage.balances.at(from).at(from).insert(change_note).deliver(
+                        MessageDelivery.CONSTRAINED_ONCHAIN,
+                    );
+                }
+            }
+        }
+
+        assert(remaining == 0, "Insufficient balance to transfer");
+
+        // Create note for recipient
+        // Randomness includes caller address for uniqueness across different callers/transactions
+        let recipient_randomness = dep::aztec::protocol_types::hash::poseidon2_hash([
+            from.to_field(),
+            to.to_field(),
+            amount as Field,
+            caller.to_field(),
+        ]);
+        let recipient_note =
+            TokenNote { owner: to, amount: total_transferred, randomness: recipient_randomness };
+        self.storage.balances.at(to).at(to).insert(recipient_note).deliver(
+            MessageDelivery.CONSTRAINED_ONCHAIN,
+        );
+
+        // Enqueue public call to verify authorization
+        // Pass the caller for authorization verification
+        BridgedToken::at(self.context.this_address())._transfer_from_public(caller).enqueue(
+            self.context,
+        );
+    }
+
+    /// Internal public function to verify transfer_from authorization.
+    ///
+    /// This function verifies that the caller of transfer_from is an authorized burner.
+    /// Uses the same authorization as burn_from since both require similar trust levels.
+    ///
+    /// # Arguments
+    /// * `caller` - The address that called transfer_from (for authorization)
+    #[external("public")]
+    fn _transfer_from_public(caller: AztecAddress) {
+        // Verify the caller is an authorized burner (reusing same authorization)
+        let is_authorized = self.storage.authorized_burners.at(caller).read();
+        assert(is_authorized == 1, "Caller is not authorized for transfer_from");
+    }
+
     /// Transfers tokens privately from caller to recipient.
     ///
     /// # Arguments

@@ -244,6 +244,20 @@ pub(crate) contract AaveWrapper {
         pub global MAX_DEADLINE_DURATION: u64 = 604800;
     }
 
+    /// Fee configuration.
+    /// FEE_BASIS_POINTS: 10 = 0.1% fee
+    /// BASIS_POINTS_DENOMINATOR: 10000 (100% = 10000 basis points)
+    pub mod FeeConfig {
+        /// Fee in basis points (10 = 0.1%)
+        pub global FEE_BASIS_POINTS: u128 = 10;
+        /// Denominator for basis point calculations (10000 = 100%)
+        pub global BASIS_POINTS_DENOMINATOR: u128 = 10000;
+        /// Minimum deposit amount to ensure non-zero net_amount after fee deduction.
+        /// Note: With integer division, deposits under 1000 tokens result in zero fee.
+        /// This minimum (100) ensures net_amount > 0 and accepts zero-fee small deposits.
+        pub global MIN_DEPOSIT_AMOUNT: u128 = 100;
+    }
+
     /// Intent status constants for public state tracking.
     /// These mirror the private PositionStatus but are for public intent lifecycle.
     mod IntentStatus {
@@ -406,14 +420,27 @@ pub(crate) contract AaveWrapper {
         // Get caller address for intent binding (kept private)
         let caller = self.msg_sender().unwrap();
 
-        // Validate amount is non-zero
-        assert(amount > 0, "Amount must be greater than zero");
+        // Validate amount meets minimum to ensure non-zero net_amount after fee deduction
+        // Note: Deposits under 1000 tokens result in zero fee due to integer division
+        assert(
+            amount >= FeeConfig::MIN_DEPOSIT_AMOUNT,
+            "Amount must be at least minimum deposit amount",
+        );
 
         // Validate deadline bounds
         // Note: In Aztec private context, we don't have access to block.timestamp
         // Deadline validation will be enforced on L1 portal instead
         // We still require deadline to be non-zero as basic sanity check
         assert(deadline > 0, "Deadline must be greater than zero");
+
+        // Calculate fee and net amount
+        // fee = amount * FEE_BASIS_POINTS / BASIS_POINTS_DENOMINATOR
+        // With 10 basis points (0.1%), fee = amount * 10 / 10000 = amount / 1000
+        let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
+        let net_amount = amount - fee;
+
+        // Validate net_amount is greater than zero (should always pass given MIN_DEPOSIT_AMOUNT)
+        assert(net_amount > 0, "Net amount after fee must be greater than zero");
 
         // Compute hash of owner for privacy
         let owner_hash = poseidon2_hash([caller.to_field()]);
@@ -423,26 +450,40 @@ pub(crate) contract AaveWrapper {
         let salt = poseidon2_hash([caller.to_field(), secret_hash]);
 
         // Compute unique intent_id using poseidon2 hash of all inputs
+        // Note: We use net_amount in intent_id since that's what goes to L1
         // The caller is included so intent_id is bound to the user, but since
         // poseidon2 is one-way, the caller cannot be recovered from intent_id
-        let intent_id = compute_intent_id(caller, asset, amount, original_decimals, deadline, salt);
+        let intent_id =
+            compute_intent_id(caller, asset, net_amount, original_decimals, deadline, salt);
 
         // Create the deposit intent struct for L2 to L1 message
+        // Note: The intent uses net_amount (after fee deduction)
         let intent = DepositIntent::new(
             intent_id,
             owner_hash,
             asset,
-            amount,
+            net_amount,
             original_decimals,
             deadline,
             salt,
         );
 
-        // Burn the user's L2 tokens before sending the cross-chain message
+        // Get stored addresses
+        let bridged_token_address = self.storage.bridged_token.read();
+        let fee_treasury = self.storage.fee_treasury.read();
+
+        // Transfer fee to treasury (if fee > 0)
+        // This happens before burning to ensure atomicity
+        if fee > 0 {
+            BridgedToken::at(bridged_token_address).transfer_from(caller, fee_treasury, fee).call(
+                self.context,
+            );
+        }
+
+        // Burn the user's L2 tokens (net amount) before sending the cross-chain message
         // This ensures atomicity: if burn fails, no L2->L1 message is sent
         // The bridged token contract verifies authorization via authorized_burners mapping
-        let bridged_token_address = self.storage.bridged_token.read();
-        BridgedToken::at(bridged_token_address).burn_from(caller, amount).call(self.context);
+        BridgedToken::at(bridged_token_address).burn_from(caller, net_amount).call(self.context);
 
         // Compute the message content hash for L2 to L1 messaging
         // Uses owner_hash and secret_hash - L1 portal doesn't learn the owner
