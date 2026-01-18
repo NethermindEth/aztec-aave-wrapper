@@ -28,7 +28,7 @@ cd aztec && aztec compile && ls target/aave_wrapper-BridgedToken.json
 
 ---
 
-### Step 2: Add burn authorization to BridgedToken
+### Step 2: Add burn authorization to BridgedToken **COMPLETE**
 
 #### Goal
 Implement an authorization mechanism allowing AaveWrapper to call burn_private on behalf of users during deposit requests.

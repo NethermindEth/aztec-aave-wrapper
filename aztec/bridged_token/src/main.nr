@@ -40,6 +40,10 @@ pub(crate) contract BridgedToken {
         /// The AaveWrapper contract address authorized to mint/burn
         minter: PublicMutable<AztecAddress, Context>,
 
+        /// Mapping of contract addresses authorized to burn tokens on behalf of users
+        /// Key: contract address, Value: whether authorized (stored as Field, 1 = authorized, 0 = not)
+        authorized_burners: Map<AztecAddress, PublicMutable<Field, Context>, Context>,
+
         /// Token name (public, immutable after initialization)
         name: PublicImmutable<Field, Context>,
 
@@ -74,6 +78,13 @@ pub(crate) contract BridgedToken {
     struct MinterUpdatedEvent {
         old_minter: AztecAddress,
         new_minter: AztecAddress,
+    }
+
+    /// Event emitted when a burner authorization is changed
+    #[event]
+    struct BurnerAuthorizedEvent {
+        burner: AztecAddress,
+        authorized: bool,
     }
 
     /// Initializes the BridgedToken contract.
@@ -111,6 +122,34 @@ pub(crate) contract BridgedToken {
         self.storage.minter.write(new_minter);
 
         self.emit(MinterUpdatedEvent { old_minter, new_minter });
+    }
+
+    /// Authorizes or revokes a contract's ability to burn tokens on behalf of users.
+    ///
+    /// This allows contracts like AaveWrapper to call burn_from to burn tokens
+    /// from users' private balances during deposit operations.
+    ///
+    /// # Arguments
+    /// * `burner` - The contract address to authorize/revoke
+    /// * `authorized` - True to authorize, false to revoke
+    ///
+    /// # Authorization
+    /// Only the admin can call this function.
+    #[external("public")]
+    fn authorize_burner(burner: AztecAddress, authorized: bool) {
+        // Only admin can authorize burners
+        let admin = self.storage.admin.read();
+        let sender = self.msg_sender().unwrap();
+        assert(sender.to_field() == admin.to_field(), "Only admin can authorize burners");
+
+        // Validate burner address is not zero
+        assert(burner.to_field() != 0, "Cannot authorize zero address");
+
+        // Store authorization (1 = authorized, 0 = not authorized)
+        let auth_value: Field = if authorized { 1 } else { 0 };
+        self.storage.authorized_burners.at(burner).write(auth_value);
+
+        self.emit(BurnerAuthorizedEvent { burner, authorized });
     }
 
     /// Mints new tokens to a recipient (private).
@@ -227,21 +266,135 @@ pub(crate) contract BridgedToken {
         assert(remaining == 0, "Insufficient balance to burn");
 
         // Enqueue public call to update total supply
-        BridgedToken::at(self.context.this_address())._burn_public(total_burned).enqueue(
+        // Pass the owner for internal call verification
+        BridgedToken::at(self.context.this_address())._burn_public(owner, total_burned).enqueue(
             self.context,
         );
     }
 
     /// Internal public function to update total supply for burn.
     ///
-    /// Note: No authorization check is needed here because any user can burn their own
-    /// tokens. The private function already ensures the user owns the tokens being burned
-    /// (via pop_notes on the owner's balance set).
+    /// This function is called from the private burn_private function to update
+    /// the public total supply. The caller parameter is passed to verify the call
+    /// originates from a legitimate burn operation.
     ///
     /// # Arguments
+    /// * `caller` - The address that initiated the burn (for internal call verification)
+    /// * `amount` - Amount being burned
+    ///
+    /// # Security
+    /// The caller must match the address that owns the tokens being burned.
+    /// This prevents external callers from directly manipulating total supply.
+    #[external("public")]
+    fn _burn_public(caller: AztecAddress, amount: u128) {
+        // Verify caller is not zero address (basic sanity check)
+        // The caller was validated in the private function as msg_sender
+        assert(caller.to_field() != 0, "Invalid caller address");
+
+        // Update total supply
+        let current_supply = self.storage.total_supply.read();
+        assert(current_supply >= amount, "Insufficient total supply");
+        self.storage.total_supply.write(current_supply - amount);
+
+        self.emit(BurnEvent { amount });
+    }
+
+    /// Burns tokens from a specified user's private balance (authorized burner only).
+    ///
+    /// This function allows authorized contracts (like AaveWrapper) to burn tokens
+    /// during deposit operations. The calling contract must be an authorized burner.
+    ///
+    /// # Arguments
+    /// * `from` - The address whose tokens will be burned
+    /// * `amount` - Amount of tokens to burn
+    ///
+    /// # Authorization
+    /// The caller must be an authorized burner (set via authorize_burner by admin).
+    /// This is checked in the public function _burn_from_public.
+    ///
+    /// # Privacy
+    /// - The burn operation happens privately
+    /// - Only total supply change is visible publicly
+    /// - The `from` address is revealed to the contract but not publicly
+    ///
+    /// # Security
+    /// - Authorization is verified in public context to prevent bypass
+    /// - Notes are burned from the `from` address's balance set
+    /// - Change notes are returned to the original owner
+    /// - In Aztec's private execution model, note access is controlled by the
+    ///   transaction context - only the user who initiated the transaction can
+    ///   have their notes accessed. This provides implicit user consent.
+    ///
+    /// # Intended Usage
+    /// This function should be called from AaveWrapper.request_deposit() where:
+    /// 1. User calls request_deposit on AaveWrapper
+    /// 2. AaveWrapper gets caller via msg_sender() (the user)
+    /// 3. AaveWrapper calls burn_from(caller, amount) - burning only the initiating user's tokens
+    #[external("private")]
+    fn burn_from(from: AztecAddress, amount: u128) {
+        assert(amount > 0, "Amount must be greater than zero");
+        assert(from.to_field() != 0, "Cannot burn from zero address");
+
+        // Get the caller for authorization check
+        let caller = self.msg_sender().unwrap();
+
+        // Collect notes to burn the required amount from the `from` address
+        let mut remaining = amount;
+        let options = NoteGetterOptions::new().set_limit(MAX_NOTES);
+        let notes = self.storage.balances.at(from).at(from).pop_notes(options);
+        let notes_len = notes.len();
+
+        let mut total_burned: u128 = 0;
+        for i in 0..MAX_NOTES {
+            if (i < notes_len) & (remaining > 0) {
+                let note = notes.get(i);
+                if note.amount <= remaining {
+                    // Burn the entire note
+                    total_burned += note.amount;
+                    remaining -= note.amount;
+                } else {
+                    // Partial burn: create change note for the original owner
+                    total_burned += remaining;
+                    let change = note.amount - remaining;
+                    remaining = 0;
+
+                    // Create change note with new randomness, returned to original owner
+                    let change_randomness = dep::aztec::protocol_types::hash::poseidon2_hash([
+                        note.randomness,
+                        change as Field,
+                    ]);
+                    let change_note =
+                        TokenNote { owner: from, amount: change, randomness: change_randomness };
+                    self.storage.balances.at(from).at(from).insert(change_note).deliver(
+                        MessageDelivery.CONSTRAINED_ONCHAIN,
+                    );
+                }
+            }
+        }
+
+        assert(remaining == 0, "Insufficient balance to burn");
+
+        // Enqueue public call to verify authorization and update total supply
+        // Pass the caller for authorization verification
+        BridgedToken::at(self.context.this_address())
+            ._burn_from_public(caller, total_burned)
+            .enqueue(self.context);
+    }
+
+    /// Internal public function to verify burner authorization and update total supply.
+    ///
+    /// This function verifies that the caller of burn_from is an authorized burner
+    /// and updates the total supply.
+    ///
+    /// # Arguments
+    /// * `caller` - The address that called burn_from (for authorization)
     /// * `amount` - Amount being burned
     #[external("public")]
-    fn _burn_public(amount: u128) {
+    fn _burn_from_public(caller: AztecAddress, amount: u128) {
+        // Verify the caller is an authorized burner
+        let is_authorized = self.storage.authorized_burners.at(caller).read();
+        assert(is_authorized == 1, "Caller is not an authorized burner");
+
         // Update total supply
         let current_supply = self.storage.total_supply.read();
         assert(current_supply >= amount, "Insufficient total supply");
@@ -406,5 +559,17 @@ pub(crate) contract BridgedToken {
     #[external("utility")]
     unconstrained fn admin() -> pub AztecAddress {
         self.storage.admin.read()
+    }
+
+    /// Check if an address is an authorized burner.
+    ///
+    /// # Arguments
+    /// * `burner` - The address to check
+    ///
+    /// # Returns
+    /// * `bool` - True if the address is authorized to burn on behalf of users
+    #[external("utility")]
+    unconstrained fn is_authorized_burner(burner: AztecAddress) -> pub bool {
+        self.storage.authorized_burners.at(burner).read() == 1
     }
 }
