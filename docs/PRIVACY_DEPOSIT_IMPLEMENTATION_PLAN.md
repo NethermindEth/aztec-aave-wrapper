@@ -252,7 +252,7 @@ cd aztec && aztec test --match cancel
 
 ---
 
-## Phase 4: AavePortal L1 Contract Updates
+## Phase 4: AavePortal L1 Contract Updates **COMPLETE**
 
 Modify the L1 portal to claim tokens from TokenPortal instead of expecting pre-transferred tokens.
 
@@ -331,7 +331,7 @@ Update L2->L1 deposit message to work with the new burn-based flow.
 make test
 ```
 
-### Step 15: Verify message hash compatibility
+### Step 15: Verify message hash compatibility **COMPLETE**
 
 #### Goal
 Ensure the L2->L1 deposit message hash computation in Noir matches what Solidity expects after the flow change.
