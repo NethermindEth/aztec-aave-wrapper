@@ -47,4 +47,11 @@ interface ITokenPortal {
      * @return The address of the token this portal handles
      */
     function underlying() external view returns (address);
+
+    /**
+     * @notice Withdraw tokens from the portal based on L2 burn authorization
+     * @param _amount Amount of tokens to withdraw
+     * @param _recipient Address to receive the tokens
+     */
+    function withdraw(uint256 _amount, address _recipient) external;
 }

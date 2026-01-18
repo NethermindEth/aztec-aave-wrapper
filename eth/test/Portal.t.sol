@@ -88,8 +88,12 @@ contract PortalTest is Test {
         validSiblingPath[1] = keccak256("sibling_1");
         validSiblingPath[2] = keccak256("sibling_2");
 
-        // Mint tokens to portal for deposit testing
-        token.mint(address(portal), 10_000e18);
+        // Configure mock token portal with underlying token
+        tokenPortal.setUnderlying(address(token));
+
+        // Mint tokens to token portal for deposit testing
+        // (AavePortal now claims tokens from TokenPortal via withdraw())
+        token.mint(address(tokenPortal), 10_000e18);
     }
 
     // ============ Constructor Tests ============
@@ -573,6 +577,9 @@ contract PortalTest is Test {
         uint256 amount = 100e18;
         address recipient = makeAddr("recipient");
 
+        // Mint tokens directly to portal for emergency withdraw test
+        token.mint(address(portal), amount);
+
         vm.prank(owner);
         portal.emergencyWithdraw(address(token), recipient, amount);
 
@@ -767,6 +774,13 @@ contract MockTokenPortal is ITokenPortal {
     bool public depositCalled;
     uint256 public lastAmount;
     bytes32 public lastSecretHash;
+    address public underlyingToken;
+
+    function setUnderlying(
+        address _underlying
+    ) external {
+        underlyingToken = _underlying;
+    }
 
     function depositToAztecPublic(
         bytes32, /* _to */
@@ -789,8 +803,15 @@ contract MockTokenPortal is ITokenPortal {
         return (keccak256("messageKey"), 0);
     }
 
-    function underlying() external pure returns (address) {
-        return address(0);
+    function underlying() external view returns (address) {
+        return underlyingToken;
+    }
+
+    function withdraw(uint256 _amount, address _recipient) external {
+        // Transfer tokens from this mock to the recipient
+        if (underlyingToken != address(0)) {
+            MockERC20(underlyingToken).transfer(_recipient, _amount);
+        }
     }
 }
 

@@ -135,7 +135,7 @@ cd eth && forge test --match-test test_withdraw -vvv
 
 ---
 
-## Phase 3: AaveWrapper L2 Contract Updates
+## Phase 3: AaveWrapper L2 Contract Updates **COMPLETE**
 
 Modify the L2 AaveWrapper to burn tokens instead of expecting L1 transfers, implementing the new privacy-preserving deposit flow.
 
@@ -261,7 +261,7 @@ Modify the L1 portal to claim tokens from TokenPortal instead of expecting pre-t
 cd eth && forge test --match-contract PortalTest -vv
 ```
 
-### Step 12: Update AavePortal to claim tokens from TokenPortal
+### Step 12: Update AavePortal to claim tokens from TokenPortal **COMPLETE**
 
 #### Goal
 Modify executeDeposit at line 182 to claim tokens from TokenPortal based on L2 burn authorization instead of expecting tokens pre-transferred to portal.

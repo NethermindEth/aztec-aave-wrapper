@@ -212,16 +212,18 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         // Step 6: Mark intent as consumed for replay protection
         consumedIntents[intent.intentId] = true;
 
-        // Step 7: Get aToken balance before supply
+        // Step 7: Claim tokens from TokenPortal (based on L2 burn authorization)
+        ITokenPortal(tokenPortal).withdraw(intent.amount, address(this));
+
+        // Step 8: Get aToken balance before supply
         address aToken = _getATokenAddress(intent.asset);
         uint256 aTokenBalanceBefore = IERC20(aToken).balanceOf(address(this));
 
-        // Step 8: Approve Aave pool to spend tokens
-        // Tokens should already be on this contract (transferred via token portal)
+        // Step 9: Approve Aave pool to spend tokens
         bool approveSuccess = IERC20(intent.asset).approve(aavePool, intent.amount);
         require(approveSuccess, "Token approval failed");
 
-        // Step 9: Supply tokens to Aave (this contract receives aTokens)
+        // Step 10: Supply tokens to Aave (this contract receives aTokens)
         ILendingPool(aavePool).supply(
             intent.asset,
             intent.amount,
@@ -229,7 +231,7 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
             0 // referral code
         );
 
-        // Step 10: Calculate shares received (aToken balance difference)
+        // Step 11: Calculate shares received (aToken balance difference)
         uint256 aTokenBalanceAfter = IERC20(aToken).balanceOf(address(this));
         uint128 shares = uint128(aTokenBalanceAfter - aTokenBalanceBefore);
 
@@ -237,13 +239,13 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
             revert AaveSupplyFailed();
         }
 
-        // Step 11: Store shares for this intent (for withdrawal tracking)
+        // Step 12: Store shares for this intent (for withdrawal tracking)
         intentShares[intent.intentId] = shares;
         intentAssets[intent.intentId] = intent.asset;
 
         emit DepositExecuted(intent.intentId, intent.asset, intent.amount, shares);
 
-        // Step 12: Send L1->L2 confirmation message
+        // Step 13: Send L1->L2 confirmation message
         bytes32 messageContent = _computeDepositFinalizationMessage(
             intent.intentId, intent.ownerHash, ConfirmationStatus.SUCCESS, shares, intent.asset
         );

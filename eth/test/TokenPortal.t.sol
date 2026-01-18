@@ -29,6 +29,8 @@ contract TokenPortalTest is Test {
     address public depositor = makeAddr("depositor");
     address public recipient = makeAddr("recipient");
     address public relayer = makeAddr("relayer");
+    address public owner = makeAddr("owner");
+    address public authorizedWithdrawer = makeAddr("authorizedWithdrawer");
 
     // Test data
     bytes32 public testSecretHash = keccak256("test_secret");
@@ -41,8 +43,10 @@ contract TokenPortalTest is Test {
         outbox = new MockAztecOutboxForPortal();
         token = new MockERC20("Test Token", "TEST", 18);
 
-        // Deploy portal
-        portal = new TokenPortal(address(token), address(inbox), address(outbox), l2Bridge);
+        // Deploy portal (with zero authorized withdrawer for these tests)
+        portal = new TokenPortal(
+            address(token), address(inbox), address(outbox), l2Bridge, address(0), owner
+        );
 
         // Mint tokens to depositor
         token.mint(depositor, 100_000e18);
@@ -64,23 +68,36 @@ contract TokenPortalTest is Test {
 
     function test_Constructor_RevertIf_ZeroUnderlying() public {
         vm.expectRevert(TokenPortal.ZeroAddress.selector);
-        new TokenPortal(address(0), address(inbox), address(outbox), l2Bridge);
+        new TokenPortal(address(0), address(inbox), address(outbox), l2Bridge, address(0), owner);
     }
 
     function test_Constructor_RevertIf_ZeroInbox() public {
         vm.expectRevert(TokenPortal.ZeroAddress.selector);
-        new TokenPortal(address(token), address(0), address(outbox), l2Bridge);
+        new TokenPortal(address(token), address(0), address(outbox), l2Bridge, address(0), owner);
     }
 
     function test_Constructor_RevertIf_ZeroOutbox() public {
         vm.expectRevert(TokenPortal.ZeroAddress.selector);
-        new TokenPortal(address(token), address(inbox), address(0), l2Bridge);
+        new TokenPortal(address(token), address(inbox), address(0), l2Bridge, address(0), owner);
     }
 
     function test_Constructor_AllowsZeroL2Bridge() public {
         // L2 bridge can be zero (will be set later or is valid bytes32(0))
-        TokenPortal p = new TokenPortal(address(token), address(inbox), address(outbox), bytes32(0));
+        TokenPortal p = new TokenPortal(
+            address(token), address(inbox), address(outbox), bytes32(0), address(0), owner
+        );
         assertEq(p.l2Bridge(), bytes32(0));
+    }
+
+    function test_Constructor_SetsInitialAuthorizedWithdrawer() public {
+        TokenPortal p = new TokenPortal(
+            address(token), address(inbox), address(outbox), l2Bridge, authorizedWithdrawer, owner
+        );
+        assertTrue(p.authorizedWithdrawers(authorizedWithdrawer));
+    }
+
+    function test_Constructor_SetsOwner() public view {
+        assertEq(portal.owner(), owner);
     }
 
     // ============ depositToAztecPublic Tests ============
@@ -556,6 +573,129 @@ contract TokenPortalTest is Test {
         portal.withdraw(to, amount, false, l2BlockNumber, leafIndex, siblingPath);
 
         assertEq(token.balanceOf(to), amount);
+    }
+
+    // ============ Authorized Withdraw Tests ============
+
+    function test_authorizedWithdraw_Success() public {
+        // Setup: authorize a withdrawer
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+
+        // Mint tokens to portal
+        token.mint(address(portal), testAmount);
+
+        uint256 recipientBalanceBefore = token.balanceOf(recipient);
+
+        // Authorized withdrawer can withdraw without L2->L1 message proof
+        vm.prank(authorizedWithdrawer);
+        portal.withdraw(testAmount, recipient);
+
+        assertEq(token.balanceOf(recipient), recipientBalanceBefore + testAmount);
+    }
+
+    function test_authorizedWithdraw_EmitsEvent() public {
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+        token.mint(address(portal), testAmount);
+
+        vm.expectEmit(true, false, false, true);
+        emit TokenPortal.WithdrawFromAztec(recipient, testAmount);
+
+        vm.prank(authorizedWithdrawer);
+        portal.withdraw(testAmount, recipient);
+    }
+
+    function test_authorizedWithdraw_RevertIf_UnauthorizedCaller() public {
+        token.mint(address(portal), testAmount);
+
+        vm.expectRevert(TokenPortal.UnauthorizedWithdrawer.selector);
+        vm.prank(relayer);
+        portal.withdraw(testAmount, recipient);
+    }
+
+    function test_authorizedWithdraw_RevertIf_ZeroRecipient() public {
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+        token.mint(address(portal), testAmount);
+
+        vm.expectRevert(TokenPortal.ZeroAddress.selector);
+        vm.prank(authorizedWithdrawer);
+        portal.withdraw(testAmount, address(0));
+    }
+
+    function test_authorizedWithdraw_RevertIf_ZeroAmount() public {
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+
+        vm.expectRevert(TokenPortal.ZeroAmount.selector);
+        vm.prank(authorizedWithdrawer);
+        portal.withdraw(0, recipient);
+    }
+
+    function test_authorizedWithdraw_RevertIf_InsufficientBalance() public {
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+        // Don't mint tokens to portal
+
+        vm.expectRevert(); // ERC20 transfer failure
+        vm.prank(authorizedWithdrawer);
+        portal.withdraw(testAmount, recipient);
+    }
+
+    // ============ setAuthorizedWithdrawer Tests ============
+
+    function test_setAuthorizedWithdrawer_Success() public {
+        assertFalse(portal.authorizedWithdrawers(authorizedWithdrawer));
+
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+
+        assertTrue(portal.authorizedWithdrawers(authorizedWithdrawer));
+    }
+
+    function test_setAuthorizedWithdrawer_Revoke() public {
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+        assertTrue(portal.authorizedWithdrawers(authorizedWithdrawer));
+
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, false);
+        assertFalse(portal.authorizedWithdrawers(authorizedWithdrawer));
+    }
+
+    function test_setAuthorizedWithdrawer_EmitsEvent() public {
+        vm.expectEmit(true, false, false, true);
+        emit TokenPortal.AuthorizedWithdrawerSet(authorizedWithdrawer, true);
+
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+    }
+
+    function test_setAuthorizedWithdrawer_RevertIf_NotOwner() public {
+        vm.expectRevert();
+        vm.prank(relayer);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+    }
+
+    function test_setAuthorizedWithdrawer_RevertIf_ZeroAddress() public {
+        vm.expectRevert(TokenPortal.ZeroAddress.selector);
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(address(0), true);
+    }
+
+    function test_revokedWithdrawer_CannotWithdraw() public {
+        // Authorize then revoke
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, true);
+        vm.prank(owner);
+        portal.setAuthorizedWithdrawer(authorizedWithdrawer, false);
+
+        token.mint(address(portal), testAmount);
+
+        vm.expectRevert(TokenPortal.UnauthorizedWithdrawer.selector);
+        vm.prank(authorizedWithdrawer);
+        portal.withdraw(testAmount, recipient);
     }
 }
 

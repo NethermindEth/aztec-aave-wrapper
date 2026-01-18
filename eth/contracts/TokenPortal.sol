@@ -8,6 +8,7 @@ import { DataStructures } from "./libraries/DataStructures.sol";
 import { Hash } from "./libraries/Hash.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /**
  * @title TokenPortal
@@ -28,7 +29,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
  * - L1 includes secretHash in L1->L2 messages
  * - L2 user must know the preimage (secret) to claim tokens
  */
-contract TokenPortal is ITokenPortal {
+contract TokenPortal is ITokenPortal, Ownable2Step {
     using SafeERC20 for IERC20;
 
     // ============ Immutables ============
@@ -48,11 +49,18 @@ contract TokenPortal is ITokenPortal {
     /// @notice Aztec instance version (read from inbox at construction)
     uint256 public immutable aztecVersion;
 
+    // ============ State ============
+
+    /// @notice Authorized callers that can withdraw tokens without L2->L1 message proof
+    /// @dev Used by AavePortal which consumes L2->L1 deposit intent messages directly
+    mapping(address => bool) public authorizedWithdrawers;
+
     // ============ Errors ============
 
     error ZeroAddress();
     error ZeroAmount();
     error InvalidWithdrawAmount();
+    error UnauthorizedWithdrawer();
 
     // ============ Events ============
 
@@ -70,6 +78,8 @@ contract TokenPortal is ITokenPortal {
 
     event WithdrawFromAztec(address indexed recipient, uint256 amount);
 
+    event AuthorizedWithdrawerSet(address indexed withdrawer, bool authorized);
+
     // ============ Constructor ============
 
     /**
@@ -78,8 +88,17 @@ contract TokenPortal is ITokenPortal {
      * @param _inbox Aztec L1->L2 message inbox address
      * @param _outbox Aztec L2->L1 message outbox address
      * @param _l2Bridge The L2 bridge contract address on Aztec
+     * @param _authorizedWithdrawer Initial authorized withdrawer (e.g., AavePortal)
+     * @param _initialOwner The initial owner of this contract
      */
-    constructor(address _underlying, address _inbox, address _outbox, bytes32 _l2Bridge) {
+    constructor(
+        address _underlying,
+        address _inbox,
+        address _outbox,
+        bytes32 _l2Bridge,
+        address _authorizedWithdrawer,
+        address _initialOwner
+    ) Ownable(_initialOwner) {
         if (_underlying == address(0) || _inbox == address(0) || _outbox == address(0)) {
             revert ZeroAddress();
         }
@@ -88,6 +107,9 @@ contract TokenPortal is ITokenPortal {
         outbox = _outbox;
         l2Bridge = _l2Bridge;
         aztecVersion = IAztecInbox(_inbox).VERSION();
+        if (_authorizedWithdrawer != address(0)) {
+            authorizedWithdrawers[_authorizedWithdrawer] = true;
+        }
     }
 
     // ============ Deposit Functions ============
@@ -223,5 +245,47 @@ contract TokenPortal is ITokenPortal {
         IERC20(underlying).safeTransfer(_recipient, _amount);
 
         emit WithdrawFromAztec(_recipient, _amount);
+    }
+
+    /**
+     * @notice Withdraw tokens to an authorized caller without L2->L1 message proof
+     * @dev Used by AavePortal which has already consumed the L2->L1 deposit intent message.
+     *      The L2 contract burns tokens and sends a deposit intent to AavePortal.
+     *      AavePortal consumes that message and then calls this function to claim tokens.
+     * @param _amount Amount of tokens to withdraw
+     * @param _recipient Address to receive the tokens
+     */
+    function withdraw(uint256 _amount, address _recipient) external override {
+        if (!authorizedWithdrawers[msg.sender]) {
+            revert UnauthorizedWithdrawer();
+        }
+        if (_recipient == address(0)) {
+            revert ZeroAddress();
+        }
+        if (_amount == 0) {
+            revert ZeroAmount();
+        }
+
+        // Release tokens to recipient
+        IERC20(underlying).safeTransfer(_recipient, _amount);
+
+        emit WithdrawFromAztec(_recipient, _amount);
+    }
+
+    // ============ Admin Functions ============
+
+    /**
+     * @notice Set or revoke authorized withdrawer status for an address
+     * @dev Only callable by owner. Used to authorize contracts (like AavePortal) to withdraw tokens
+     *      without L2->L1 message proof.
+     * @param _withdrawer Address to authorize or deauthorize
+     * @param _authorized Whether the address should be authorized
+     */
+    function setAuthorizedWithdrawer(address _withdrawer, bool _authorized) external onlyOwner {
+        if (_withdrawer == address(0)) {
+            revert ZeroAddress();
+        }
+        authorizedWithdrawers[_withdrawer] = _authorized;
+        emit AuthorizedWithdrawerSet(_withdrawer, _authorized);
     }
 }
