@@ -70,9 +70,8 @@ make install         # bun install + forge install for l1
 
 ## Local Development Environment
 
-Docker Compose runs two services:
-- `anvil-l1`: Ethereum L1 (port 8545)
-- `aztec-sandbox`: Aztec PXE (port 8081)
+Docker Compose runs one service:
+- `aztec-sandbox`: Includes Aztec PXE (port 8080) and internal Anvil L1 (port 8545)
 
 **Important**: L1 anvil must NOT have `--block-time` set - Aztec sandbox controls L1 timing.
 
