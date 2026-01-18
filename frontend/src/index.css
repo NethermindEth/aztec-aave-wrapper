@@ -1,9 +1,9 @@
+/* JetBrains Mono for terminal aesthetic - must be first */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* JetBrains Mono for terminal aesthetic */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
 
 @layer base {
   /* Dark theme by default for crypto/privacy aesthetic */

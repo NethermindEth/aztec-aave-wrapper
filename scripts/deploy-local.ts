@@ -215,6 +215,46 @@ function checkPxeRunning(): boolean {
 }
 
 // =============================================================================
+// Aztec Sandbox L1 Contract Addresses
+// =============================================================================
+
+interface SandboxL1Addresses {
+  inboxAddress: string;
+  outboxAddress: string;
+  registryAddress: string;
+}
+
+function fetchSandboxL1Addresses(): SandboxL1Addresses {
+  console.log("  Fetching Aztec sandbox L1 contract addresses...");
+
+  try {
+    const output = execSync(
+      `curl -sf -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"node_getL1ContractAddresses","params":[],"id":1}' ${PXE_URL}`,
+      { encoding: "utf-8", stdio: "pipe" }
+    );
+
+    const response = JSON.parse(output);
+    if (!response.result) {
+      throw new Error("No result in sandbox response");
+    }
+
+    const { inboxAddress, outboxAddress, registryAddress } = response.result;
+
+    if (!inboxAddress || !outboxAddress) {
+      throw new Error("Missing inbox or outbox address from sandbox");
+    }
+
+    console.log(`    ✓ Inbox: ${inboxAddress}`);
+    console.log(`    ✓ Outbox: ${outboxAddress}`);
+
+    return { inboxAddress, outboxAddress, registryAddress };
+  } catch (error) {
+    console.error("    ✗ Failed to fetch sandbox addresses:", error instanceof Error ? error.message : error);
+    throw error;
+  }
+}
+
+// =============================================================================
 // Aztec L2 Deployment
 // =============================================================================
 
@@ -352,6 +392,11 @@ async function main() {
     process.exit(1);
   }
 
+  if (!pxeRunning) {
+    console.error("\n✗ Aztec sandbox must be running to fetch L1 contract addresses. Start with: make devnet-up");
+    process.exit(1);
+  }
+
   const addresses: DeploymentAddresses = {
     l1: {
       mockUsdc: "",
@@ -405,11 +450,17 @@ async function main() {
   configureAToken(addresses.l1.mockLendingPool, addresses.l1.mockUsdc, mockAToken, L1_RPC);
 
   // ---------------------------------------------------------------------------
-  // Deploy Aztec Mock Contracts
+  // Get Aztec Sandbox L1 Addresses (for reference)
   // ---------------------------------------------------------------------------
-  console.log("\n  Deploying Aztec mock contracts...");
+  console.log("\n  Getting Aztec sandbox L1 addresses...");
 
-  // Deploy MockAztecOutbox (from test file)
+  // Fetch real addresses from Aztec sandbox
+  const sandboxAddresses = fetchSandboxL1Addresses();
+
+  // Deploy MockAztecOutbox for L2→L1 messages
+  // We use a mock because the real outbox requires waiting for L2 block proving,
+  // which adds latency to the dev workflow. The mock allows instant message validation.
+  console.log("\n  Deploying mock contracts for L2→L1 messaging...");
   const aztecOutbox = deployWithForge(
     "test/Portal.t.sol:MockAztecOutbox",
     [],
@@ -417,15 +468,14 @@ async function main() {
     "eth"
   );
 
-  // Deploy MockAztecInbox (from test file)
-  const aztecInbox = deployWithForge(
-    "test/Portal.t.sol:MockAztecInbox",
-    [],
-    L1_RPC,
-    "eth"
-  );
+  // Use the REAL Aztec inbox for L1→L2 messages
+  // This ensures messages sent from L1 are actually consumable on L2
+  console.log("\n  Using real Aztec inbox for L1→L2 messaging...");
+  const aztecInbox = sandboxAddresses.inboxAddress;
+  console.log(`    ✓ Inbox: ${aztecInbox}`);
 
-  // Deploy MockTokenPortal (from test file)
+  // Deploy MockTokenPortal (still needed for withdrawal token bridging back to L2)
+  // TODO: Replace with real token portal when available
   const tokenPortal = deployWithForge(
     "test/Portal.t.sol:MockTokenPortal",
     [],
@@ -462,6 +512,20 @@ async function main() {
   if (pxeRunning) {
     try {
       addresses.l2.aaveWrapper = await deployL2Contract(addresses.l1.portal);
+
+      // Update L1 portal with the actual L2 contract address
+      // This is required because L1 portal was deployed first with a placeholder address
+      console.log("\n  Updating L1 portal with L2 contract address...");
+      const updateL2AddressCmd = [
+        "cast send",
+        addresses.l1.portal,
+        '"setL2ContractAddress(bytes32)"',
+        addresses.l2.aaveWrapper,
+        "--rpc-url", L1_RPC,
+        "--private-key", DEPLOYER_PRIVATE_KEY,
+      ].join(" ");
+      execSync(updateL2AddressCmd, { encoding: "utf-8", stdio: "pipe" });
+      console.log(`    ✓ L2 address set: ${addresses.l2.aaveWrapper.slice(0, 18)}...`);
     } catch (error) {
       console.log(
         "    ⚠ L2 deployment failed (e2e tests will deploy):",

@@ -321,7 +321,7 @@ export function TopBar() {
         actions.setWallet({ l2Address: null });
       });
 
-      actions.setWallet({ l2Address: connection.address });
+      actions.setWallet({ l2Address: connection.address as `0x${string}` });
       setAztecWalletStatus("connected");
     } catch {
       setAztecWalletStatus("error");

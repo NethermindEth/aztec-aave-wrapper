@@ -5,15 +5,17 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:720-728.
  */
 
-import type {
-  Abi,
-  Account,
-  Address,
-  Chain,
-  Hex,
-  PublicClient,
-  Transport,
-  WalletClient,
+import {
+  keccak256,
+  toBytes,
+  type Abi,
+  type Account,
+  type Address,
+  type Chain,
+  type Hex,
+  type PublicClient,
+  type Transport,
+  type WalletClient,
 } from "viem";
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
 import type { DepositIntent, WithdrawIntent } from "./intent.js";
@@ -51,6 +53,7 @@ export const PORTAL_ABI = [
           { name: "originalDecimals", type: "uint8" },
           { name: "deadline", type: "uint64" },
           { name: "salt", type: "bytes32" },
+          { name: "secretHash", type: "bytes32" },
         ],
       },
       { name: "l2BlockNumber", type: "uint256" },
@@ -156,6 +159,15 @@ export const PORTAL_ABI = [
       { name: "status", type: "uint8", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "L2MessageSent",
+    inputs: [
+      { name: "intentId", type: "bytes32", indexed: true },
+      { name: "messageLeaf", type: "bytes32", indexed: false },
+      { name: "messageIndex", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
 // =============================================================================
@@ -168,6 +180,10 @@ export const PORTAL_ABI = [
 export interface ExecuteDepositResult {
   txHash: Hex;
   success: boolean;
+  /** The L1→L2 message leaf index (for L2 consumption) */
+  messageIndex: bigint;
+  /** The L1→L2 message leaf (hash computed by L1 inbox) */
+  messageLeaf: Hex;
 }
 
 /**
@@ -240,6 +256,7 @@ export async function executeDeposit(
     originalDecimals: intent.originalDecimals,
     deadline: intent.deadline,
     salt: intent.salt,
+    secretHash: intent.secretHash,
   };
 
   const txHash = await walletClient.writeContract({
@@ -249,11 +266,62 @@ export async function executeDeposit(
     args: [intentTuple, proof.l2BlockNumber, proof.leafIndex, proof.siblingPath],
   });
 
-  await publicClient.waitForTransactionReceipt({ hash: txHash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-  logSuccess(`Deposit executed (tx: ${txHash.slice(0, 10)}...)`);
+  // Extract message index from L2MessageSent event
+  // The event has signature: L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf, uint256 messageIndex)
+  const L2_MESSAGE_SENT_TOPIC = keccak256(toBytes("L2MessageSent(bytes32,bytes32,uint256)"));
+  console.log("L2MessageSent topic:", L2_MESSAGE_SENT_TOPIC);
 
-  return { txHash, success: true };
+  let messageIndex = 0n;
+  let messageLeaf = "0x0" as Hex;
+
+  // Find the L2MessageSent event in logs by matching the event topic
+  for (const log of receipt.logs) {
+    // Check if this log is from the portal contract and is the L2MessageSent event
+    if (
+      log.address.toLowerCase() === portalAddress.toLowerCase() &&
+      log.topics.length >= 2 &&
+      log.topics[0]?.toLowerCase() === L2_MESSAGE_SENT_TOPIC.toLowerCase()
+    ) {
+      // L2MessageSent has 1 indexed param (intentId) + 2 non-indexed (messageLeaf, messageIndex)
+      // Topic 0 is the event signature, Topic 1 is intentId
+      // Data contains messageLeaf (32 bytes) + messageIndex (32 bytes)
+      if (log.data && log.data.length >= 130) {
+        // 0x + 64 + 64 = 130 chars
+        try {
+          // Parse messageLeaf from the first 32 bytes of data
+          messageLeaf = `0x${log.data.slice(2, 66)}` as Hex;
+          // Parse messageIndex from the second 32 bytes of data
+          const messageIndexHex = `0x${log.data.slice(66, 130)}`;
+          messageIndex = BigInt(messageIndexHex);
+          console.log("=== L2MessageSent Event ===");
+          console.log("  intentId (topic[1]):", log.topics[1]);
+          console.log("  messageLeaf (L1 computed hash):", messageLeaf);
+          console.log("  messageIndex:", messageIndex.toString());
+          logInfo(`Extracted L1→L2 message index: ${messageIndex}`);
+          break;
+        } catch {
+          // Continue to next log if parsing fails
+        }
+      }
+    }
+  }
+
+  // Debug: log all events from portal for troubleshooting
+  if (messageIndex === 0n) {
+    console.log("Warning: Could not extract message index. Portal logs:");
+    for (const log of receipt.logs) {
+      if (log.address.toLowerCase() === portalAddress.toLowerCase()) {
+        console.log("  Topic[0]:", log.topics[0]);
+        console.log("  Data length:", log.data?.length);
+      }
+    }
+  }
+
+  logSuccess(`Deposit executed (tx: ${txHash.slice(0, 10)}..., messageIndex: ${messageIndex})`);
+
+  return { txHash, success: true, messageIndex, messageLeaf };
 }
 
 /**

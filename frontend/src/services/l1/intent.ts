@@ -32,6 +32,8 @@ export interface DepositIntent {
   deadline: bigint;
   /** Random salt for intent uniqueness and replay protection */
   salt: Hex;
+  /** Hash of secret for L1→L2 message consumption */
+  secretHash: Hex;
 }
 
 /**
@@ -88,6 +90,7 @@ export function computeDepositIntentHash(intent: DepositIntent): Hex {
         { type: "uint8" }, // originalDecimals
         { type: "uint64" }, // deadline
         { type: "bytes32" }, // salt
+        { type: "bytes32" }, // secretHash
       ],
       [
         intent.intentId,
@@ -97,6 +100,7 @@ export function computeDepositIntentHash(intent: DepositIntent): Hex {
         intent.originalDecimals,
         intent.deadline,
         intent.salt,
+        intent.secretHash,
       ]
     )
   );

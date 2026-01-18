@@ -11,7 +11,7 @@
  */
 
 import { type Accessor, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
-import type { Account, WalletClient } from "viem";
+import type { Account, Chain, Transport, WalletClient } from "viem";
 import type { L1Clients } from "../services/l1/client.js";
 import { createL1WalletClient, DevnetAccounts } from "../services/l1/client.js";
 import { balanceOf } from "../services/l1/tokens.js";

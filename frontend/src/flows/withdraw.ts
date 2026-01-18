@@ -232,23 +232,113 @@ async function waitForL2ToL1Message(
 }
 
 /**
- * Wait for L1→L2 message to be available.
+ * Wait for L1→L2 message to be available on L2.
  *
- * @param publicClient - L1 public client
- * @param _node - Aztec node client (unused in devnet mock mode)
+ * Uses the Aztec node's `getL1ToL2MessageBlock` API to poll for message availability
+ * when a message leaf is provided. Otherwise falls back to time-based waiting.
+ *
+ * @param publicClient - L1 public client (for mining blocks to advance time)
+ * @param node - Aztec node client
+ * @param messageLeaf - Optional message leaf hash from the L1 L2MessageSent event
+ * @param maxWaitMs - Maximum wait time in milliseconds (default: 180s)
+ * @param pollIntervalMs - Polling interval (default: 3s)
  */
 async function waitForL1ToL2Message(
   publicClient: PublicClient<Transport, Chain>,
-  _node: AztecNodeClient
+  node: AztecNodeClient,
+  messageLeaf?: Hex,
+  maxWaitMs = 180_000, // 3 minutes
+  pollIntervalMs = 3000 // 3 seconds between polls
 ): Promise<void> {
-  logSection("L1→L2", "Waiting for message to be available...");
+  logSection("L1→L2", "Waiting for message to be synced by archiver...");
 
-  // Mine an L1 block to finalize the message
-  await mineL1Block(publicClient);
+  const startTime = Date.now();
 
-  // In devnet with mocks, the message should be available immediately
-  // In production, we would poll the Aztec inbox for the message
-  logSuccess("L1→L2 message should now be available");
+  // Mine initial L1 blocks to trigger archiver sync
+  logInfo("Mining L1 blocks to trigger archiver sync...");
+  for (let i = 0; i < 3; i++) {
+    await mineL1Block(publicClient);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  // If we have the message leaf, use the proper API to poll
+  if (messageLeaf) {
+    logInfo(`Message leaf: ${messageLeaf}`);
+    const { Fr } = await import("@aztec/aztec.js/fields");
+    const messageLeafFr = Fr.fromString(messageLeaf);
+
+    let pollCount = 0;
+    while (Date.now() - startTime < maxWaitMs) {
+      pollCount++;
+
+      try {
+        const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
+
+        if (messageBlockNumber !== undefined) {
+          const currentBlock = await node.getBlockNumber();
+          logInfo(
+            `Message available at L2 block ${messageBlockNumber}, current block: ${currentBlock}`
+          );
+
+          if (currentBlock >= messageBlockNumber) {
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+            logSuccess(`L1→L2 message ready for consumption (${elapsed}s, block ${currentBlock})`);
+            return;
+          }
+
+          logInfo(`Waiting for L2 block ${messageBlockNumber} (current: ${currentBlock})...`);
+        } else {
+          logInfo(`Poll ${pollCount}: Message not yet synced by archiver...`);
+        }
+
+        await mineL1Block(publicClient);
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      } catch (error) {
+        logInfo(`Poll ${pollCount}: ${error instanceof Error ? error.message : "Error"}`);
+        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      }
+    }
+
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    logError(`Timeout after ${elapsed}s waiting for L1→L2 message`);
+    throw new Error(`L1→L2 message not available after ${elapsed}s. Message leaf: ${messageLeaf}`);
+  }
+
+  // Fallback: time-based waiting when no message leaf provided
+  logInfo("No message leaf provided, using time-based wait...");
+  const initialL2Block = await node.getBlockNumber();
+  let lastL2Block = initialL2Block;
+  let blocksAdvanced = 0;
+  const requiredBlockAdvance = 4;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const currentL2Block = await node.getBlockNumber();
+
+      if (currentL2Block > lastL2Block) {
+        blocksAdvanced += currentL2Block - lastL2Block;
+        lastL2Block = currentL2Block;
+        logInfo(`L2 block ${currentL2Block} (+${blocksAdvanced} total)`);
+
+        if (blocksAdvanced >= requiredBlockAdvance) {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          logSuccess(
+            `L1→L2 message should be consumable (${elapsed}s, ${blocksAdvanced} L2 blocks)`
+          );
+          return;
+        }
+      }
+
+      await mineL1Block(publicClient);
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    } catch (error) {
+      logInfo(`Polling... (${error instanceof Error ? error.message : ""})`);
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+  logInfo(`Wait completed (${elapsed}s, ${blocksAdvanced} L2 blocks) - proceeding anyway`);
 }
 
 /**
@@ -466,9 +556,13 @@ export async function executeWithdrawFlow(
 
     // Execute withdraw via relayer
     logSection("Privacy", "Relayer executing L1 withdraw (not user)");
+
+    // Generate unique leaf index from intent ID to avoid collision in mock outbox
+    const leafIndex = BigInt(withdrawIntent.intentId.slice(0, 18)) % 1000000n;
+
     const proof: MerkleProof = {
       l2BlockNumber,
-      leafIndex: 0n,
+      leafIndex,
       siblingPath: [],
     };
 

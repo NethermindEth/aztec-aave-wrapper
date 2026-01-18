@@ -2,7 +2,11 @@ pub mod types;
 mod test;
 
 use dep::aztec::macros::aztec;
-use dep::aztec::protocol_types::{address::AztecAddress, hash::poseidon2_hash, traits::ToField};
+use dep::aztec::protocol_types::{
+    address::AztecAddress,
+    hash::{poseidon2_hash, sha256_to_field},
+    traits::ToField,
+};
 
 use crate::types::DepositIntent;
 
@@ -86,7 +90,7 @@ pub fn compute_deposit_message_content(intent: DepositIntent, secret_hash: Field
 ///
 /// # Arguments
 /// * `intent_id` - The unique identifier of the deposit intent
-/// * `asset_id` - Identifier for the deposited asset
+/// * `asset_id` - Identifier for the deposited asset (L1 address as Field)
 /// * `shares` - Number of aToken shares received from the Aave deposit
 ///
 /// # Returns
@@ -97,9 +101,29 @@ pub fn compute_deposit_confirmation_content(
     shares: u128,
 ) -> Field {
     // Hash confirmation data for L1 to L2 message verification
-    // This must match the encoding used by the L1 portal when sending the message
-    // Owner is authenticated via secret, not included in hash
-    poseidon2_hash([intent_id, asset_id, shares as Field])
+    // Uses sha256_to_field to match L1 portal's Hash.sha256ToField
+    // Encoding: intentId (32) + asset as bytes32 (32) + shares as bytes32 (32) = 96 bytes
+    let mut data: [u8; 96] = [0; 96];
+
+    // Pack intent_id (first 32 bytes)
+    let intent_bytes: [u8; 32] = intent_id.to_be_bytes();
+    for i in 0..32 {
+        data[i] = intent_bytes[i];
+    }
+
+    // Pack asset_id (next 32 bytes)
+    let asset_bytes: [u8; 32] = asset_id.to_be_bytes();
+    for i in 0..32 {
+        data[32 + i] = asset_bytes[i];
+    }
+
+    // Pack shares as Field (last 32 bytes)
+    let shares_bytes: [u8; 32] = (shares as Field).to_be_bytes();
+    for i in 0..32 {
+        data[64 + i] = shares_bytes[i];
+    }
+
+    sha256_to_field(data)
 }
 
 /// Computes the message content hash for L1 to L2 withdrawal confirmation messages.
@@ -113,7 +137,7 @@ pub fn compute_deposit_confirmation_content(
 ///
 /// # Arguments
 /// * `intent_id` - The unique identifier of the withdrawal intent
-/// * `asset_id` - Identifier for the withdrawn asset
+/// * `asset_id` - Identifier for the withdrawn asset (L1 address as Field)
 /// * `amount` - Amount of tokens that were withdrawn
 ///
 /// # Returns
@@ -124,9 +148,29 @@ pub fn compute_withdraw_confirmation_content(
     amount: u128,
 ) -> Field {
     // Hash confirmation data for L1 to L2 message verification
-    // This must match the encoding used by the L1 portal when sending the message
-    // Owner is authenticated via secret, not included in hash
-    poseidon2_hash([intent_id, asset_id, amount as Field])
+    // Uses sha256_to_field to match L1 portal's Hash.sha256ToField
+    // Encoding: intentId (32) + asset as bytes32 (32) + amount as bytes32 (32) = 96 bytes
+    let mut data: [u8; 96] = [0; 96];
+
+    // Pack intent_id (first 32 bytes)
+    let intent_bytes: [u8; 32] = intent_id.to_be_bytes();
+    for i in 0..32 {
+        data[i] = intent_bytes[i];
+    }
+
+    // Pack asset_id (next 32 bytes)
+    let asset_bytes: [u8; 32] = asset_id.to_be_bytes();
+    for i in 0..32 {
+        data[32 + i] = asset_bytes[i];
+    }
+
+    // Pack amount as Field (last 32 bytes)
+    let amount_bytes: [u8; 32] = (amount as Field).to_be_bytes();
+    for i in 0..32 {
+        data[64 + i] = amount_bytes[i];
+    }
+
+    sha256_to_field(data)
 }
 
 use crate::types::WithdrawIntent;
@@ -171,10 +215,8 @@ pub(crate) contract AaveWrapper {
         macros::{events::event, functions::{external, initializer}, storage::storage},
         messages::message_delivery::MessageDelivery,
         note::{
-            constants::MAX_NOTES_PER_PAGE,
-            note_getter_options::NoteGetterOptions,
-            note_interface::NoteProperties,
-            note_viewer_options::NoteViewerOptions,
+            constants::MAX_NOTES_PER_PAGE, note_getter_options::NoteGetterOptions,
+            note_interface::NoteProperties, note_viewer_options::NoteViewerOptions,
         },
         protocol_types::{
             address::{AztecAddress, EthAddress},
@@ -944,7 +986,9 @@ pub(crate) contract AaveWrapper {
     /// This function runs in the user's PXE and only returns notes encrypted for them.
     /// No information is revealed on-chain.
     #[external("utility")]
-    unconstrained fn get_positions(owner: AztecAddress) -> pub BoundedVec<PositionReceiptNote, MAX_NOTES_PER_PAGE> {
+    unconstrained fn get_positions(
+        owner: AztecAddress,
+    ) -> pub BoundedVec<PositionReceiptNote, MAX_NOTES_PER_PAGE> {
         self.storage.receipts.at(owner).view_notes(NoteViewerOptions::new())
     }
 

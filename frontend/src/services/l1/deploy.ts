@@ -6,11 +6,14 @@
  *
  * This service handles deployment of:
  * - MockERC20 (USDC and aToken)
- * - MockAztecOutbox
- * - MockAztecInbox
+ * - MockAztecOutbox (for instant L2→L1 validation during dev)
  * - MockTokenPortal
  * - MockAaveLendingPool
  * - AztecAavePortalL1
+ *
+ * IMPORTANT: Uses the REAL Aztec inbox from the sandbox for L1→L2 messaging.
+ * The mock inbox does NOT work - messages sent to mock inbox are not
+ * consumable on L2.
  */
 
 import {
@@ -44,7 +47,6 @@ export interface ContractArtifact {
 export interface L1DeploymentArtifacts {
   mockERC20: ContractArtifact;
   mockAztecOutbox: ContractArtifact;
-  mockAztecInbox: ContractArtifact;
   mockTokenPortal: ContractArtifact;
   mockAaveLendingPool: ContractArtifact;
   aztecAavePortalL1: ContractArtifact;
@@ -60,8 +62,22 @@ export interface L1Addresses {
   mockAToken: Address;
   mockLendingPool: Address;
   mockAztecOutbox: Address;
-  mockAztecInbox: Address;
+  /** Real Aztec inbox address from sandbox (required for L1→L2 messaging) */
+  aztecInbox: Address;
   mockTokenPortal: Address;
+}
+
+/**
+ * Real Aztec L1 contract addresses from the sandbox.
+ * Required for proper L1↔L2 messaging.
+ */
+export interface AztecL1Addresses {
+  /** Aztec inbox address for L1→L2 messages (REQUIRED) */
+  inboxAddress: Address;
+  /** Aztec outbox address for L2→L1 messages (optional, mock used for instant dev) */
+  outboxAddress?: Address;
+  /** Aztec registry address */
+  registryAddress?: Address;
 }
 
 /**
@@ -72,6 +88,8 @@ export interface L1DeploymentConfig {
   l2ContractAddress: Hex;
   /** Owner/admin address for portal */
   ownerAddress: Address;
+  /** Real Aztec L1 addresses from sandbox (REQUIRED for L1→L2 messaging) */
+  aztecL1Addresses: AztecL1Addresses;
 }
 
 /**
@@ -162,16 +180,15 @@ async function deployMockERC20(
  * Deployment order (matches e2e/scripts/full-flow.ts):
  * 1. MockERC20 (USDC)
  * 2. MockERC20 (aUSDC/aToken)
- * 3. MockAztecOutbox
- * 4. MockAztecInbox
- * 5. MockTokenPortal
- * 6. MockAaveLendingPool (needs USDC + aToken addresses)
- * 7. AztecAavePortalL1 (needs all mock addresses)
+ * 3. MockAztecOutbox (for instant L2→L1 validation)
+ * 4. MockTokenPortal
+ * 5. MockAaveLendingPool (needs USDC + aToken addresses)
+ * 6. AztecAavePortalL1 (uses REAL inbox from sandbox)
  *
  * @param publicClient - Viem public client
  * @param walletClient - Viem wallet client with deployer account
  * @param artifacts - Pre-loaded contract artifacts
- * @param config - Deployment configuration
+ * @param config - Deployment configuration (MUST include aztecL1Addresses)
  * @returns All deployed contract addresses
  *
  * @example
@@ -183,6 +200,7 @@ async function deployMockERC20(
  *   {
  *     l2ContractAddress: l2Address,
  *     ownerAddress: deployerAddress,
+ *     aztecL1Addresses: { inboxAddress: realInboxFromSandbox },
  *   }
  * );
  * ```
@@ -194,6 +212,17 @@ export async function deployL1Contracts(
   config: L1DeploymentConfig
 ): Promise<L1Addresses> {
   logInfo("Starting L1 contract deployment...");
+
+  // Validate required real inbox address
+  if (!config.aztecL1Addresses?.inboxAddress) {
+    throw new Error(
+      "Real Aztec inbox address is required. " +
+        "Fetch it from node.getNodeInfo().l1ContractAddresses.inboxAddress"
+    );
+  }
+
+  const aztecInbox = config.aztecL1Addresses.inboxAddress;
+  logInfo(`Using real Aztec inbox: ${aztecInbox}`);
 
   // 1. Deploy MockERC20 (USDC)
   const { address: mockUsdc } = await deployMockERC20(
@@ -216,6 +245,8 @@ export async function deployL1Contracts(
   );
 
   // 3. Deploy MockAztecOutbox
+  // Note: We use mock outbox for instant L2→L1 message validation during dev.
+  // The real outbox requires waiting for L2 block proving.
   const { address: mockAztecOutbox } = await deployContract(
     publicClient,
     walletClient,
@@ -224,16 +255,7 @@ export async function deployL1Contracts(
     "MockAztecOutbox"
   );
 
-  // 4. Deploy MockAztecInbox
-  const { address: mockAztecInbox } = await deployContract(
-    publicClient,
-    walletClient,
-    artifacts.mockAztecInbox,
-    [],
-    "MockAztecInbox"
-  );
-
-  // 5. Deploy MockTokenPortal
+  // 4. Deploy MockTokenPortal
   const { address: mockTokenPortal } = await deployContract(
     publicClient,
     walletClient,
@@ -242,7 +264,7 @@ export async function deployL1Contracts(
     "MockTokenPortal"
   );
 
-  // 6. Deploy MockAaveLendingPool
+  // 5. Deploy MockAaveLendingPool
   const { address: mockLendingPool } = await deployContract(
     publicClient,
     walletClient,
@@ -251,7 +273,7 @@ export async function deployL1Contracts(
     "MockAaveLendingPool"
   );
 
-  // 7. Deploy AztecAavePortalL1
+  // 6. Deploy AztecAavePortalL1
   // Pad L2 address to bytes32 as required by the portal constructor
   const l2AddressBytes32 = pad(config.l2ContractAddress, { size: 32 });
 
@@ -261,7 +283,7 @@ export async function deployL1Contracts(
     artifacts.aztecAavePortalL1,
     [
       mockAztecOutbox,
-      mockAztecInbox,
+      aztecInbox, // REAL Aztec inbox - required for L1→L2 messaging
       mockTokenPortal,
       mockLendingPool,
       l2AddressBytes32,
@@ -278,7 +300,7 @@ export async function deployL1Contracts(
     mockAToken,
     mockLendingPool,
     mockAztecOutbox,
-    mockAztecInbox,
+    aztecInbox,
     mockTokenPortal,
   };
 }
@@ -329,7 +351,6 @@ export function createArtifact(rawArtifact: {
 export const ARTIFACT_PATHS = {
   mockERC20: "MockERC20.sol/MockERC20.json",
   mockAztecOutbox: "Portal.t.sol/MockAztecOutbox.json",
-  mockAztecInbox: "Portal.t.sol/MockAztecInbox.json",
   mockTokenPortal: "Portal.t.sol/MockTokenPortal.json",
   mockAaveLendingPool: "Portal.t.sol/MockAaveLendingPool.json",
   aztecAavePortalL1: "AztecAavePortalL1.sol/AztecAavePortalL1.json",
@@ -379,26 +400,18 @@ export async function fetchArtifact(
  * ```
  */
 export async function fetchAllArtifacts(baseUrl: string): Promise<L1DeploymentArtifacts> {
-  const [
-    mockERC20,
-    mockAztecOutbox,
-    mockAztecInbox,
-    mockTokenPortal,
-    mockAaveLendingPool,
-    aztecAavePortalL1,
-  ] = await Promise.all([
-    fetchArtifact(baseUrl, ARTIFACT_PATHS.mockERC20),
-    fetchArtifact(baseUrl, ARTIFACT_PATHS.mockAztecOutbox),
-    fetchArtifact(baseUrl, ARTIFACT_PATHS.mockAztecInbox),
-    fetchArtifact(baseUrl, ARTIFACT_PATHS.mockTokenPortal),
-    fetchArtifact(baseUrl, ARTIFACT_PATHS.mockAaveLendingPool),
-    fetchArtifact(baseUrl, ARTIFACT_PATHS.aztecAavePortalL1),
-  ]);
+  const [mockERC20, mockAztecOutbox, mockTokenPortal, mockAaveLendingPool, aztecAavePortalL1] =
+    await Promise.all([
+      fetchArtifact(baseUrl, ARTIFACT_PATHS.mockERC20),
+      fetchArtifact(baseUrl, ARTIFACT_PATHS.mockAztecOutbox),
+      fetchArtifact(baseUrl, ARTIFACT_PATHS.mockTokenPortal),
+      fetchArtifact(baseUrl, ARTIFACT_PATHS.mockAaveLendingPool),
+      fetchArtifact(baseUrl, ARTIFACT_PATHS.aztecAavePortalL1),
+    ]);
 
   return {
     mockERC20,
     mockAztecOutbox,
-    mockAztecInbox,
     mockTokenPortal,
     mockAaveLendingPool,
     aztecAavePortalL1,

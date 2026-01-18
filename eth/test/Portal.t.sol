@@ -10,6 +10,7 @@ import { IAztecInbox } from "../contracts/interfaces/IAztecInbox.sol";
 import { ILendingPool } from "../contracts/interfaces/ILendingPool.sol";
 import { ITokenPortal } from "../contracts/interfaces/ITokenPortal.sol";
 import { MockERC20 } from "../contracts/mocks/MockERC20.sol";
+import { DataStructures } from "../contracts/libraries/DataStructures.sol";
 
 /**
  * @title PortalTest
@@ -69,7 +70,8 @@ contract PortalTest is Test {
             amount: 1000e18,
             originalDecimals: 18,
             deadline: uint64(block.timestamp + 1 hours),
-            salt: keccak256("salt_1")
+            salt: keccak256("salt_1"),
+            secretHash: keccak256("test_secret_1")
         });
 
         // Setup valid withdraw intent
@@ -285,7 +287,7 @@ contract PortalTest is Test {
         bytes32 messageHash = IntentLib.hashDepositIntent(validDepositIntent);
         aztecOutbox.setMessageValid(messageHash, l2BlockNumber, false);
 
-        vm.expectRevert("Failed to consume outbox message");
+        vm.expectRevert("Message not valid");
         vm.prank(relayer);
         portal.executeDeposit(validDepositIntent, l2BlockNumber, leafIndex, validSiblingPath);
     }
@@ -651,57 +653,112 @@ contract PortalTest is Test {
 // ============ Mock Contracts ============
 
 contract MockAztecOutbox is IAztecOutbox {
+    // Track valid message content hashes by block number
     mapping(bytes32 => mapping(uint256 => bool)) public validMessages;
-    mapping(bytes32 => bool) public consumed;
+    // Track consumed messages by (blockNumber, leafIndex)
+    mapping(uint256 => mapping(uint256 => bool)) public consumedAtCheckpoint;
 
-    function setMessageValid(bytes32 message, uint256 blockNumber, bool valid) external {
-        validMessages[message][blockNumber] = valid;
+    // Aztec instance version (default to 1)
+    uint256 public constant AZTEC_VERSION = 1;
+
+    /**
+     * @notice Set a message content as valid for testing
+     * @param messageContent The message content hash
+     * @param blockNumber The L2 block number
+     * @param valid Whether the message should be considered valid
+     */
+    function setMessageValid(bytes32 messageContent, uint256 blockNumber, bool valid) external {
+        validMessages[messageContent][blockNumber] = valid;
     }
 
+    /**
+     * @notice Consume a message from the outbox (matches real Aztec interface)
+     * @param _message The L2 to L1 message struct
+     * @param _l2BlockNumber The L2 block number (checkpoint)
+     * @param _leafIndex The index of the message in the merkle tree
+     * @param _path Merkle proof (ignored in mock)
+     */
     function consume(
-        bytes32 _message,
+        DataStructures.L2ToL1Msg calldata _message,
         uint256 _l2BlockNumber,
-        uint256, /* _leafIndex */
-        bytes32[] calldata /* _path */
-    ) external returns (bool) {
-        if (!validMessages[_message][_l2BlockNumber]) {
-            return false;
-        }
-        consumed[_message] = true;
-        return true;
+        uint256 _leafIndex,
+        bytes32[] calldata _path
+    ) external override {
+        // Silence unused variable warning
+        _path;
+
+        // Verify the message content is marked as valid
+        require(validMessages[_message.content][_l2BlockNumber], "Message not valid");
+
+        // Verify not already consumed
+        require(!consumedAtCheckpoint[_l2BlockNumber][_leafIndex], "Already consumed");
+
+        // Mark as consumed
+        consumedAtCheckpoint[_l2BlockNumber][_leafIndex] = true;
     }
 
-    function hasMessageBeenConsumed(
-        bytes32 _message
-    ) external view returns (bool) {
-        return consumed[_message];
+    /**
+     * @notice Check if a message has been consumed at a checkpoint
+     */
+    function hasMessageBeenConsumedAtCheckpoint(
+        uint256 _l2BlockNumber,
+        uint256 _leafIndex
+    ) external view override returns (bool) {
+        return consumedAtCheckpoint[_l2BlockNumber][_leafIndex];
     }
 
-    function getRootForBlock(
+    /**
+     * @notice Get root data for a block (returns dummy data in mock)
+     */
+    function getRootData(
         uint256 /* _l2BlockNumber */
-    ) external pure returns (bytes32) {
-        return bytes32(0);
+    ) external pure override returns (bytes32, uint256) {
+        return (bytes32(0), 0);
     }
 }
 
 contract MockAztecInbox is IAztecInbox {
     bool public messageSent;
-    bytes32 public lastRecipient;
+    bytes32 public lastRecipientActor;
+    uint256 public lastRecipientVersion;
     bytes32 public lastContent;
+    bytes32 public lastSecretHash;
+    uint256 public messageCount;
 
-    function sendL2Message(bytes32 _recipient, bytes32 _content) external returns (bytes32) {
-        messageSent = true;
-        lastRecipient = _recipient;
-        lastContent = _content;
-        return keccak256(abi.encode(_recipient, _content));
+    /// @notice Mock version - matches test expectation
+    uint256 public constant VERSION_VALUE = 1;
+
+    function VERSION() external pure override returns (uint256) {
+        return VERSION_VALUE;
     }
 
-    function getRoot() external pure returns (bytes32) {
+    /**
+     * @notice Send an L1->L2 message (matches real Aztec interface)
+     */
+    function sendL2Message(
+        DataStructures.L2Actor memory _recipient,
+        bytes32 _content,
+        bytes32 _secretHash
+    ) external override returns (bytes32 entryKey, uint256 index) {
+        messageSent = true;
+        lastRecipientActor = _recipient.actor;
+        lastRecipientVersion = _recipient.version;
+        lastContent = _content;
+        lastSecretHash = _secretHash;
+
+        messageCount++;
+        entryKey = keccak256(abi.encode(_recipient.actor, _recipient.version, _content, _secretHash));
+        index = messageCount - 1;
+
+        return (entryKey, index);
+    }
+
+    function getRoot() external pure override returns (bytes32) {
         return bytes32(0);
     }
 
-    function getSize() external pure returns (uint256) {
-        return 0;
+    function getSize() external view override returns (uint256) {
+        return messageCount;
     }
 }
 

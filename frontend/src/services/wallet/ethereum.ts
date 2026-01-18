@@ -21,6 +21,17 @@ import {
 } from "viem";
 import { foundry } from "viem/chains";
 
+// Extend Window interface for ethereum provider
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      on: (event: string, handler: (...args: unknown[]) => void) => void;
+      removeListener: (event: string, handler: (...args: unknown[]) => void) => void;
+    };
+  }
+}
+
 /**
  * Check if MetaMask or another injected provider is available
  */

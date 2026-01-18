@@ -77,7 +77,8 @@ interface L1Addresses {
   mockAToken: Address;
   mockLendingPool: Address;
   mockAztecOutbox: Address;
-  mockAztecInbox: Address;
+  /** Real Aztec inbox address from sandbox (required for L1→L2 messaging) */
+  aztecInbox: Address;
   mockTokenPortal: Address;
 }
 
@@ -221,14 +222,15 @@ function loadArtifact(contractPath: string, contractName: string) {
 async function deployL1Contracts(
   publicClient: any,
   deployerWallet: any,
-  l2ContractAddress: Hex
+  l2ContractAddress: Hex,
+  aztecInboxAddress: Address
 ): Promise<L1Addresses> {
   log("L1", "Deploying L1 contracts...");
+  log("L1", "Using real Aztec inbox", { address: aztecInboxAddress });
 
-  // Load artifacts
+  // Load artifacts (no MockAztecInbox - we use real inbox from sandbox)
   const mockERC20Artifact = loadArtifact("MockERC20.sol", "MockERC20");
   const mockOutboxArtifact = loadArtifact("Portal.t.sol", "MockAztecOutbox");
-  const mockInboxArtifact = loadArtifact("Portal.t.sol", "MockAztecInbox");
   const mockTokenPortalArtifact = loadArtifact("Portal.t.sol", "MockTokenPortal");
   const mockLendingPoolArtifact = loadArtifact("Portal.t.sol", "MockAaveLendingPool");
   const portalArtifact = loadArtifact("AztecAavePortalL1.sol", "AztecAavePortalL1");
@@ -272,18 +274,8 @@ async function deployL1Contracts(
   const mockAztecOutbox = outboxReceipt.contractAddress!;
   log("L1", "MockAztecOutbox deployed", { address: mockAztecOutbox });
 
-  // Deploy MockAztecInbox
-  log("L1", "Deploying MockAztecInbox...");
-  const inboxHash = await deployerWallet.deployContract({
-    account: ACCOUNTS.deployer,
-    chain: foundry,
-    abi: mockInboxArtifact.abi,
-    bytecode: mockInboxArtifact.bytecode,
-    args: [],
-  });
-  const inboxReceipt = await publicClient.waitForTransactionReceipt({ hash: inboxHash });
-  const mockAztecInbox = inboxReceipt.contractAddress!;
-  log("L1", "MockAztecInbox deployed", { address: mockAztecInbox });
+  // Note: Using REAL Aztec inbox from sandbox (aztecInboxAddress parameter)
+  // MockAztecInbox does NOT work - messages sent to mock are not consumable on L2
 
   // Deploy MockTokenPortal
   log("L1", "Deploying MockTokenPortal...");
@@ -321,7 +313,7 @@ async function deployL1Contracts(
     bytecode: portalArtifact.bytecode,
     args: [
       mockAztecOutbox,
-      mockAztecInbox,
+      aztecInboxAddress,  // REAL Aztec inbox - required for L1→L2 messaging
       mockTokenPortal,
       mockLendingPool,
       l2AddressBytes32,
@@ -338,7 +330,7 @@ async function deployL1Contracts(
     mockAToken,
     mockLendingPool,
     mockAztecOutbox,
-    mockAztecInbox,
+    aztecInbox: aztecInboxAddress,
     mockTokenPortal,
   };
 }
@@ -515,6 +507,7 @@ function computeDepositIntentHash(intent: {
   originalDecimals: number;
   deadline: bigint;
   salt: Hex;
+  secretHash: Hex;
 }): Hex {
   // Match Solidity: keccak256(abi.encode(...))
   return keccak256(
@@ -527,6 +520,7 @@ function computeDepositIntentHash(intent: {
         { type: "uint8" },
         { type: "uint64" },
         { type: "bytes32" },
+        { type: "bytes32" },
       ],
       [
         intent.intentId,
@@ -536,6 +530,7 @@ function computeDepositIntentHash(intent: {
         intent.originalDecimals,
         intent.deadline,
         intent.salt,
+        intent.secretHash,
       ]
     )
   );
@@ -699,6 +694,8 @@ async function executeDepositFlow(
   const salt = keccak256(encodePacked(["uint256"], [BigInt(Date.now())]));
   const intentIdHex = pad(toHex(BigInt(intentId.toString())), { size: 32 });
   const ownerHashHex = pad(toHex(ownerHash), { size: 32 });
+  // Convert Fr secretHash to hex for L1 - ensures L1→L2 message uses same hash
+  const secretHashHex = pad(toHex(secretHash.toBigInt()), { size: 32 });
 
   const depositIntent = {
     intentId: intentIdHex,
@@ -708,6 +705,7 @@ async function executeDepositFlow(
     originalDecimals: CONFIG.originalDecimals,
     deadline: deadline,
     salt: salt,
+    secretHash: secretHashHex,
   };
 
   // Compute message hash and set it as valid in mock outbox
@@ -947,17 +945,44 @@ async function main() {
     const node = await setupL2Client(aztec);
     const { wallet, address } = await setupL2Wallet(aztec, node);
 
-    // Deploy L2 contract first (we need the address for L1 portal)
-    // Use a placeholder portal address initially
-    const placeholderPortal = "0x0000000000000000000000000000000000000001" as Address;
-    const l2Contract = await deployL2Contract(wallet, address, placeholderPortal);
+    // Fetch real Aztec L1 contract addresses from the sandbox
+    // IMPORTANT: We must use the real inbox for L1→L2 messages to work
+    log("L1", "Fetching real Aztec inbox address from sandbox...");
+    const nodeInfo = await node.getNodeInfo();
+    const realInboxAddress = nodeInfo.l1ContractAddresses.inboxAddress.toString() as Address;
+    log("L1", "Got real Aztec inbox", { address: realInboxAddress });
 
-    // Deploy L1 contracts with L2 contract address
+    // Deploy L1 contracts first with placeholder L2 address
+    // This allows us to get the portal address for L2 deployment
+    const placeholderL2 = "0x0000000000000000000000000000000000000000000000000000000000000001" as Hex;
     const l1Addresses = await deployL1Contracts(
       l1.publicClient,
       l1.deployerWallet,
-      l2Contract.address.toString() as Hex
+      placeholderL2,
+      realInboxAddress
     );
+    log("Deploy", "L1 contracts deployed", { portal: l1Addresses.portal, realInbox: realInboxAddress });
+
+    // Deploy L2 contract with actual portal address
+    const l2Contract = await deployL2Contract(wallet, address, l1Addresses.portal);
+    log("Deploy", "L2 contract deployed", { address: l2Contract.address.toString() });
+
+    // Update L1 portal's L2 reference
+    log("Deploy", "Updating L1 portal's L2 reference...");
+    const setL2Tx = await l1.deployerWallet.writeContract({
+      chain: foundry,
+      address: l1Addresses.portal,
+      abi: [{
+        type: "function",
+        name: "setL2ContractAddress",
+        inputs: [{ name: "_l2ContractAddress", type: "bytes32" }],
+        outputs: [],
+        stateMutability: "nonpayable",
+      }] as const,
+      functionName: "setL2ContractAddress",
+      args: [l2Contract.address.toString() as Hex],
+    });
+    await l1.publicClient.waitForTransactionReceipt({ hash: setL2Tx });
 
     log("Deploy", "All contracts deployed", {
       l2AaveWrapper: l2Contract.address.toString(),

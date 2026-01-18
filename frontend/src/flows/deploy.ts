@@ -1,17 +1,17 @@
 /**
  * Contract Deployment Orchestrator
  *
- * Coordinates L1 and L2 contract deployment matching the main() flow
- * from e2e/scripts/full-flow.ts.
+ * Coordinates L1 and L2 contract deployment with correct ordering.
  *
- * DEPLOYMENT ORDER (critical for cross-chain references):
- * 1. Deploy L2 contract first with placeholder portal address
- * 2. Deploy L1 contracts with actual L2 contract address
+ * DEPLOYMENT ORDER (critical for cross-chain messaging to work):
+ * 1. Deploy L1 contracts first with placeholder L2 address
+ * 2. Deploy L2 contract with actual L1 portal address
+ * 3. Update L1 portal's L2 contract reference
  *
- * Note: The L2 contract uses a placeholder portal address during deployment.
- * This is a workaround since we need the L2 address for L1 portal constructor,
- * but L2 also needs the portal address. In production, this would require
- * a two-phase deployment or address precomputation.
+ * This order ensures the L2 contract has the correct portal address,
+ * which is required for consume_l1_to_l2_message to work correctly.
+ * The L1 portal has a setL2ContractAddress function that allows updating
+ * the L2 reference after deployment.
  */
 
 import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClient } from "viem";
@@ -19,11 +19,13 @@ import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClien
 // L1 Services
 import {
   deployL1Contracts,
+  type AztecL1Addresses,
   type L1Addresses,
   type L1DeploymentArtifacts,
 } from "../services/l1/deploy.js";
 
 // L2 Services
+import { createL2NodeClient, type AztecNodeClient } from "../services/l2/client.js";
 import { type AaveWrapperContract, deployL2Contract } from "../services/l2/deploy.js";
 import type { AztecAddress, TestWallet } from "../services/l2/wallet.js";
 
@@ -35,17 +37,56 @@ import { logError, logInfo, logSection, logStep, logSuccess } from "../store/log
 // =============================================================================
 
 /**
- * Placeholder portal address used during L2 deployment.
- * This is required because:
- * - L1 portal needs L2 contract address in constructor
- * - L2 contract needs portal address for cross-chain messaging
- * - We deploy L2 first to get its address for L1
- *
- * In production, this would be handled via:
- * - Address precomputation (CREATE2)
- * - Two-phase deployment with portal address update
+ * Placeholder L2 address used during L1 deployment.
+ * The L1 portal's setL2ContractAddress function is used after L2 deployment
+ * to update this reference.
  */
-export const PLACEHOLDER_PORTAL_ADDRESS: Address = "0x0000000000000000000000000000000000000001";
+export const PLACEHOLDER_L2_ADDRESS: Hex =
+  "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+// =============================================================================
+// Aztec L1 Address Fetching
+// =============================================================================
+
+/**
+ * Fetch real Aztec L1 contract addresses from the sandbox/node.
+ *
+ * IMPORTANT: These addresses are required for L1→L2 messaging to work.
+ * The portal must use the REAL Aztec inbox, not a mock.
+ *
+ * @param node - Connected Aztec node client (optional, will create one if not provided)
+ * @returns Real Aztec L1 addresses including inbox
+ *
+ * @example
+ * ```ts
+ * const aztecL1Addresses = await fetchAztecL1Addresses();
+ * console.log('Real inbox:', aztecL1Addresses.inboxAddress);
+ * ```
+ */
+export async function fetchAztecL1Addresses(node?: AztecNodeClient): Promise<AztecL1Addresses> {
+  logInfo("Fetching real Aztec L1 contract addresses from sandbox...");
+
+  const aztecNode = node ?? (await createL2NodeClient());
+  const nodeInfo = await aztecNode.getNodeInfo();
+
+  const l1Addresses = nodeInfo.l1ContractAddresses;
+
+  if (!l1Addresses?.inboxAddress) {
+    throw new Error(
+      "Failed to fetch Aztec inbox address from node. " + "Make sure the Aztec sandbox is running."
+    );
+  }
+
+  const aztecL1Addresses: AztecL1Addresses = {
+    inboxAddress: l1Addresses.inboxAddress.toString() as Address,
+    outboxAddress: l1Addresses.outboxAddress?.toString() as Address | undefined,
+    registryAddress: l1Addresses.registryAddress?.toString() as Address | undefined,
+  };
+
+  logSuccess(`Real Aztec inbox: ${aztecL1Addresses.inboxAddress}`);
+
+  return aztecL1Addresses;
+}
 
 // =============================================================================
 // Types
@@ -61,6 +102,8 @@ export interface L1DeploymentContext {
   deployerWallet: WalletClient<Transport, Chain, Account>;
   /** Contract artifacts for deployment */
   artifacts: L1DeploymentArtifacts;
+  /** Real Aztec L1 addresses (REQUIRED for L1→L2 messaging) */
+  aztecL1Addresses: AztecL1Addresses;
 }
 
 /**
@@ -104,22 +147,61 @@ export class DeploymentError extends Error {
 // =============================================================================
 
 /**
- * Deploy L2 contract with placeholder portal address.
+ * Deploy L1 contracts with placeholder L2 address.
  *
- * This is step 1 of the deployment process. The L2 contract is deployed
- * first so we can use its address when deploying the L1 portal.
+ * This is step 1 of the deployment process. L1 contracts are deployed first
+ * so we can use the portal address when deploying L2.
+ *
+ * Uses the REAL Aztec inbox address from the sandbox for proper L1→L2 messaging.
+ *
+ * @param context - L1 deployment context (must include aztecL1Addresses)
+ * @returns All deployed L1 addresses
+ */
+async function deployL1WithPlaceholder(context: L1DeploymentContext): Promise<L1Addresses> {
+  logSection("L1", "Deploying portal and mock contracts with placeholder L2 address");
+  logInfo(`Placeholder L2: ${PLACEHOLDER_L2_ADDRESS.slice(0, 20)}...`);
+  logInfo(`Using real Aztec inbox: ${context.aztecL1Addresses.inboxAddress}`);
+
+  const ownerAddress = context.deployerWallet.account.address;
+
+  const addresses = await deployL1Contracts(
+    context.publicClient,
+    context.deployerWallet,
+    context.artifacts,
+    {
+      l2ContractAddress: PLACEHOLDER_L2_ADDRESS,
+      ownerAddress,
+      aztecL1Addresses: context.aztecL1Addresses,
+    }
+  );
+
+  logSuccess(`Portal deployed at ${addresses.portal}`);
+  logSuccess(`MockUSDC deployed at ${addresses.mockUsdc}`);
+  logSuccess(`MockAToken deployed at ${addresses.mockAToken}`);
+  logSuccess(`Real Aztec inbox: ${addresses.aztecInbox}`);
+
+  return addresses;
+}
+
+/**
+ * Deploy L2 contract with the actual L1 portal address.
+ *
+ * This is step 2 of the deployment process. Now that we have the L1
+ * portal address, we can deploy the L2 contract with the correct reference.
  *
  * @param context - L2 deployment context
+ * @param portalAddress - L1 portal address to reference in L2 contract
  * @returns Deployed contract and address
  */
-async function deployL2WithPlaceholder(
-  context: L2DeploymentContext
+async function deployL2WithPortalAddress(
+  context: L2DeploymentContext,
+  portalAddress: Address
 ): Promise<{ contract: AaveWrapperContract; address: AztecAddress }> {
-  logSection("L2", "Deploying AaveWrapper with placeholder portal address");
-  logInfo(`Placeholder portal: ${PLACEHOLDER_PORTAL_ADDRESS}`);
+  logSection("L2", "Deploying AaveWrapper with actual portal address");
+  logInfo(`Portal address: ${portalAddress}`);
 
   const result = await deployL2Contract(context.wallet, context.walletAddress, {
-    portalAddress: PLACEHOLDER_PORTAL_ADDRESS,
+    portalAddress: portalAddress,
   });
 
   logSuccess(`L2 contract deployed at ${result.address.toString()}`);
@@ -131,42 +213,44 @@ async function deployL2WithPlaceholder(
 }
 
 /**
- * Deploy L1 contracts with the actual L2 address.
+ * Update L1 portal's L2 contract reference.
  *
- * This is step 2 of the deployment process. Now that we have the L2
- * contract address, we can deploy the L1 portal with the correct reference.
+ * This is step 3 of the deployment process. After both contracts are deployed,
+ * we update the L1 portal to reference the actual L2 contract address.
  *
  * @param context - L1 deployment context
- * @param l2Address - L2 contract address to reference in portal
- * @returns All deployed L1 addresses
+ * @param portalAddress - L1 portal address
+ * @param l2Address - Actual L2 contract address
  */
-async function deployL1WithL2Address(
+async function updateL1PortalL2Reference(
   context: L1DeploymentContext,
+  portalAddress: Address,
   l2Address: AztecAddress
-): Promise<L1Addresses> {
-  logSection("L1", "Deploying portal and mock contracts");
+): Promise<void> {
+  logSection("L1", "Updating portal's L2 contract reference");
 
   const l2AddressHex = l2Address.toString() as Hex;
-  const ownerAddress = context.deployerWallet.account.address;
+  logInfo(`Setting L2 contract address: ${l2AddressHex.slice(0, 20)}...`);
 
-  logInfo(`L2 contract reference: ${l2AddressHex.slice(0, 20)}...`);
-  logInfo(`Portal owner: ${ownerAddress}`);
-
-  const addresses = await deployL1Contracts(
-    context.publicClient,
-    context.deployerWallet,
-    context.artifacts,
+  const PORTAL_ABI = [
     {
-      l2ContractAddress: l2AddressHex,
-      ownerAddress,
-    }
-  );
+      type: "function",
+      name: "setL2ContractAddress",
+      inputs: [{ name: "_l2ContractAddress", type: "bytes32" }],
+      outputs: [],
+      stateMutability: "nonpayable",
+    },
+  ] as const;
 
-  logSuccess(`Portal deployed at ${addresses.portal}`);
-  logSuccess(`MockUSDC deployed at ${addresses.mockUsdc}`);
-  logSuccess(`MockAToken deployed at ${addresses.mockAToken}`);
+  const txHash = await context.deployerWallet.writeContract({
+    address: portalAddress,
+    abi: PORTAL_ABI,
+    functionName: "setL2ContractAddress",
+    args: [l2AddressHex],
+  });
 
-  return addresses;
+  await context.publicClient.waitForTransactionReceipt({ hash: txHash });
+  logSuccess("L1 portal's L2 reference updated");
 }
 
 // =============================================================================
@@ -177,13 +261,12 @@ async function deployL1WithL2Address(
  * Deploy all contracts in the correct order.
  *
  * This orchestrates the full deployment process:
- * 1. Deploy L2 contract with placeholder portal address
- * 2. Deploy L1 contracts with actual L2 address
+ * 1. Deploy L1 contracts with placeholder L2 address
+ * 2. Deploy L2 contract with actual L1 portal address
+ * 3. Update L1 portal's L2 contract reference
  *
- * Note: The placeholder portal address workaround means the L2 contract
- * will have an incorrect portal reference. For devnet testing, this is
- * acceptable as we use mocked cross-chain messaging. In production,
- * this would require address precomputation or a portal update mechanism.
+ * This order ensures the L2 contract has the correct portal address,
+ * which is required for cross-chain messaging to work correctly.
  *
  * @param l1Context - L1 deployment context with clients and artifacts
  * @param l2Context - L2 deployment context with wallet
@@ -192,11 +275,15 @@ async function deployL1WithL2Address(
  *
  * @example
  * ```ts
+ * // First, fetch real Aztec L1 addresses from the sandbox
+ * const aztecL1Addresses = await fetchAztecL1Addresses();
+ *
  * const result = await deployAllContracts(
  *   {
  *     publicClient,
  *     deployerWallet,
  *     artifacts: await fetchAllArtifacts("/artifacts"),
+ *     aztecL1Addresses, // Required for L1→L2 messaging
  *   },
  *   {
  *     wallet,
@@ -212,20 +299,28 @@ export async function deployAllContracts(
   l1Context: L1DeploymentContext,
   l2Context: L2DeploymentContext
 ): Promise<DeploymentResult> {
-  const totalSteps = 2;
+  const totalSteps = 3;
 
   logSection("Deploy", "Starting contract deployment orchestration");
 
   try {
-    // Step 1: Deploy L2 contract
-    logStep(1, totalSteps, "Deploy L2 AaveWrapper contract");
+    // Step 1: Deploy L1 contracts with placeholder L2 address
+    logStep(1, totalSteps, "Deploy L1 portal and mock contracts");
 
-    const { contract: l2Contract, address: l2Address } = await deployL2WithPlaceholder(l2Context);
+    const l1Addresses = await deployL1WithPlaceholder(l1Context);
 
-    // Step 2: Deploy L1 contracts
-    logStep(2, totalSteps, "Deploy L1 portal and mock contracts");
+    // Step 2: Deploy L2 contract with actual portal address
+    logStep(2, totalSteps, "Deploy L2 AaveWrapper with actual portal address");
 
-    const l1Addresses = await deployL1WithL2Address(l1Context, l2Address);
+    const { contract: l2Contract, address: l2Address } = await deployL2WithPortalAddress(
+      l2Context,
+      l1Addresses.portal
+    );
+
+    // Step 3: Update L1 portal's L2 reference
+    logStep(3, totalSteps, "Update L1 portal's L2 contract reference");
+
+    await updateL1PortalL2Reference(l1Context, l1Addresses.portal, l2Address);
 
     // Log summary
     logSection("Deploy", "All contracts deployed successfully");
@@ -234,6 +329,7 @@ export async function deployAllContracts(
     logInfo(`L1 MockUSDC: ${l1Addresses.mockUsdc}`);
     logInfo(`L1 MockAToken: ${l1Addresses.mockAToken}`);
     logInfo(`L1 MockLendingPool: ${l1Addresses.mockLendingPool}`);
+    logInfo(`L1 Aztec Inbox (real): ${l1Addresses.aztecInbox}`);
 
     logSuccess("Deployment complete!");
 

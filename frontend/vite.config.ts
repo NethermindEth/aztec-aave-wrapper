@@ -117,7 +117,7 @@ export default defineConfig({
           dest: 'artifacts',
         },
         {
-          src: '../eth/out/AztecAavePortalL1Simple.sol/AztecAavePortalL1Simple.json',
+          src: '../eth/out/AztecAavePortalL1.sol/AztecAavePortalL1.json',
           dest: 'artifacts',
         },
         {

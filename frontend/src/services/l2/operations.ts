@@ -12,6 +12,12 @@
  */
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
+import {
+  bigIntToBytes32,
+  computeDepositConfirmationContent,
+  computeIntentId,
+  computeSalt,
+} from "./crypto.js";
 import type { AaveWrapperContract } from "./deploy.js";
 import { loadAztecModules } from "./modules.js";
 import type { AztecAddress } from "./wallet.js";
@@ -306,6 +312,20 @@ export async function executeRequestDeposit(
   logInfo(`  from: ${from?.toString?.() ?? from}`);
 
   try {
+    // Compute the intent_id locally using the same formula as the Noir contract
+    // This avoids issues with Azguard wallet's simulation/return value extraction
+    logInfo("Computing intent ID locally...");
+    const salt = await computeSalt(from, params.secretHash);
+    const intentId = await computeIntentId({
+      caller: from,
+      asset: params.asset,
+      amount: params.amount,
+      originalDecimals: params.originalDecimals,
+      deadline: params.deadline,
+      salt,
+    });
+    logInfo(`Computed intent ID: ${intentId.toString().slice(0, 16)}...`);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
@@ -321,24 +341,10 @@ export async function executeRequestDeposit(
     const paymentMethod = await getSponsoredFeePaymentMethod();
 
     // Execute the transaction with sponsored fee payment
-    // Note: With Azguard wallet, simulation may fail due to return value handling differences
-    // The wallet will prompt user for approval before sending
     logInfo("Sending transaction to wallet for approval (using sponsored fees)...");
     const tx = await call.send({ from, fee: { paymentMethod } }).wait();
 
     logSuccess(`Deposit request executed, tx: ${tx.txHash?.toString()}`);
-
-    // Get intent ID from transaction return value
-    // In Aztec SDK v3, the return value should be in tx.debugInfo?.returnValues or similar
-    let intentId = tx.returnValues?.[0];
-
-    // If not available from tx, we need to compute it (or get from logs)
-    if (!intentId) {
-      logInfo("Computing intent ID from transaction logs...");
-      // The intent ID is emitted in the transaction, try to extract it
-      // For now, use a placeholder - the actual ID should come from tx metadata
-      intentId = tx.txHash; // Fallback to tx hash if intent ID not available
-    }
 
     return {
       intentId,
@@ -384,6 +390,41 @@ export async function executeFinalizeDeposit(
   logInfo("Finalizing deposit...");
 
   try {
+    // Debug: Log all parameters for message content hash computation
+    const intentIdBigInt = params.intentId.toBigInt();
+    const assetIdBigInt = params.assetId;
+    const sharesBigInt = params.shares;
+
+    console.log("=== DEBUG: finalize_deposit parameters ===");
+    console.log(`  intentId (bigint): ${intentIdBigInt}`);
+    console.log(`  intentId (hex):    0x${intentIdBigInt.toString(16).padStart(64, "0")}`);
+    console.log(`  assetId (bigint):  ${assetIdBigInt}`);
+    console.log(`  assetId (hex):     0x${assetIdBigInt.toString(16).padStart(64, "0")}`);
+    console.log(`  shares (bigint):   ${sharesBigInt}`);
+    console.log(`  shares (hex):      0x${sharesBigInt.toString(16).padStart(64, "0")}`);
+    console.log(`  secret:            ${params.secret.toString()}`);
+    console.log(`  messageLeafIndex:  ${params.messageLeafIndex}`);
+
+    // Compute expected content hash locally for comparison
+    const expectedContentHash = await computeDepositConfirmationContent(
+      intentIdBigInt,
+      assetIdBigInt,
+      sharesBigInt
+    );
+    console.log(`  Expected content hash: ${expectedContentHash.toString()}`);
+
+    // Show the raw bytes being hashed (browser-compatible hex conversion)
+    const intentBytes = bigIntToBytes32(intentIdBigInt);
+    const assetBytes = bigIntToBytes32(assetIdBigInt);
+    const sharesBytes = bigIntToBytes32(sharesBigInt);
+    const bytesToHex = (bytes: Uint8Array) =>
+      Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    console.log(`  intentId bytes: 0x${bytesToHex(intentBytes)}`);
+    console.log(`  assetId bytes:  0x${bytesToHex(assetBytes)}`);
+    console.log(`  shares bytes:   0x${bytesToHex(sharesBytes)}`);
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
@@ -501,16 +542,34 @@ export async function executeRequestWithdraw(
       params.secretHash
     );
 
-    // Simulate first to get intent ID
-    const intentId = await call.simulate({ from });
-
     // Get the sponsored fee payment method
     const paymentMethod = await getSponsoredFeePaymentMethod();
 
     // Execute the transaction
+    // Note: We skip simulation because Azguard wallet's simulateTx returns Fr[] which
+    // requires manual decoding. Instead, we get the intent ID from transaction return values.
     const tx = await call.send({ from, fee: { paymentMethod } }).wait();
 
     logSuccess(`Withdrawal request executed, tx: ${tx.txHash?.toString()}`);
+
+    // Extract intent ID from transaction return values
+    let intentId = tx.returnValues?.[0];
+
+    if (!intentId) {
+      // Fallback: try to get from debugInfo or other sources
+      logInfo("Return values not directly available, checking debugInfo...");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const debugInfo = (tx as any).debugInfo;
+      if (debugInfo?.returnValues?.[0]) {
+        intentId = debugInfo.returnValues[0];
+      }
+    }
+
+    if (!intentId) {
+      throw new Error("Could not extract intent ID from transaction result");
+    }
+
+    logInfo(`Withdraw intent ID from transaction: ${intentId.toString().slice(0, 16)}...`);
 
     return {
       intentId,

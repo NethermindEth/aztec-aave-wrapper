@@ -26,6 +26,9 @@ struct DepositIntent {
     uint64 deadline;
     /// @notice Random salt for intent uniqueness and replay protection
     bytes32 salt;
+    /// @notice Hash of secret for L1→L2 message consumption
+    /// @dev Used to verify the L1→L2 confirmation message can be consumed by the user
+    bytes32 secretHash;
 }
 
 /// @notice Intent to withdraw assets from Aave on a target chain
@@ -61,7 +64,8 @@ library IntentLib {
                 intent.amount,
                 intent.originalDecimals,
                 intent.deadline,
-                intent.salt
+                intent.salt,
+                intent.secretHash
             )
         );
     }
@@ -90,7 +94,8 @@ library IntentLib {
             intent.amount,
             intent.originalDecimals,
             intent.deadline,
-            intent.salt
+            intent.salt,
+            intent.secretHash
         );
     }
 

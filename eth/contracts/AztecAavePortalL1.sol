@@ -3,6 +3,8 @@ pragma solidity ^0.8.33;
 
 import { IAztecOutbox } from "./interfaces/IAztecOutbox.sol";
 import { IAztecInbox } from "./interfaces/IAztecInbox.sol";
+import { DataStructures } from "./libraries/DataStructures.sol";
+import { Hash } from "./libraries/Hash.sol";
 import { ILendingPool } from "./interfaces/ILendingPool.sol";
 import { DepositIntent, WithdrawIntent, IntentLib } from "./types/Intent.sol";
 import { ITokenPortal } from "./interfaces/ITokenPortal.sol";
@@ -45,8 +47,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
     /// @notice Aave V3 lending pool
     address public immutable aavePool;
 
-    /// @notice L2 contract address on Aztec
-    bytes32 public immutable l2ContractAddress;
+    /// @notice Aztec instance version (read from inbox at construction)
+    uint256 public immutable aztecVersion;
 
     // ============ Deadline Configuration ============
 
@@ -57,6 +59,9 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
     uint256 public constant MAX_DEADLINE = 24 hours;
 
     // ============ State ============
+
+    /// @notice L2 contract address on Aztec (can be updated by admin)
+    bytes32 public l2ContractAddress;
 
     /// @notice Tracks consumed intent IDs for replay protection
     mapping(bytes32 => bool) public consumedIntents;
@@ -94,9 +99,11 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
     event WithdrawConfirmed(bytes32 indexed intentId, uint256 amount, ConfirmationStatus status);
 
-    event L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf);
+    event L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf, uint256 messageIndex);
 
     event TokensDepositedToL2(bytes32 indexed intentId, bytes32 messageKey, uint256 messageIndex);
+
+    event L2ContractAddressUpdated(bytes32 indexed oldAddress, bytes32 indexed newAddress);
 
     // ============ Constructor ============
 
@@ -119,6 +126,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         tokenPortal = _tokenPortal;
         aavePool = _aavePool;
         l2ContractAddress = _l2ContractAddress;
+        // Read version from inbox to ensure compatibility
+        aztecVersion = IAztecInbox(_aztecInbox).VERSION();
     }
 
     // ============ Internal Functions ============
@@ -189,13 +198,22 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         // Step 3: Validate deadline is within acceptable bounds
         _validateDeadline(intent.deadline);
 
-        // Step 4: Compute message hash for outbox consumption
-        bytes32 messageHash = IntentLib.hashDepositIntent(intent);
+        // Step 4: Compute message content (intent hash) for outbox consumption
+        bytes32 intentHash = IntentLib.hashDepositIntent(intent);
 
-        // Step 5: Consume the L2->L1 message from Aztec outbox
-        bool consumed =
-            IAztecOutbox(aztecOutbox).consume(messageHash, l2BlockNumber, leafIndex, siblingPath);
-        require(consumed, "Failed to consume outbox message");
+        // Step 5: Construct L2ToL1Msg and consume from Aztec outbox
+        DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
+            sender: DataStructures.L2Actor({
+                actor: l2ContractAddress,
+                version: aztecVersion
+            }),
+            recipient: DataStructures.L1Actor({
+                actor: address(this),
+                chainId: block.chainid
+            }),
+            content: intentHash
+        });
+        IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
         // Step 6: Mark intent as consumed for replay protection
         consumedIntents[intent.intentId] = true;
@@ -236,11 +254,17 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
             intent.intentId, intent.ownerHash, ConfirmationStatus.SUCCESS, shares, intent.asset
         );
 
-        bytes32 messageLeaf =
-            IAztecInbox(aztecInbox).sendL2Message(l2ContractAddress, messageContent);
+        // Construct L2 recipient and send message with the user's secretHash
+        // This ensures only the user who knows the secret can consume the L1→L2 message
+        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({
+            actor: l2ContractAddress,
+            version: aztecVersion
+        });
+        (bytes32 messageLeaf, uint256 messageIndex) =
+            IAztecInbox(aztecInbox).sendL2Message(recipient, messageContent, intent.secretHash);
 
         emit DepositConfirmed(intent.intentId, shares, ConfirmationStatus.SUCCESS);
-        emit L2MessageSent(intent.intentId, messageLeaf);
+        emit L2MessageSent(intent.intentId, messageLeaf, messageIndex);
     }
 
     /**
@@ -290,13 +314,22 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         address asset = intentAssets[intent.intentId];
 
-        // Step 5: Compute message hash for outbox consumption
-        bytes32 messageHash = IntentLib.hashWithdrawIntent(intent);
+        // Step 5: Compute message content (intent hash) for outbox consumption
+        bytes32 intentHash = IntentLib.hashWithdrawIntent(intent);
 
-        // Step 6: Consume the L2->L1 message from Aztec outbox
-        bool consumed =
-            IAztecOutbox(aztecOutbox).consume(messageHash, l2BlockNumber, leafIndex, siblingPath);
-        require(consumed, "Failed to consume outbox message");
+        // Step 6: Construct L2ToL1Msg and consume from Aztec outbox
+        DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
+            sender: DataStructures.L2Actor({
+                actor: l2ContractAddress,
+                version: aztecVersion
+            }),
+            recipient: DataStructures.L1Actor({
+                actor: address(this),
+                chainId: block.chainid
+            }),
+            content: intentHash
+        });
+        IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
         // Step 7: Mark intent as consumed for replay protection
         consumedIntents[intent.intentId] = true;
@@ -340,68 +373,63 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
             asset
         );
 
-        bytes32 messageLeaf =
-            IAztecInbox(aztecInbox).sendL2Message(l2ContractAddress, messageContent);
+        // Construct L2 recipient and send message
+        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({
+            actor: l2ContractAddress,
+            version: aztecVersion
+        });
+        (bytes32 messageLeaf, uint256 confirmationMessageIndex) =
+            IAztecInbox(aztecInbox).sendL2Message(recipient, messageContent, bytes32(0));
 
         emit WithdrawConfirmed(intent.intentId, withdrawnAmount, ConfirmationStatus.SUCCESS);
-        emit L2MessageSent(intent.intentId, messageLeaf);
+        emit L2MessageSent(intent.intentId, messageLeaf, confirmationMessageIndex);
     }
 
     // ============ Internal Helper Functions ============
 
     /**
      * @notice Compute the message content for deposit finalization on L2
+     * @dev Uses sha256ToField to match Aztec's L1↔L2 message content hash pattern.
+     *      The encoding must exactly match the L2 Noir contract's hash computation.
      * @param intentId The intent ID
-     * @param ownerHash The hashed owner address
-     * @param status The confirmation status
      * @param shares The number of shares received
-     * @param asset The asset address
-     * @return The message content hash
+     * @param asset The asset address (converted to bytes32 for L2 compatibility)
+     * @return The message content hash (truncated to field element size)
      */
     function _computeDepositFinalizationMessage(
         bytes32 intentId,
-        bytes32 ownerHash,
-        ConfirmationStatus status,
+        bytes32, // ownerHash - unused, kept for interface compatibility
+        ConfirmationStatus, // status - unused, kept for interface compatibility
         uint128 shares,
         address asset
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                uint8(0), // Action type: deposit finalization
-                intentId,
-                ownerHash,
-                uint8(status),
-                shares,
-                asset
-            )
+        // Match L2 encoding: sha256([intent_id, asset_id, shares])
+        // Asset address is padded to bytes32 for L2 Field compatibility
+        return Hash.sha256ToField(
+            abi.encodePacked(intentId, bytes32(uint256(uint160(asset))), bytes32(uint256(shares)))
         );
     }
 
     /**
      * @notice Compute the message content for withdraw finalization on L2
+     * @dev Uses sha256ToField to match Aztec's L1↔L2 message content hash pattern.
+     *      The encoding must exactly match the L2 Noir contract's hash computation.
      * @param intentId The intent ID
-     * @param ownerHash The hashed owner address
-     * @param status The confirmation status
      * @param amount The amount withdrawn
-     * @param asset The asset address
-     * @return The message content hash
+     * @param asset The asset address (converted to bytes32 for L2 compatibility)
+     * @return The message content hash (truncated to field element size)
      */
     function _computeWithdrawFinalizationMessage(
         bytes32 intentId,
-        bytes32 ownerHash,
-        ConfirmationStatus status,
+        bytes32, // ownerHash - unused, kept for interface compatibility
+        ConfirmationStatus, // status - unused, kept for interface compatibility
         uint128 amount,
         address asset
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                uint8(1), // Action type: withdraw finalization
-                intentId,
-                ownerHash,
-                uint8(status),
-                amount,
-                asset
-            )
+        // Match L2 encoding: sha256([intent_id, asset_id, amount])
+        // Asset address is padded to bytes32 for L2 Field compatibility
+        return Hash.sha256ToField(
+            abi.encodePacked(intentId, bytes32(uint256(uint160(asset))), bytes32(uint256(amount)))
         );
     }
 
@@ -460,6 +488,17 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         }
         IERC20(token).safeTransfer(to, amount);
         emit EmergencyWithdraw(token, to, amount);
+    }
+
+    /**
+     * @notice Update the L2 contract address for cross-chain messaging
+     * @dev Only callable by owner. Required when L2 contract is deployed after L1 portal.
+     * @param _l2ContractAddress The new L2 contract address (bytes32 for Aztec addresses)
+     */
+    function setL2ContractAddress(bytes32 _l2ContractAddress) external onlyOwner {
+        bytes32 oldAddress = l2ContractAddress;
+        l2ContractAddress = _l2ContractAddress;
+        emit L2ContractAddressUpdated(oldAddress, _l2ContractAddress);
     }
 
     // ============ Admin Events ============

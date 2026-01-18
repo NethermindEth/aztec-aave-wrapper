@@ -4,7 +4,6 @@
  * sha3 is a CommonJS module. This shim re-exports it as ESM.
  */
 
-// @ts-expect-error - importing CommonJS module
 import * as sha3Module from "../../node_modules/sha3/index.js";
 
 // Named exports

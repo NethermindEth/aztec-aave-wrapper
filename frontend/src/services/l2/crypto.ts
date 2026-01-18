@@ -320,3 +320,104 @@ export async function hexToFr(hex: string): Promise<Fr> {
 export function frToHex(fr: Fr): string {
   return fr.toString();
 }
+
+// =============================================================================
+// SHA256 to Field (for L1↔L2 message content hash)
+// =============================================================================
+
+/**
+ * Convert a bigint to a 32-byte big-endian Uint8Array.
+ *
+ * @param value - The bigint to convert
+ * @returns 32-byte Uint8Array in big-endian format
+ */
+export function bigIntToBytes32(value: bigint): Uint8Array {
+  const bytes = new Uint8Array(32);
+  let v = value;
+  for (let i = 31; i >= 0; i--) {
+    bytes[i] = Number(v & 0xffn);
+    v >>= 8n;
+  }
+  return bytes;
+}
+
+/**
+ * Compute SHA256 and truncate to a field element.
+ *
+ * This matches the Aztec protocol's sha256_to_field function used in L1↔L2 messaging.
+ * The SHA256 hash is truncated to fit within the field (first 31 bytes = 248 bits).
+ *
+ * @param data - Input data as Uint8Array
+ * @returns Promise resolving to the field element as Fr
+ *
+ * @example
+ * ```ts
+ * const data = new Uint8Array([...]);
+ * const field = await sha256ToField(data);
+ * ```
+ */
+export async function sha256ToField(data: Uint8Array): Promise<Fr> {
+  const { Fr } = await loadAztecModules();
+
+  // Compute SHA-256 hash using browser crypto API
+  // Cast to ArrayBuffer to satisfy TypeScript's strict type checking
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data as unknown as ArrayBuffer);
+  const hashArray = new Uint8Array(hashBuffer);
+
+  // Truncate to 31 bytes (248 bits) to fit in field element
+  // This matches Aztec's sha256_to_field implementation
+  const truncated = hashArray.slice(0, 31);
+
+  // Convert to bigint (big-endian)
+  let result = 0n;
+  for (const byte of truncated) {
+    result = (result << 8n) | BigInt(byte);
+  }
+
+  return new Fr(result);
+}
+
+/**
+ * Compute the expected L1→L2 deposit confirmation message content hash.
+ *
+ * This matches the Noir contract's compute_deposit_confirmation_content function
+ * and the L1 portal's _computeDepositFinalizationMessage function.
+ *
+ * Encoding: sha256_to_field([intentId (32 bytes) + assetId (32 bytes) + shares (32 bytes)])
+ *
+ * @param intentId - The intent ID as bigint
+ * @param assetId - The asset address as bigint (L1 address zero-extended to 32 bytes)
+ * @param shares - The number of aToken shares as bigint
+ * @returns Promise resolving to the message content hash as Fr
+ *
+ * @example
+ * ```ts
+ * const contentHash = await computeDepositConfirmationContent(
+ *   intentIdBigInt,
+ *   BigInt(usdcAddress),
+ *   sharesBigInt
+ * );
+ * ```
+ */
+export async function computeDepositConfirmationContent(
+  intentId: bigint,
+  assetId: bigint,
+  shares: bigint
+): Promise<Fr> {
+  // Create 96-byte packed data: intentId (32) + assetId (32) + shares (32)
+  const data = new Uint8Array(96);
+
+  // Pack intentId (first 32 bytes)
+  const intentBytes = bigIntToBytes32(intentId);
+  data.set(intentBytes, 0);
+
+  // Pack assetId (next 32 bytes)
+  const assetBytes = bigIntToBytes32(assetId);
+  data.set(assetBytes, 32);
+
+  // Pack shares (last 32 bytes)
+  const sharesBytes = bigIntToBytes32(shares);
+  data.set(sharesBytes, 64);
+
+  return sha256ToField(data);
+}

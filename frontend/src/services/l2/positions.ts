@@ -92,27 +92,33 @@ export async function queryL2Positions(
 
     // Call the get_positions utility function
     // Utility functions are simulated (not sent as transactions)
-    const result = await contract.methods.get_positions(owner).simulate();
+    // Note: Pass empty options object to avoid "authWitnesses" error in SDK
+    const result = await (contract.methods as any).get_positions(owner).simulate({});
 
     // Parse the BoundedVec result into Position array
-    // The result is a BoundedVec which has .len() and .get(i) methods
-    // In TypeScript, it's returned as an array-like structure
+    // BoundedVec has { storage: Note[], len: number } structure
     const positions: L2Position[] = [];
 
     // Handle the result based on its structure
-    // BoundedVec in aztec.js is typically returned as an array
-    if (Array.isArray(result)) {
-      for (const note of result) {
-        positions.push(parsePositionNote(note));
+    const boundedVec = result as { storage?: unknown[]; len?: number | bigint };
+
+    if (boundedVec?.storage && boundedVec.len !== undefined) {
+      // BoundedVec structure: use len to know how many valid items
+      const validCount = Number(boundedVec.len);
+
+      for (let i = 0; i < validCount; i++) {
+        const note = boundedVec.storage[i];
+        if (note) {
+          positions.push(parsePositionNote(note));
+        }
       }
-    } else if (result && typeof result === "object") {
-      // Handle BoundedVec object structure if different
-      const items = (result as { storage?: unknown[] }).storage;
-      if (Array.isArray(items)) {
-        for (const note of items) {
-          if (note) {
-            positions.push(parsePositionNote(note));
-          }
+    } else if (Array.isArray(result)) {
+      // Fallback: if it's just an array, filter out empty notes
+      for (const note of result) {
+        const parsed = parsePositionNote(note);
+        // Skip empty notes (nonce = 0x0 means uninitialized)
+        if (parsed.intentId !== "0x0" && parsed.shares > 0n) {
+          positions.push(parsed);
         }
       }
     }
@@ -148,7 +154,7 @@ export async function queryIntentStatus(
     const { Fr } = await import("@aztec/aztec.js/fields");
     const intentIdField = Fr.fromString(intentId);
 
-    const result = await contract.methods.get_intent_status(intentIdField).simulate();
+    const result = await (contract.methods as any).get_intent_status(intentIdField).simulate({});
     return Number(result);
   } catch (error) {
     console.warn("Failed to query intent status:", error);
@@ -171,7 +177,7 @@ export async function isIntentConsumed(
     const { Fr } = await import("@aztec/aztec.js/fields");
     const intentIdField = Fr.fromString(intentId);
 
-    const result = await contract.methods.is_intent_consumed(intentIdField).simulate();
+    const result = await (contract.methods as any).is_intent_consumed(intentIdField).simulate({});
     return Boolean(result);
   } catch (error) {
     console.warn("Failed to check intent consumed:", error);

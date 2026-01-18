@@ -32,7 +32,7 @@ interface FoundryArtifact {
 /**
  * Supported contract names for artifact loading
  */
-export type ContractName = "MockERC20" | "MockLendingPool" | "AztecAavePortalL1Simple";
+export type ContractName = "MockERC20" | "MockLendingPool" | "AztecAavePortalL1";
 
 /**
  * Cache for loaded artifacts to avoid redundant fetches
@@ -128,7 +128,7 @@ export async function loadArtifact(contractName: ContractName): Promise<Contract
  * @throws AggregateError if any artifacts fail to load, containing all individual errors
  */
 export async function preloadArtifacts(): Promise<void> {
-  const contracts: ContractName[] = ["MockERC20", "MockLendingPool", "AztecAavePortalL1Simple"];
+  const contracts: ContractName[] = ["MockERC20", "MockLendingPool", "AztecAavePortalL1"];
 
   const results = await Promise.allSettled(contracts.map(loadArtifact));
 

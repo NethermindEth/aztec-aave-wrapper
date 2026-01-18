@@ -6,25 +6,35 @@
  * a helpful error if actually called.
  */
 
+// Minimal type for browser shim - avoids strict NodeRequire type checking
+interface BrowserRequire {
+  (id: string): never;
+  resolve: ((id: string) => never) & { paths: (request: string) => null };
+  cache: Record<string, unknown>;
+  extensions: Record<string, unknown>;
+  main: undefined;
+}
+
 /**
  * Stub for createRequire - not available in browsers
  * Returns a function that throws when called
  */
-export function createRequire(_url: string | URL): NodeRequire {
+export function createRequire(_url: string | URL): BrowserRequire {
   const requireFn = function require(id: string): never {
     throw new Error(
       `Cannot require("${id}") in browser environment. createRequire is a Node.js-only API.`
     );
-  } as NodeRequire;
+  } as BrowserRequire;
 
-  requireFn.resolve = function resolve(id: string): never {
+  const resolveFn = function resolve(id: string): never {
     throw new Error(`Cannot require.resolve("${id}") in browser environment.`);
-  } as NodeRequire["resolve"];
+  } as BrowserRequire["resolve"];
 
-  requireFn.resolve.paths = function paths(_request: string): null {
+  resolveFn.paths = function paths(_request: string): null {
     return null;
   };
 
+  requireFn.resolve = resolveFn;
   requireFn.cache = {};
   requireFn.extensions = {};
   requireFn.main = undefined;

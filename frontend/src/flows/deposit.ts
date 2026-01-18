@@ -208,23 +208,130 @@ async function waitForL2ToL1Message(
 }
 
 /**
- * Wait for L1→L2 message to be available.
+ * Wait for L1→L2 message to be consumable by polling for membership witness.
+ * This is the definitive check - if we can get a witness, the message is consumable.
  *
- * @param publicClient - L1 public client
- * @param _node - Aztec node client (unused in devnet mock mode)
+ * @returns true if message is ready, false if timeout
  */
 async function waitForL1ToL2Message(
   publicClient: PublicClient<Transport, Chain>,
-  _node: AztecNodeClient
-): Promise<void> {
-  logSection("L1→L2", "Waiting for message to be available...");
+  node: AztecNodeClient,
+  messageLeaf: Hex,
+  maxWaitMs = 120_000, // 2 minutes
+  pollIntervalMs = 5000 // 5 seconds between polls
+): Promise<boolean> {
+  console.log("[waitForL1ToL2Message] ENTERED FUNCTION");
+  console.log("[waitForL1ToL2Message] messageLeaf:", messageLeaf);
+  console.log("[waitForL1ToL2Message] maxWaitMs:", maxWaitMs);
 
-  // Mine an L1 block to finalize the message
-  await mineL1Block(publicClient);
+  const startTime = Date.now();
+  const { Fr } = await import("@aztec/aztec.js/fields");
 
-  // In devnet with mocks, the message should be available immediately
-  // In production, we would poll the Aztec inbox for the message
-  logSuccess("L1→L2 message should now be available");
+  // Convert hex message leaf to Fr for querying
+  const messageLeafFr = Fr.fromString(messageLeaf);
+  console.log("[waitForL1ToL2Message] messageLeafFr:", messageLeafFr.toString());
+
+  let pollCount = 0;
+  let lastBlockMined = Date.now();
+  const minMineInterval = 20000; // Mine L1 every 20s to trigger archiver
+
+  console.log("[waitForL1ToL2Message] Starting poll loop...");
+
+  while (Date.now() - startTime < maxWaitMs) {
+    pollCount++;
+    console.log(`[waitForL1ToL2Message] Poll ${pollCount} starting...`);
+
+    try {
+      console.log("[waitForL1ToL2Message] Getting current block number...");
+      const currentBlock = await node.getBlockNumber();
+      console.log("[waitForL1ToL2Message] currentBlock:", currentBlock);
+
+      // Step 1: Check which block the message will be available
+      console.log("[waitForL1ToL2Message] Calling getL1ToL2MessageBlock...");
+      const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
+      console.log("[waitForL1ToL2Message] messageBlockNumber:", messageBlockNumber);
+
+      if (messageBlockNumber === undefined) {
+        logInfo(
+          `Poll ${pollCount}: Message not yet indexed by archiver (L2 block=${currentBlock})`
+        );
+      } else if (currentBlock < messageBlockNumber) {
+        logInfo(
+          `Poll ${pollCount}: Message available at block ${messageBlockNumber}, current=${currentBlock}`
+        );
+      } else {
+        // Message should be available - try to get the membership witness
+        // This is the DEFINITIVE check - if we get a witness, it's consumable
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const nodeAny = node as any;
+
+        console.log(
+          `[L1→L2] Poll ${pollCount}: currentBlock=${currentBlock} >= messageBlock=${messageBlockNumber}`
+        );
+        console.log(`[L1→L2] Attempting to get membership witness...`);
+
+        if (typeof nodeAny.getL1ToL2MembershipWitness === "function") {
+          try {
+            console.log(
+              `[L1→L2] Calling getL1ToL2MembershipWitness(${currentBlock}, ${messageLeafFr.toString()})`
+            );
+            const witness = await nodeAny.getL1ToL2MembershipWitness(currentBlock, messageLeafFr);
+            console.log(`[L1→L2] Witness response:`, witness);
+
+            if (witness && witness.length > 0) {
+              const elapsed = Math.round((Date.now() - startTime) / 1000);
+              console.log(
+                `[L1→L2] ✓ Witness obtained! Index: ${witness[0]}, siblingPath length: ${witness[1]?.length || 0}`
+              );
+              logSuccess(
+                `L1→L2 message is consumable! (${elapsed}s, witness obtained at block ${currentBlock})`
+              );
+              return true;
+            }
+            console.log(`[L1→L2] Witness returned but empty or invalid`);
+            logInfo(
+              `Poll ${pollCount}: Block ${currentBlock} >= ${messageBlockNumber} but witness not yet available`
+            );
+          } catch (witnessError) {
+            console.log(`[L1→L2] Witness query error:`, witnessError);
+            logInfo(
+              `Poll ${pollCount}: Witness query failed: ${witnessError instanceof Error ? witnessError.message : "error"}`
+            );
+          }
+        } else {
+          // Fallback: if no witness API, trust block number check
+          console.log(
+            `[L1→L2] getL1ToL2MembershipWitness not available on node, falling back to block check`
+          );
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          logSuccess(
+            `L1→L2 message indexed at block ${currentBlock} (${elapsed}s) - witness API not available`
+          );
+          return true;
+        }
+      }
+
+      // Mine L1 block periodically to trigger archiver sync
+      if (Date.now() - lastBlockMined > minMineInterval) {
+        logInfo("Mining L1 block to trigger archiver sync...");
+        try {
+          await mineL1Block(publicClient);
+        } catch {
+          // Ignore mining errors
+        }
+        lastBlockMined = Date.now();
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    } catch (error) {
+      logInfo(`Poll ${pollCount}: ${error instanceof Error ? error.message : "Error"}`);
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  const elapsed = Math.round((Date.now() - startTime) / 1000);
+  logSection("L1→L2", `Message not consumable after ${elapsed}s`, "warning");
+  return false;
 }
 
 /**
@@ -408,6 +515,8 @@ export async function executeDepositFlow(
     const salt = generateSalt();
     const intentIdHex = pad(toHex(BigInt(intentIdStr)), { size: 32 }) as Hex;
     const ownerHashHex = pad(toHex(ownerHash), { size: 32 }) as Hex;
+    // Convert Fr secretHash to hex for L1 - ensures L1→L2 message uses same hash
+    const secretHashHex = pad(toHex(secretHash.toBigInt()), { size: 32 }) as Hex;
 
     const depositIntent: DepositIntent = {
       intentId: intentIdHex,
@@ -417,10 +526,82 @@ export async function executeDepositFlow(
       originalDecimals: config.originalDecimals,
       deadline,
       salt,
+      secretHash: secretHashHex,
     };
 
     // Compute message hash and set it as valid in mock outbox
+    console.log("=== DEBUG: Deposit Intent Values ===");
+    console.log("intentId:", depositIntent.intentId);
+    console.log("ownerHash:", depositIntent.ownerHash);
+    console.log("asset:", depositIntent.asset);
+    console.log("amount:", depositIntent.amount.toString());
+    console.log("originalDecimals:", depositIntent.originalDecimals);
+    console.log("deadline:", depositIntent.deadline.toString());
+    console.log("salt:", depositIntent.salt);
+
     const messageHash = computeDepositIntentHash(depositIntent);
+    console.log("=== DEBUG: Deposit Flow ===");
+    console.log("Message hash:", messageHash);
+    console.log("Outbox address (frontend):", l1Addresses.mockAztecOutbox);
+    console.log("Portal address:", l1Addresses.portal);
+
+    // Debug: verify portal's outbox matches what we're using
+    const portalOutbox = await publicClient.readContract({
+      address: l1Addresses.portal,
+      abi: [
+        {
+          name: "aztecOutbox",
+          type: "function",
+          stateMutability: "view",
+          inputs: [],
+          outputs: [{ type: "address" }],
+        },
+      ] as const,
+      functionName: "aztecOutbox",
+    });
+    console.log("Outbox address (portal):", portalOutbox);
+    console.log(
+      "Addresses match:",
+      l1Addresses.mockAztecOutbox.toLowerCase() === portalOutbox.toLowerCase()
+    );
+
+    // Debug: verify portal's L2 contract address matches what we're using
+    const portalL2Address = await publicClient.readContract({
+      address: l1Addresses.portal,
+      abi: [
+        {
+          name: "l2ContractAddress",
+          type: "function",
+          stateMutability: "view",
+          inputs: [],
+          outputs: [{ type: "bytes32" }],
+        },
+      ] as const,
+      functionName: "l2ContractAddress",
+    });
+    const ourL2Address = contract.address.toString();
+    console.log("L2 address (portal):", portalL2Address);
+    console.log("L2 address (our contract):", ourL2Address);
+    console.log(
+      "L2 addresses match:",
+      portalL2Address.toLowerCase() === ourL2Address.toLowerCase()
+    );
+
+    // Debug: check portal's inbox address
+    const portalInbox = await publicClient.readContract({
+      address: l1Addresses.portal,
+      abi: [
+        {
+          name: "aztecInbox",
+          type: "function",
+          stateMutability: "view",
+          inputs: [],
+          outputs: [{ type: "address" }],
+        },
+      ] as const,
+      functionName: "aztecInbox",
+    });
+    console.log("Portal inbox address:", portalInbox);
 
     const l2BlockNumber = 100n; // Mock L2 block number for devnet
     await setMockOutboxMessageValid(
@@ -431,13 +612,58 @@ export async function executeDepositFlow(
       l2BlockNumber
     );
 
+    // Verify the message was set correctly
+    const isValid = await publicClient.readContract({
+      address: l1Addresses.mockAztecOutbox,
+      abi: [
+        {
+          name: "validMessages",
+          type: "function",
+          stateMutability: "view",
+          inputs: [{ type: "bytes32" }, { type: "uint256" }],
+          outputs: [{ type: "bool" }],
+        },
+      ] as const,
+      functionName: "validMessages",
+      args: [messageHash, l2BlockNumber],
+    });
+    console.log("Message set in outbox?", isValid);
+    console.log("Block number used:", l2BlockNumber.toString());
+
     // Execute deposit via relayer
     logSection("Privacy", "Relayer executing L1 deposit (not user)");
+
+    // Generate unique leaf index from intent ID to avoid collision in mock outbox
+    // The mock outbox tracks consumed messages by (blockNumber, leafIndex)
+    // Using a hash-derived index ensures each deposit gets a unique slot
+    const leafIndex = BigInt(depositIntent.intentId.slice(0, 18)) % 1000000n;
+
     const proof: MerkleProof = {
       l2BlockNumber,
-      leafIndex: 0n,
+      leafIndex,
       siblingPath: [],
     };
+
+    // Check if intent was already consumed (from a previous failed attempt)
+    const alreadyConsumed = await publicClient.readContract({
+      address: l1Addresses.portal,
+      abi: [
+        {
+          name: "consumedIntents",
+          type: "function",
+          stateMutability: "view",
+          inputs: [{ type: "bytes32" }],
+          outputs: [{ type: "bool" }],
+        },
+      ] as const,
+      functionName: "consumedIntents",
+      args: [depositIntent.intentId],
+    });
+    console.log("Intent already consumed?", alreadyConsumed);
+    console.log("Executing with proof:", {
+      l2BlockNumber: proof.l2BlockNumber.toString(),
+      leafIndex: proof.leafIndex.toString(),
+    });
 
     const executeResult = await executeDeposit(
       publicClient,
@@ -447,19 +673,29 @@ export async function executeDepositFlow(
       proof
     );
     txHashes.l1Execute = executeResult.txHash;
+    const l1ToL2MessageIndex = executeResult.messageIndex;
+    const l1MessageLeaf = executeResult.messageLeaf;
+    logInfo(`L1→L2 message index: ${l1ToL2MessageIndex}`);
+    console.log("L1→L2 message leaf (L1 computed):", l1MessageLeaf);
 
     // Get shares recorded for this intent
+    console.log("[DEBUG] Fetching shares for intent...");
     const shares = await getIntentShares(publicClient, l1Addresses.portal, intentIdHex);
+    console.log("[DEBUG] Shares fetched:", shares.toString());
     logSuccess(`Shares recorded: ${shares.toString()}`);
 
     // =========================================================================
-    // Step 5: Wait for L1→L2 message
+    // Step 5: Wait for L1→L2 message to be consumable
     // =========================================================================
     currentStep = 5;
     logStep(5, totalSteps, "Wait for L1→L2 message");
     setOperationStep(5);
 
-    await waitForL1ToL2Message(publicClient, node);
+    console.log("[L1→L2] Starting to wait for message to be consumable...");
+    console.log("[L1→L2] Message leaf:", l1MessageLeaf);
+
+    // Wait for L1→L2 message to be consumable (polls membership witness - no signing)
+    const messageReady = await waitForL1ToL2Message(publicClient, node, l1MessageLeaf);
 
     // =========================================================================
     // Step 6: Call finalize_deposit on L2
@@ -468,27 +704,45 @@ export async function executeDepositFlow(
     logStep(6, totalSteps, "Finalize deposit on L2");
     setOperationStep(6);
 
-    // MVP: shares = amount (1:1 ratio for initial deposit)
-    const mockShares = config.amount;
+    // Use actual shares from L1 (fetched above) - must match message content hash
+    // Convert asset address to Field for L2 (matches L1's bytes32(uint256(uint160(asset))))
+    const assetAsField = BigInt(l1Addresses.mockUsdc);
 
-    try {
-      const finalizeResult = await executeFinalizeDeposit(
-        contract,
-        {
-          intentId,
-          assetId: config.assetId,
-          shares: mockShares,
-          secret,
-          messageLeafIndex: 0n,
-        },
-        wallet.address
-      );
-      txHashes.l2Finalize = finalizeResult.txHash;
-      logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
-    } catch (error) {
-      // In devnet without real L1→L2 messaging, finalize may fail
-      logSection("L2", "finalize_deposit may fail without real L1→L2 message", "warning");
-      logInfo(error instanceof Error ? error.message.slice(0, 100) : "Unknown error");
+    console.log("=== DEBUG: Values for finalize_deposit ===");
+    console.log(`  intentId: ${intentId.toString()}`);
+    console.log(`  shares: ${shares}`);
+    console.log(`  assetAsField: ${assetAsField}`);
+    console.log(`  assetAsField (hex): 0x${assetAsField.toString(16)}`);
+    console.log(`  l1ToL2MessageIndex: ${l1ToL2MessageIndex}`);
+    console.log(`  secret: ${secret.toString()}`);
+    console.log(`  L2 contract address: ${contract.address.toString()}`);
+    console.log(`  Portal address: ${l1Addresses.portal}`);
+
+    if (!messageReady) {
+      logSection("L2", "Cannot finalize - L1→L2 message not consumable", "warning");
+      logInfo("The message may need more time to sync. Try again later.");
+    } else {
+      // Message is confirmed consumable - send finalize_deposit (ONE signature)
+      try {
+        logInfo("Sending finalize_deposit transaction...");
+        const finalizeResult = await executeFinalizeDeposit(
+          contract,
+          {
+            intentId,
+            assetId: assetAsField,
+            shares: shares,
+            secret,
+            messageLeafIndex: l1ToL2MessageIndex,
+          },
+          wallet.address
+        );
+        txHashes.l2Finalize = finalizeResult.txHash;
+        logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
+      } catch (error) {
+        logSection("L2", "finalize_deposit failed", "warning");
+        logInfo(error instanceof Error ? error.message : "Unknown error");
+        console.error("finalize_deposit error:", error);
+      }
     }
 
     // Note: Position is added by caller (App.tsx) after flow completes

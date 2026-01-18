@@ -1,57 +1,15 @@
 # Docker Compose configuration for Aztec Aave Wrapper local development
-# This configuration runs:
-# - anvil-l1: Ethereum L1 simulation (port 8545)
-# - aztec-sandbox: Full Aztec sandbox with PXE (port 8080)
+#
+# Uses `aztec start --local-network` which includes:
+# - Internal Anvil L1 (exposed on port 8545)
+# - Aztec PXE (exposed on port 8080)
+# - Pre-deployed Aztec protocol contracts
+# - Test accounts with funds
 
 services:
   # ============================================================================
-  # Anvil L1 - Simulates Ethereum mainnet/sepolia
-  # This is where the Aztec rollup settles and the L1 portal contract lives
-  # ============================================================================
-  anvil-l1:
-    image: ghcr.io/foundry-rs/foundry:latest
-    container_name: aztec-aave-anvil-l1
-    ports:
-      - "${ANVIL_L1_PORT:-8545}:8545"
-    entrypoint: anvil
-    command:
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "8545"
-      - "--chain-id"
-      - "${ANVIL_L1_CHAIN_ID:-31337}"
-      - "--accounts"
-      - "10"
-      - "--balance"
-      - "10000"
-      # NOTE: Do not set --block-time here! The Aztec sandbox controls L1 block timing
-      # by calling anvil_setBlockTimestampInterval(12) during initialization.
-      # Setting --block-time here causes transaction mining timeouts.
-      - "--gas-limit"
-      - "30000000"
-      - "--code-size-limit"
-      - "100000"
-    healthcheck:
-      test: ["CMD-SHELL", "cast block-number --rpc-url http://localhost:8545 || exit 1"]
-      interval: 5s
-      timeout: 10s
-      retries: 30
-      start_period: 10s
-    networks:
-      - aztec-aave-net
-    restart: unless-stopped
-
-  # ============================================================================
-  # NOTE: anvil-target removed for MVP simplification
-  # MVP uses direct L2→L1 Aave deposits without cross-chain bridging
-  # See docs/MVP_RESEARCH.md for details
-  # ============================================================================
-
-  # ============================================================================
-  # Aztec Sandbox - Full Aztec development environment
-  # Includes: PXE (Private Execution Environment), sequencer, and L1 contracts
-  # Documentation: https://docs.aztec.network/guides/developer_guides/local_env/run_more_than_one_pxe_sandbox
+  # Aztec Local Network - Complete development environment
+  # Includes internal Anvil L1, PXE, sequencer, and pre-deployed contracts
   # ============================================================================
   aztec-sandbox:
     image: aztecprotocol/aztec:${AZTEC_VERSION:-latest}
@@ -59,44 +17,25 @@ services:
     ports:
       # PXE HTTP endpoint
       - "${PXE_PORT:-8080}:8080"
+      # Internal Anvil L1 endpoint
+      - "${ANVIL_L1_PORT:-8545}:8545"
     environment:
-      # L1 RPC URLs - point to our L1 anvil instance
-      # The Aztec CLI uses ETHEREUM_HOSTS for the L1 RPC URL(s)
-      ETHEREUM_HOSTS: http://anvil-l1:8545
-      # Also set L1_RPC_URLS for compatibility
-      L1_RPC_URLS: http://anvil-l1:8545
-      # L1 chain ID must match anvil-l1
-      L1_CHAIN_ID: ${ANVIL_L1_CHAIN_ID:-31337}
       # Sandbox mode settings
       AZTEC_NODE_NO_LOGS: ${AZTEC_NODE_NO_LOGS:-false}
       # Debug logging (set to empty for less verbose)
       DEBUG: ${AZTEC_DEBUG:-aztec:*}
       # PXE configuration
       PXE_PROVER_ENABLED: ${PXE_PROVER_ENABLED:-false}
-    # Override entrypoint to start local network
-    # For 3.0.0+ use "start --local-network", for 0.65.x use "start --sandbox"
+    # Start local network - includes internal Anvil L1
     entrypoint: ["/bin/bash", "-c", "node --no-warnings /usr/src/yarn-project/aztec/dest/bin/index.js start --local-network"]
-    depends_on:
-      anvil-l1:
-        condition: service_healthy
     healthcheck:
-      # Check PXE is responding - use curl to check the status endpoint
+      # Check PXE is responding
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/status || exit 1"]
       interval: 10s
       timeout: 30s
       retries: 60
       start_period: 120s
-    networks:
-      - aztec-aave-net
     restart: unless-stopped
-
-# ============================================================================
-# Network Configuration
-# ============================================================================
-networks:
-  aztec-aave-net:
-    driver: bridge
-    name: aztec-aave-network
 
 # ============================================================================
 # Volumes (optional - for persistence)

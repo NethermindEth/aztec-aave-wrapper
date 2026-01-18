@@ -228,7 +228,7 @@ export function WalletInfo() {
         actions.setWallet({ l2Address: null });
       });
 
-      actions.setWallet({ l2Address: connection.address });
+      actions.setWallet({ l2Address: connection.address as `0x${string}` });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to connect Azguard wallet";
       setL2Error(message);

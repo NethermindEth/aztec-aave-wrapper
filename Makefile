@@ -26,12 +26,12 @@ L1_DIR := eth
 L2_DIR := aztec
 E2E_DIR := e2e
 
-# Docker compose configuration
-DOCKER_COMPOSE := docker compose
-DOCKER_COMPOSE_FILE := docker-compose.yml
+# Aztec local network configuration
+# Uses `aztec start --local-network` which manages both L1 and L2 internally
+AZTEC_PID_FILE := .aztec.pid
+AZTEC_LOG_FILE := .aztec.log
 
-# Anvil ports (from docker-compose.yml defaults)
-# Export these so docker-compose can use them
+# Network ports
 export ANVIL_L1_PORT ?= 8545
 export PXE_PORT ?= 8080
 
@@ -40,7 +40,7 @@ export PXE_PORT ?= 8080
 # ==============================================================================
 .PHONY: help check-tooling check-tool-docker check-tool-foundry check-tool-bun \
         check-tool-aztec check-tool-aztec devnet-up devnet-down devnet-health \
-        devnet-logs build build-l1 build-l2 test test-l1 test-l2 \
+        devnet-logs advance-blocks build build-l1 build-l2 test test-l1 test-l2 \
         deploy-local e2e clean
 
 # ==============================================================================
@@ -59,7 +59,7 @@ help:
 	@grep -E '^## check' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
 	@echo ""
 	@echo "Devnet:"
-	@grep -E '^## devnet' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
+	@grep -E '^## devnet|^## advance' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
 	@echo ""
 	@echo "Build:"
 	@grep -E '^## build' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
@@ -187,11 +187,22 @@ devnet-up:
 	@echo "Starting local devnet..."
 	@echo "========================"
 	@echo ""
-	@echo "Services:"
-	@echo "  - Anvil L1 (Ethereum):    http://localhost:$(ANVIL_L1_PORT)"
-	@echo "  - Aztec Sandbox (PXE):    http://localhost:$(PXE_PORT)"
+	@if [ -f $(AZTEC_PID_FILE) ] && kill -0 $$(cat $(AZTEC_PID_FILE)) 2>/dev/null; then \
+		echo -e "$(YELLOW)Devnet already running (PID: $$(cat $(AZTEC_PID_FILE)))$(NC)"; \
+		echo "Run 'make devnet-down' first to stop it."; \
+		exit 1; \
+	fi
+	@echo "Starting Aztec Local Network (aztec start --local-network)..."
+	@echo "This manages both L1 (Anvil) and L2 (PXE) with proper timing coordination."
 	@echo ""
-	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) up -d
+	@echo "Endpoints:"
+	@echo "  - L1 Anvil:    http://localhost:$(ANVIL_L1_PORT)"
+	@echo "  - L2 PXE:      http://localhost:$(PXE_PORT)"
+	@echo ""
+	@echo "Logs: $(AZTEC_LOG_FILE)"
+	@echo ""
+	@nohup aztec start --local-network > $(AZTEC_LOG_FILE) 2>&1 & echo $$! > $(AZTEC_PID_FILE)
+	@echo "Started aztec (PID: $$(cat $(AZTEC_PID_FILE)))"
 	@echo ""
 	@echo "Waiting for services to be healthy..."
 	@./scripts/wait-for-services.sh
@@ -208,30 +219,56 @@ devnet-down:
 	@echo ""
 	@echo "Stopping local devnet..."
 	@echo ""
-	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down --volumes
+	@# Stop any aztec Docker containers (aztec CLI runs Docker internally)
+	@docker ps -q --filter "name=aztec-start" | xargs -r docker stop 2>/dev/null || true
+	@docker ps -aq --filter "name=aztec-start" | xargs -r docker rm 2>/dev/null || true
+	@# Kill the aztec CLI wrapper processes
+	@if [ -f $(AZTEC_PID_FILE) ]; then \
+		PID=$$(cat $(AZTEC_PID_FILE)); \
+		kill $$PID 2>/dev/null || true; \
+		rm -f $(AZTEC_PID_FILE); \
+	fi
+	@pkill -f "aztec-run" 2>/dev/null || true
+	@pkill -f "aztec start" 2>/dev/null || true
 	@echo ""
-	@echo "Devnet stopped."
+	@echo -e "$(GREEN)Devnet stopped.$(NC)"
 	@echo ""
 
 ## devnet-health: Check health status of all devnet services
 devnet-health:
 	@./scripts/wait-for-services.sh
 
-## devnet-logs: View logs from all devnet services
+## devnet-logs: View logs from local devnet
 devnet-logs:
-	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) logs -f
+	@if [ -f $(AZTEC_LOG_FILE) ]; then \
+		tail -f $(AZTEC_LOG_FILE); \
+	else \
+		echo "No log file found. Is devnet running?"; \
+		exit 1; \
+	fi
 
 ## devnet-restart: Restart the local development network
 devnet-restart: devnet-down devnet-up
 
-## devnet-clean: Stop devnet and remove all volumes/data
+## advance-blocks: Advance Aztec L2 blocks (default: 2, or pass N=<num>)
+advance-blocks: check-devnet-running
+	@echo ""
+	@echo "Advancing Aztec blocks..."
+	@echo "========================="
+	cd $(E2E_DIR) && bun run scripts/advance-blocks.ts $(or $(N),2)
+	@echo ""
+
+## devnet-clean: Stop devnet and remove all data/logs
 devnet-clean:
 	@echo ""
 	@echo "Stopping devnet and removing all data..."
 	@echo ""
-	$(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) down -v --remove-orphans
+	@$(MAKE) devnet-down
+	@rm -f $(AZTEC_LOG_FILE) $(AZTEC_PID_FILE)
+	@rm -f .deployments.local.json
+	@rm -rf /tmp/aztec-world-state-*
 	@echo ""
-	@echo "Devnet cleaned."
+	@echo -e "$(GREEN)Devnet cleaned.$(NC)"
 	@echo ""
 
 # ==============================================================================
