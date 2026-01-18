@@ -231,7 +231,7 @@ cd aztec && aztec test --match cancel_deposit
 
 ---
 
-### Step 11: Store deposit amount for cancel refunds
+### Step 11: Store deposit amount for cancel refunds **COMPLETE**
 
 #### Goal
 Add storage to track the net deposit amount per intent so cancel_deposit can mint back the correct amount.
