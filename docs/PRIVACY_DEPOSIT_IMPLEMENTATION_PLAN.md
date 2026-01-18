@@ -302,7 +302,7 @@ cd eth && forge test --match-contract PortalTest -vvv
 
 ---
 
-### Step 14: Update MockTokenPortal with withdraw function
+### Step 14: Update MockTokenPortal with withdraw function **COMPLETE**
 
 #### Goal
 Extend MockTokenPortal in Portal.t.sol to support withdraw function for testing.
