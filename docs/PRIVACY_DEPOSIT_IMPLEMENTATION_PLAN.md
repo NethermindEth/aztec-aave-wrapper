@@ -115,7 +115,7 @@ cd eth && forge test --match-contract TokenPortalTest -vvv
 
 ---
 
-### Step 6: Add withdraw function to TokenPortal
+### Step 6: Add withdraw function to TokenPortal **COMPLETE**
 
 #### Goal
 Implement the withdraw function that allows the AavePortal to claim tokens from TokenPortal after L2 burn message consumption.
