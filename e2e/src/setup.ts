@@ -157,8 +157,10 @@ export class TestHarness {
   // Contract instances
   private _contracts: {
     aaveWrapper: ContractInstance | null;
+    bridgedToken: ContractInstance | null;
   } = {
     aaveWrapper: null,
+    bridgedToken: null,
   };
 
   // Status
@@ -199,6 +201,7 @@ export class TestHarness {
   get contracts() {
     return {
       aaveWrapper: this._contracts.aaveWrapper!,
+      bridgedToken: this._contracts.bridgedToken!,
     };
   }
 
@@ -269,7 +272,7 @@ export class TestHarness {
     this._node = null;
     this._l1Client = null;
     this._accounts = { admin: null, user: null, user2: null };
-    this._contracts = { aaveWrapper: null };
+    this._contracts = { aaveWrapper: null, bridgedToken: null };
     this._status = {
       aztecAvailable: false,
       pxeConnected: false,
@@ -495,19 +498,66 @@ export class TestHarness {
     if (!this.aztec || !this._artifact || !this._accounts.admin) return;
 
     try {
-      // Import the generated contract wrapper
+      // Import the generated contract wrappers
       const { AaveWrapperContract, AaveWrapperContractArtifact } = await import(
         "../../aztec/generated/AaveWrapper"
       );
+      const { BridgedTokenContract, BridgedTokenContractArtifact } = await import(
+        "./generated/BridgedToken"
+      );
       const { EthAddress } = await import("@aztec/foundation/eth-address");
+      const { Fr } = await import("@aztec/aztec.js/fields");
 
       const adminWallet = this._accounts.admin.wallet;
       const adminAddress = this._accounts.admin.address;
 
+      // Deploy BridgedToken first
+      console.log("Deploying BridgedToken contract...");
+      // Convert name and symbol to Field elements (short strings encoded as BigInt)
+      // Aztec Field elements store short strings as their UTF-8 byte representation as a BigInt
+      const stringToField = (s: string): bigint => {
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(s);
+        let result = 0n;
+        for (const byte of bytes) {
+          result = (result << 8n) | BigInt(byte);
+        }
+        return result;
+      };
+      const tokenName = new Fr(stringToField("USDC")); // Token name
+      const tokenSymbol = new Fr(stringToField("USDC")); // Token symbol
+      const tokenDecimals = 6; // USDC decimals
+
+      const deployedBridgedToken = await BridgedTokenContract.deploy(
+        adminWallet as any,
+        adminAddress,
+        tokenName,
+        tokenSymbol,
+        tokenDecimals
+      )
+        .send({ from: adminAddress })
+        .deployed();
+
+      // Store the deployed BridgedToken contract
+      this._contracts.bridgedToken = deployedBridgedToken as unknown as ContractInstance;
+      console.log("BridgedToken deployed at:", deployedBridgedToken.address.toString());
+
+      // Register BridgedToken with other wallets
+      const bridgedTokenInstance = await this._node!.getContract(deployedBridgedToken.address);
+      if (bridgedTokenInstance && this._accounts.user?.wallet && this._accounts.user2?.wallet) {
+        await (this._accounts.user.wallet as any).registerContract(
+          bridgedTokenInstance,
+          BridgedTokenContractArtifact
+        );
+        await (this._accounts.user2.wallet as any).registerContract(
+          bridgedTokenInstance,
+          BridgedTokenContractArtifact
+        );
+      }
+
       // Use mock addresses for testing
       const portalAddress = EthAddress.fromString("0x1234567890123456789012345678901234567890");
-      // Use admin address as mock bridged token and fee treasury for testing
-      const mockBridgedToken = adminAddress;
+      // Use admin address as mock fee treasury for testing
       const mockFeeTreasury = adminAddress;
 
       console.log("Deploying AaveWrapper contract...");
@@ -518,7 +568,7 @@ export class TestHarness {
         adminWallet as any,
         adminAddress,
         portalAddress,
-        mockBridgedToken,
+        deployedBridgedToken.address, // Use the real BridgedToken address
         mockFeeTreasury
       )
         .send({ from: adminAddress })
@@ -595,6 +645,9 @@ export class TestHarness {
     }
     if (this._accounts.user?.address) {
       lines.push(`  User: ${this._accounts.user.address.toString()}`);
+    }
+    if (this._contracts.bridgedToken) {
+      lines.push(`  BridgedToken: ${this._contracts.bridgedToken.address.toString()}`);
     }
     if (this._contracts.aaveWrapper) {
       lines.push(`  AaveWrapper: ${this._contracts.aaveWrapper.address.toString()}`);

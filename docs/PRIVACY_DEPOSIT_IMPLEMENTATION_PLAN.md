@@ -401,7 +401,7 @@ make devnet-up && bun run scripts/deploy-local.ts
 
 ---
 
-### Step 18: Deploy BridgedToken in test setup
+### Step 18: Deploy BridgedToken in test setup **COMPLETE**
 
 #### Goal
 Deploy BridgedToken on L2 in e2e test harness and register with test accounts.

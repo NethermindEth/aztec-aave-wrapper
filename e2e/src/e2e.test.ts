@@ -455,9 +455,11 @@ describe("Aztec Aave Wrapper E2E", () => {
       //
       // The integration tests cover the post-finalization replay protection.
       // Here we just verify the contract accepts or rejects based on current state.
+      const replayDeadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
+      const replayNetAmount = 1000000n; // 1 USDC (6 decimals)
       try {
         await methods
-          ._set_intent_pending_deposit(intentId, userAddress!)
+          ._set_intent_pending_deposit(intentId, userAddress!, replayDeadline, replayNetAmount)
           .send({ from: userAddress! })
           .wait();
         // If it succeeds, the contract doesn't prevent pre-finalization replay

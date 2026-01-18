@@ -50,14 +50,14 @@ export class AaveWrapperContract extends ContractBase {
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, admin: AztecAddressLike, portal_address: EthAddressLike) {
+  public static deploy(wallet: Wallet, admin: AztecAddressLike, portal_address: EthAddressLike, bridged_token: AztecAddressLike, fee_treasury: AztecAddressLike) {
     return new DeployMethod<AaveWrapperContract>(PublicKeys.default(), wallet, AaveWrapperContractArtifact, (instance, wallet) => AaveWrapperContract.at(instance.address, wallet), Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, portal_address: EthAddressLike) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, portal_address: EthAddressLike, bridged_token: AztecAddressLike, fee_treasury: AztecAddressLike) {
     return new DeployMethod<AaveWrapperContract>(publicKeys, wallet, AaveWrapperContractArtifact, (instance, wallet) => AaveWrapperContract.at(instance.address, wallet), Array.from(arguments).slice(2));
   }
 
@@ -95,7 +95,7 @@ export class AaveWrapperContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'receipts' | 'intent_status' | 'consumed_intents' | 'intent_owners' | 'intent_deadlines' | 'admin' | 'portal_address' | 'nonce'> {
+  public static get storage(): ContractStorageLayout<'receipts' | 'intent_status' | 'consumed_intents' | 'intent_owners' | 'intent_deadlines' | 'intent_net_amounts' | 'admin' | 'portal_address' | 'nonce' | 'bridged_token' | 'fee_treasury'> {
       return {
         receipts: {
       slot: new Fr(1n),
@@ -112,22 +112,34 @@ intent_owners: {
 intent_deadlines: {
       slot: new Fr(5n),
     },
-admin: {
+intent_net_amounts: {
       slot: new Fr(6n),
     },
-portal_address: {
+admin: {
       slot: new Fr(7n),
     },
+portal_address: {
+      slot: new Fr(8n),
+    },
 nonce: {
-      slot: new Fr(9n),
+      slot: new Fr(10n),
+    },
+bridged_token: {
+      slot: new Fr(11n),
+    },
+fee_treasury: {
+      slot: new Fr(13n),
     }
-      } as ContractStorageLayout<'receipts' | 'intent_status' | 'consumed_intents' | 'intent_owners' | 'intent_deadlines' | 'admin' | 'portal_address' | 'nonce'>;
+      } as ContractStorageLayout<'receipts' | 'intent_status' | 'consumed_intents' | 'intent_owners' | 'intent_deadlines' | 'intent_net_amounts' | 'admin' | 'portal_address' | 'nonce' | 'bridged_token' | 'fee_treasury'>;
     }
     
 
   /** Type-safe wrappers for the public methods exposed by the contract. */
   public declare methods: {
     
+    /** _cancel_deposit_public(intent_id: field, caller: struct, current_time: integer, net_amount: integer) */
+    _cancel_deposit_public: ((intent_id: FieldLike, caller: AztecAddressLike, current_time: (bigint | number), net_amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** _claim_refund_public(intent_id: field, current_time: integer) */
     _claim_refund_public: ((intent_id: FieldLike, current_time: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
@@ -140,14 +152,17 @@ nonce: {
     /** _request_withdraw_public(intent_id: field, owner: struct, deadline: integer) */
     _request_withdraw_public: ((intent_id: FieldLike, owner: AztecAddressLike, deadline: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** _set_intent_pending_deposit(intent_id: field, owner: struct) */
-    _set_intent_pending_deposit: ((intent_id: FieldLike, owner: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** _set_intent_pending_deposit(intent_id: field, owner: struct, deadline: integer, net_amount: integer) */
+    _set_intent_pending_deposit: ((intent_id: FieldLike, owner: AztecAddressLike, deadline: (bigint | number), net_amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** cancel_deposit(intent_id: field, current_time: integer, net_amount: integer) */
+    cancel_deposit: ((intent_id: FieldLike, current_time: (bigint | number), net_amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** claim_refund(nonce: field, current_time: integer) */
     claim_refund: ((nonce: FieldLike, current_time: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** constructor(admin: struct, portal_address: struct) */
-    constructor: ((admin: AztecAddressLike, portal_address: EthAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** constructor(admin: struct, portal_address: struct, bridged_token: struct, fee_treasury: struct) */
+    constructor: ((admin: AztecAddressLike, portal_address: EthAddressLike, bridged_token: AztecAddressLike, fee_treasury: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** finalize_deposit(intent_id: field, asset_id: field, shares: integer, secret: field, message_leaf_index: field) */
     finalize_deposit: ((intent_id: FieldLike, asset_id: FieldLike, shares: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;

@@ -378,9 +378,11 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       // After finalization, trying to set intent as pending again should fail
       // because consumed_intents is now true
       // Note: The SDK may not extract the assert message, so we also accept app_logic_reverted
+      const replayDeadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour from now
+      const netAmount = 1000000n; // 1 USDC (6 decimals)
       await expect(
         adminContract.methods
-          ._set_intent_pending_deposit(intentId, userAAddress)
+          ._set_intent_pending_deposit(intentId, userAAddress, replayDeadline, netAmount)
           .send({ from: adminAddress })
           .wait()
       ).rejects.toThrow(/Intent ID already consumed|app_logic_reverted/);
