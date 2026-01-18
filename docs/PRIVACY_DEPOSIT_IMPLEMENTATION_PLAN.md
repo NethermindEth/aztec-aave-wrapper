@@ -96,7 +96,7 @@ cd eth && forge build && forge inspect TokenPortal methods
 
 ---
 
-### Step 5: Add TokenPortal unit tests
+### Step 5: Add TokenPortal unit tests **COMPLETE**
 
 #### Goal
 Create comprehensive unit tests for TokenPortal covering deposit, withdraw, and edge cases.
