@@ -232,6 +232,7 @@ pub(crate) contract AaveWrapper {
         compute_withdraw_confirmation_content, compute_withdraw_message_content,
     };
     use crate::types::{DepositIntent, PositionReceiptNote, PositionStatus, WithdrawIntent};
+    use bridged_token::BridgedToken;
 
     /// Deadline validation constants.
     /// Min deadline: 30 minutes = 1800 seconds
@@ -436,6 +437,12 @@ pub(crate) contract AaveWrapper {
             deadline,
             salt,
         );
+
+        // Burn the user's L2 tokens before sending the cross-chain message
+        // This ensures atomicity: if burn fails, no L2->L1 message is sent
+        // The bridged token contract verifies authorization via authorized_burners mapping
+        let bridged_token_address = self.storage.bridged_token.read();
+        BridgedToken::at(bridged_token_address).burn_from(caller, amount).call(self.context);
 
         // Compute the message content hash for L2 to L1 messaging
         // Uses owner_hash and secret_hash - L1 portal doesn't learn the owner

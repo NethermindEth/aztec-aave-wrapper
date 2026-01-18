@@ -1,7 +1,7 @@
 use dep::aztec::macros::aztec;
 
 #[aztec]
-pub(crate) contract BridgedToken {
+pub contract BridgedToken {
     use dep::aztec::{
         macros::{events::event, functions::{external, initializer}, notes::note, storage::storage},
         messages::message_delivery::MessageDelivery,

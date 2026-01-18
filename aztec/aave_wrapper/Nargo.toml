@@ -6,3 +6,4 @@ compiler_version = ">=0.18.0"
 
 [dependencies]
 aztec = { git = "https://github.com/AztecProtocol/aztec-packages", tag = "v3.0.0-devnet.20251212", directory = "noir-projects/aztec-nr/aztec" }
+bridged_token = { path = "../bridged_token" }

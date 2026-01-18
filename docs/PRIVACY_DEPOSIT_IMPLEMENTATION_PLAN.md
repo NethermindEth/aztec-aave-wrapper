@@ -164,7 +164,7 @@ cd aztec && aztec compile
 
 ---
 
-### Step 8: Modify request_deposit to burn L2 tokens
+### Step 8: Modify request_deposit to burn L2 tokens **COMPLETE**
 
 #### Goal
 Update request_deposit at line 372 to burn the user's L2 tokens via the BridgedToken contract instead of expecting tokens on L1.
