@@ -679,7 +679,7 @@ grep -q "burn" frontend/src/flows/deposit.ts && grep -q "TokenPortal" frontend/s
 
 ---
 
-### Step 33: Update README with new flow descriptions
+### Step 33: Update README with new flow descriptions **COMPLETE**
 
 #### Goal
 Document the new bridge, cancel, and claim flows in frontend README.
