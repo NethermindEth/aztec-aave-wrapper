@@ -292,7 +292,7 @@ grep -q "Wait for L1→L2" frontend/src/components/DepositFlow.tsx && ! grep -q 
 
 ---
 
-## Phase 4: Cancel Deposit Flow
+## Phase 4: Cancel Deposit Flow **COMPLETE**
 
 Implement deposit cancellation for expired intents.
 
@@ -387,7 +387,7 @@ Complete the withdrawal flow with token claim from TokenPortal.
 cd frontend && npm run build && npm run typecheck
 ```
 
-### Step 19: Add L2 token claim service function
+### Step 19: Add L2 token claim service function **COMPLETE**
 
 #### Goal
 Create function to claim tokens from TokenPortal on L2 using BridgedToken.claim_private.
