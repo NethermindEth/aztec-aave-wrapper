@@ -444,7 +444,7 @@ grep -q "storeWithdrawSecret" frontend/src/services/secrets.ts && echo "OK"
 
 ---
 
-### Step 22: Update withdraw flow to persist secret
+### Step 22: Update withdraw flow to persist secret **COMPLETE**
 
 #### Goal
 Modify withdraw flow to store the secret for later token claim.

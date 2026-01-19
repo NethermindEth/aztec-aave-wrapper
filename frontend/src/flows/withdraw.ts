@@ -41,6 +41,7 @@ import {
   type Fr,
 } from "../services/l2/operations.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
+import { storeWithdrawSecret } from "../services/secrets.js";
 import {
   removePosition,
   setOperationError,
@@ -577,6 +578,15 @@ export async function executeWithdrawFlow(
     txHashes.l1Execute = executeResult.txHash;
 
     logSuccess(`Withdraw executed on L1 (tx: ${executeResult.txHash.slice(0, 10)}...)`);
+
+    // Store secret for later token claim
+    try {
+      await storeWithdrawSecret(intentIdStr, secret.toString(), wallet.address.toString());
+      logSuccess("Withdrawal secret stored for token claim");
+    } catch (storeError) {
+      // Log but don't fail the flow - user can still try to claim if they have the secret
+      logError(`Failed to store withdrawal secret: ${storeError instanceof Error ? storeError.message : "Unknown error"}`);
+    }
 
     // =========================================================================
     // Optional: Finalize on L2 (if L1→L2 messaging is available)
