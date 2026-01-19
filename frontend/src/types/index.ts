@@ -91,3 +91,13 @@ export {
   TimeoutError,
   UserRejectedError,
 } from "./errors.js";
+
+// =============================================================================
+// Re-export Fee Configuration
+// =============================================================================
+
+/**
+ * Protocol fee configuration for deposit/withdraw operations.
+ * Used for calculating and displaying fees in the UI.
+ */
+export { FEE_CONFIG } from "../config/constants.js";

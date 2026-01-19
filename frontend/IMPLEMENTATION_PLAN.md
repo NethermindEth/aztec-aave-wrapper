@@ -615,7 +615,7 @@ grep -q "l2UsdcBalance" frontend/src/components/DepositFlow.tsx && echo "OK"
 
 ---
 
-### Step 30: Update types index to export new types
+### Step 30: Update types index to export new types **COMPLETE**
 
 #### Goal
 Export all new types and functions from the types index file.
