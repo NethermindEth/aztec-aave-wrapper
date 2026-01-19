@@ -33,15 +33,21 @@ import {
   executeClaimRefundFlow,
   type RefundL2Context,
 } from "./flows/refund";
+import {
+  type BridgeL1Addresses,
+  type BridgeL2Context,
+  executeBridgeFlow,
+} from "./flows/bridge";
 import { getPositionStatusLabel, usePositions } from "./hooks/usePositions.js";
 import { createL1PublicClient, createL1WalletClient, DevnetAccounts } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
 import { balanceOf } from "./services/l1/tokens";
 import { createL2NodeClient } from "./services/l2/client";
 import { loadContractWithAzguard } from "./services/l2/contract";
+import { loadBridgedTokenWithAzguard } from "./services/l2/bridgedToken";
 import { connectAztecWallet } from "./services/wallet/aztec";
 import { connectEthereumWallet } from "./services/wallet/ethereum";
-import { setATokenBalance, setEthBalance, setUsdcBalance } from "./store";
+import { setATokenBalance, setEthBalance, setL2UsdcBalance, setUsdcBalance } from "./store";
 import { useApp } from "./store/hooks";
 import { formatUSDC, toBigIntString } from "./types/state.js";
 
@@ -60,6 +66,7 @@ const App: Component = () => {
   } = usePositions();
 
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
+  const [isBridging, setIsBridging] = createSignal(false);
   const [isDepositing, setIsDepositing] = createSignal(false);
   const [isWithdrawing, setIsWithdrawing] = createSignal(false);
   const [isCancelling, setIsCancelling] = createSignal(false);
@@ -147,6 +154,129 @@ const App: Component = () => {
     } catch (error) {
       // Balance refresh is non-critical - log but don't throw
       console.warn("Failed to refresh balances:", error);
+    }
+  };
+
+  /**
+   * Handle bridge operation to transfer USDC from L1 to L2.
+   * This is a prerequisite for privacy-preserving deposits.
+   */
+  const handleBridge = async (amount: bigint) => {
+    // Prevent duplicate submissions
+    if (isBridging()) {
+      addLog("Bridge already in progress", LogLevel.WARNING);
+      return;
+    }
+
+    // Validate contracts are loaded
+    if (!state.contracts.tokenPortal || !state.contracts.mockUsdc) {
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+      return;
+    }
+
+    // Extract validated contract addresses for type narrowing
+    const tokenPortal = state.contracts.tokenPortal;
+    const mockUsdc = state.contracts.mockUsdc;
+
+    setIsBridging(true);
+    const amountFormatted = formatAmount(amount);
+    addLog(`Initiating bridge of ${amountFormatted} USDC from L1 to L2`);
+
+    try {
+      // Connect to MetaMask for user wallet
+      addLog("Connecting to L1 (MetaMask)...");
+      const ethereumConnection = await connectEthereumWallet();
+      addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
+
+      // Create L1 clients with MetaMask user wallet
+      const publicClient = createL1PublicClient();
+      const l1Clients = {
+        publicClient,
+        userWallet: ethereumConnection.walletClient,
+        relayerWallet: ethereumConnection.walletClient, // Bridge doesn't need separate relayer
+      };
+
+      // Build L1 addresses for bridge
+      const l1Addresses: BridgeL1Addresses = {
+        tokenPortal,
+        mockUsdc,
+      };
+
+      // Initialize L2 context
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectAztecWallet();
+
+      // Load BridgedToken contract for L2 claiming
+      // Note: In MVP, we use the AaveWrapper address as a placeholder since
+      // BridgedToken address isn't in deployments. The bridge flow handles
+      // the L2 claim step gracefully if it fails.
+      addLog("Loading BridgedToken contract...");
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+
+      // For now, we need to get the BridgedToken address. In devnet, it should be
+      // deployed and linked to the AaveWrapper. We'll try to load it from the wallet.
+      // If not available, the bridge will still work but L2 claim may fail.
+      let bridgedTokenContract;
+      try {
+        // Try to load BridgedToken - in production this would come from deployments
+        // For MVP, we'll skip the L2 claim if BridgedToken isn't available
+        const wrapperContract = await loadContractWithAzguard(wallet, state.contracts.l2Wrapper!);
+        // Try to get bridged_token address from wrapper contract
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const methods = wrapperContract.contract.methods as any;
+        const bridgedTokenAddress = await methods.get_bridged_token().simulate();
+        const { contract } = await loadBridgedTokenWithAzguard(wallet, bridgedTokenAddress.toString());
+        bridgedTokenContract = contract;
+        addLog("BridgedToken contract loaded");
+      } catch {
+        addLog("BridgedToken contract not available - L2 claim will be skipped", LogLevel.WARNING);
+        // Create a minimal placeholder - the bridge flow will handle this gracefully
+        bridgedTokenContract = null;
+      }
+
+      // Build L2 context
+      const l2Context: BridgeL2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        bridgedTokenContract: bridgedTokenContract as BridgeL2Context["bridgedTokenContract"],
+      };
+
+      // Execute the bridge flow
+      addLog("Executing bridge flow...");
+      const result = await executeBridgeFlow(l1Clients, l1Addresses, l2Context, {
+        amount,
+      });
+
+      addLog(`Bridge complete! Message key: ${result.messageKey.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Amount bridged: ${formatAmount(result.amount)}`, LogLevel.SUCCESS);
+      if (result.claimed) {
+        addLog("L2 tokens claimed successfully", LogLevel.SUCCESS);
+      } else {
+        addLog("L2 tokens can be claimed later", LogLevel.WARNING);
+      }
+
+      // Refresh L1 balances after bridge
+      await refreshBalances(publicClient, ethereumConnection.address, mockUsdc);
+
+      // Update L2 USDC balance if claim was successful
+      if (result.claimed && bridgedTokenContract) {
+        try {
+          const { getBalance } = await import("./services/l2/bridgedToken");
+          const l2Balance = await getBalance(bridgedTokenContract, AztecAddress.fromString(walletAddress));
+          setL2UsdcBalance(l2Balance.toString());
+        } catch {
+          // Non-critical - L2 balance refresh is optional
+          console.warn("Failed to refresh L2 USDC balance");
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Bridge failed: ${message}`, LogLevel.ERROR);
+    } finally {
+      setIsBridging(false);
     }
   };
 
@@ -564,6 +694,7 @@ const App: Component = () => {
           <ErrorBoundary>
             <OperationTabs
               defaultTab="deposit"
+              onBridge={handleBridge}
               onDeposit={handleDeposit}
               onWithdraw={handleWithdraw}
             />

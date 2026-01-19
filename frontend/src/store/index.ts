@@ -52,6 +52,7 @@ export {
   setL2BlockNumber,
   // L2 connection actions
   setL2Connection,
+  setL2UsdcBalance,
   setOperationError,
   setOperationIntentId,
   setOperationStatus,

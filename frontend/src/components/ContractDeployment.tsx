@@ -98,6 +98,7 @@ export function ContractDeployment() {
 
       actions.setContracts({
         portal: deployments.l1.portal,
+        tokenPortal: deployments.l1.tokenPortal,
         mockUsdc: deployments.l1.mockUsdc,
         mockLendingPool: deployments.l1.mockLendingPool,
         l2Wrapper: deployments.l2.aaveWrapper,

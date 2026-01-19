@@ -135,6 +135,13 @@ export function setATokenBalance(balance: string): void {
   setState("wallet", "aTokenBalance", balance);
 }
 
+/**
+ * Update L2 USDC balance (as string)
+ */
+export function setL2UsdcBalance(balance: string): void {
+  setState("wallet", "l2UsdcBalance", balance);
+}
+
 // =============================================================================
 // Contract Actions
 // =============================================================================
@@ -145,6 +152,9 @@ export function setATokenBalance(balance: string): void {
 export function setContracts(contracts: Partial<ContractsState>): void {
   if (contracts.portal !== undefined) {
     setState("contracts", "portal", contracts.portal);
+  }
+  if (contracts.tokenPortal !== undefined) {
+    setState("contracts", "tokenPortal", contracts.tokenPortal);
   }
   if (contracts.mockUsdc !== undefined) {
     setState("contracts", "mockUsdc", contracts.mockUsdc);
