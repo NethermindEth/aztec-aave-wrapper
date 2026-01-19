@@ -5,7 +5,8 @@
  * and action button. Supports full withdrawal only (MVP constraint).
  */
 
-import { createMemo, createSignal, Match, Show, Switch } from "solid-js";
+import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
+import { hasSecret } from "../services/secrets.js";
 import { useApp } from "../store/hooks.js";
 import { IntentStatus } from "../types/index.js";
 import type { PositionDisplay } from "../types/state.js";
@@ -39,6 +40,11 @@ const WITHDRAW_STEPS: StepConfig[] = [
     description: "Completing withdrawal and nullifying position receipt",
     estimatedSeconds: 15,
   },
+  {
+    label: "Claim tokens on L2",
+    description: "Claiming withdrawn tokens via BridgedToken contract",
+    estimatedSeconds: 15,
+  },
 ];
 
 /**
@@ -47,6 +53,8 @@ const WITHDRAW_STEPS: StepConfig[] = [
 export interface WithdrawFlowProps {
   /** Callback when withdrawal is initiated */
   onWithdraw?: (intentId: string) => void;
+  /** Callback when claim is initiated for a pending withdrawal */
+  onClaim?: (intentId: string) => void;
   /** Optional: CSS class for the container */
   class?: string;
 }
@@ -94,12 +102,27 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
     state.positions.find((p) => p.intentId === selectedPosition())
   );
 
-  const isOperationActive = () => state.operation.type === "withdraw";
+  // Positions pending claim (PendingWithdraw status with stored secret)
+  const pendingClaims = createMemo(() =>
+    state.positions.filter(
+      (p) => p.status === IntentStatus.PendingWithdraw && hasSecret(p.intentId)
+    )
+  );
+
+  const hasPendingClaims = () => pendingClaims().length > 0;
+
+  const isOperationActive = () => state.operation.type === "withdraw" || state.operation.type === "claim";
+  const isWithdrawActive = () => state.operation.type === "withdraw";
+  const isClaimActive = () => state.operation.type === "claim";
   const isProcessing = () => isOperationActive() && state.operation.status === "pending";
 
   const currentStepConfig = () => {
     if (!isOperationActive()) return null;
     const step = state.operation.step;
+    if (isClaimActive()) {
+      // Claim steps map to the last step in WITHDRAW_STEPS (Claim tokens on L2)
+      return WITHDRAW_STEPS[WITHDRAW_STEPS.length - 1] ?? null;
+    }
     return WITHDRAW_STEPS[step - 1] ?? null;
   };
 
@@ -164,6 +187,13 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
 
     // Call handler
     props.onWithdraw?.(selectedPosition());
+  };
+
+  const handleClaim = (intentId: string) => {
+    if (!intentId || isProcessing()) {
+      return;
+    }
+    props.onClaim?.(intentId);
   };
 
   // Determine error to display (validation error or operation error)
@@ -238,6 +268,38 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
           <Alert variant="destructive">
             <AlertDescription>{displayError()}</AlertDescription>
           </Alert>
+        </Show>
+
+        {/* Pending Claims Section */}
+        <Show when={hasPendingClaims()}>
+          <div class="space-y-2 pt-4 border-t">
+            <h4 class="text-sm font-medium">Pending Claims</h4>
+            <p class="text-xs text-muted-foreground">
+              These withdrawals have completed on L1 and are ready to claim on L2.
+            </p>
+            <For each={pendingClaims()}>
+              {(position) => (
+                <div class="flex items-center justify-between rounded-md border p-3">
+                  <div class="space-y-1">
+                    <p class="text-sm font-medium">{position.sharesFormatted}</p>
+                    <p class="text-xs text-muted-foreground font-mono">
+                      {position.intentId.slice(0, 14)}...
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isProcessing()}
+                    onClick={() => handleClaim(position.intentId)}
+                  >
+                    <Show when={isClaimActive()} fallback="Claim tokens">
+                      Claiming...
+                    </Show>
+                  </Button>
+                </div>
+              )}
+            </For>
+          </div>
         </Show>
       </CardContent>
       <CardFooter>

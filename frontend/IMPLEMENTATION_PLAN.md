@@ -463,7 +463,7 @@ grep -q "storeWithdrawSecret" frontend/src/flows/withdraw.ts && echo "OK"
 
 ---
 
-### Step 23: Add claim step to WithdrawFlow UI
+### Step 23: Add claim step to WithdrawFlow UI **COMPLETE**
 
 #### Goal
 Add token claim step to withdrawal UI and show pending claims.
