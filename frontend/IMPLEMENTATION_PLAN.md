@@ -68,7 +68,7 @@ grep "MIN_OFFSET_SECONDS.*300" frontend/src/config/constants.ts && echo "OK"
 
 ---
 
-### Step 4: Add fee calculation utilities
+### Step 4: Add fee calculation utilities **COMPLETE**
 
 #### Goal
 Create utility functions to calculate protocol fee and net amount.
