@@ -378,7 +378,7 @@ grep -q "handleCancelDeposit" frontend/src/App.tsx && echo "OK"
 
 ---
 
-## Phase 5: Token Claim After Withdraw
+## Phase 5: Token Claim After Withdraw **COMPLETE**
 
 Complete the withdrawal flow with token claim from TokenPortal.
 
@@ -491,7 +491,7 @@ Implement refund for expired withdrawal requests.
 cd frontend && npm run build && npm run typecheck
 ```
 
-### Step 24: Add claim_refund L2 operation
+### Step 24: Add claim_refund L2 operation **COMPLETE**
 
 #### Goal
 Add service function to call claim_refund on AaveWrapper contract.

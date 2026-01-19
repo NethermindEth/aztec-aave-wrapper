@@ -783,6 +783,102 @@ export function deadlineFromNow(offsetSeconds: number): bigint {
 }
 
 // =============================================================================
+// Claim Refund Operation
+// =============================================================================
+
+/**
+ * Parameters for claim_refund operation
+ */
+export interface ClaimRefundParams {
+  /** The nonce of the PendingWithdraw receipt note to refund */
+  nonce: Fr;
+  /** Current timestamp for deadline validation (must be >= deadline for refund to succeed) */
+  currentTime: bigint;
+}
+
+/**
+ * Result of a claim refund execution
+ */
+export interface ClaimRefundResult {
+  /** Transaction hash */
+  txHash: string;
+}
+
+/**
+ * Execute a claim refund operation on the L2 contract.
+ *
+ * This function claims a refund for a pending withdrawal that has expired.
+ * The caller must own the PendingWithdraw position receipt note identified by nonce.
+ * The deadline must have passed (current_time >= deadline).
+ *
+ * Note: The currentTime parameter should be accurate - if it's too far in the past,
+ * the transaction will fail. Using Date.now() / 1000 is recommended.
+ *
+ * @param contract - AaveWrapper contract instance
+ * @param params - Claim refund parameters
+ * @param from - Sender address (must be the note owner)
+ * @returns Transaction hash
+ *
+ * @example
+ * ```ts
+ * const { txHash } = await executeClaimRefund(contract, {
+ *   nonce: withdrawIntentId,
+ *   currentTime: BigInt(Math.floor(Date.now() / 1000)),
+ * }, userAddress);
+ * ```
+ */
+export async function executeClaimRefund(
+  contract: AaveWrapperContract,
+  params: ClaimRefundParams,
+  from: AztecAddress
+): Promise<ClaimRefundResult> {
+  logInfo("Executing claim refund...");
+
+  // Debug: Log parameters
+  logInfo(`  nonce: ${params.nonce?.toString?.() ?? params.nonce}`);
+  logInfo(`  currentTime: ${params.currentTime}`);
+  logInfo(`  from: ${from?.toString?.() ?? from}`);
+
+  // Validate current_time is non-zero (matches contract validation)
+  if (params.currentTime <= 0n) {
+    throw new ContractOperationError(
+      "executeClaimRefund",
+      new Error("Current time must be greater than zero")
+    );
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const methods = contract.methods as any;
+
+    const call = methods.claim_refund(params.nonce, params.currentTime);
+
+    // Get the sponsored fee payment method (no Fee Juice required)
+    const paymentMethod = await getSponsoredFeePaymentMethod();
+
+    // Execute the transaction with sponsored fee payment
+    logInfo("Sending claim refund transaction to wallet for approval (using sponsored fees)...");
+    const tx = await call.send({ from, fee: { paymentMethod } }).wait();
+
+    logSuccess(`Claim refund executed, tx: ${tx.txHash?.toString()}`);
+
+    return {
+      txHash: tx.txHash?.toString() ?? "",
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    logError(`Claim refund failed: ${errorMessage}`);
+    if (errorStack) {
+      logError(`Stack trace: ${errorStack}`);
+    }
+    // Log the full error object for debugging
+    console.error("Full claim refund error:", error);
+    throw new ContractOperationError("executeClaimRefund", error);
+  }
+}
+
+// =============================================================================
 // Cancel Deposit Operation
 // =============================================================================
 
