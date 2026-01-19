@@ -372,7 +372,7 @@ make build && make test
 
 ---
 
-## Phase 6: Integration Testing
+## Phase 6: Integration Testing **COMPLETE**
 
 Create end-to-end tests validating the complete privacy-preserving deposit flow.
 
@@ -503,7 +503,7 @@ Remove legacy flow and update documentation.
 make test && make e2e
 ```
 
-### Step 22: Remove L1 direct token transfer code paths
+### Step 22: Remove L1 direct token transfer code paths **COMPLETE**
 
 #### Goal
 Remove code and comments in AavePortal that reference the old flow where tokens were pre-transferred to portal.
