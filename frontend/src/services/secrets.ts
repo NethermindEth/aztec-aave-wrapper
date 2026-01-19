@@ -366,3 +366,64 @@ export function clearAllSecrets(): void {
     // Ignore errors
   }
 }
+
+// =============================================================================
+// Withdrawal-Specific API
+// =============================================================================
+
+/**
+ * Store a withdrawal secret for later claim.
+ *
+ * This is a convenience wrapper around storeSecret() specifically for
+ * withdrawal flows. The secret is required to claim tokens after withdrawal
+ * finalization on L1.
+ *
+ * Security note: If the user clears localStorage before claiming, the secret
+ * will be lost and tokens cannot be claimed. Consider backing up secrets.
+ *
+ * @param intentId - The withdrawal intent ID
+ * @param secretHex - The withdrawal secret as hex string
+ * @param l2AddressHex - The user's L2 address for encryption
+ * @throws Error if any parameter is empty
+ *
+ * @example
+ * ```ts
+ * // After requesting withdrawal
+ * await storeWithdrawSecret(
+ *   withdrawResult.intentId,
+ *   withdrawResult.secret.toString(),
+ *   wallet.address.toString()
+ * );
+ * ```
+ */
+export async function storeWithdrawSecret(
+  intentId: string,
+  secretHex: string,
+  l2AddressHex: string
+): Promise<void> {
+  return storeSecret(intentId, secretHex, l2AddressHex);
+}
+
+/**
+ * Retrieve a stored withdrawal secret for token claim.
+ *
+ * @param intentId - The withdrawal intent ID
+ * @param l2AddressHex - The user's L2 address for decryption
+ * @returns The decrypted secret entry, or null if not found
+ *
+ * @example
+ * ```ts
+ * const secretEntry = await getWithdrawSecret(intentId, wallet.address.toString());
+ * if (secretEntry) {
+ *   // Use secretEntry.secretHex for token claim
+ * } else {
+ *   // Secret not found - user may have cleared storage
+ * }
+ * ```
+ */
+export async function getWithdrawSecret(
+  intentId: string,
+  l2AddressHex: string
+): Promise<SecretEntry | null> {
+  return getSecret(intentId, l2AddressHex);
+}

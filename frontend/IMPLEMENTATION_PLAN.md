@@ -425,7 +425,7 @@ test -f frontend/src/flows/claim.ts && grep -q "executeTokenClaim" frontend/src/
 
 ---
 
-### Step 21: Store withdrawal secret for claim
+### Step 21: Store withdrawal secret for claim **COMPLETE**
 
 #### Goal
 Persist withdrawal secret so user can claim tokens later.
