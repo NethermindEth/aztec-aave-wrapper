@@ -1,0 +1,275 @@
+/**
+ * BridgeFlow Component
+ *
+ * Bridge flow interface for transferring USDC from L1 (Ethereum) to L2 (Aztec).
+ * This is a prerequisite step before users can deposit to Aave with privacy.
+ *
+ * BRIDGE FLOW (3 steps):
+ * 1. Approve TokenPortal to spend USDC on L1
+ * 2. Deposit to TokenPortal (creates L1→L2 message)
+ * 3. Claim tokens on L2 via BridgedToken
+ */
+
+import { createSignal, Match, Show, Switch } from "solid-js";
+import { useApp } from "../store/hooks.js";
+import { fromBigIntString } from "../types/state.js";
+import { type StepConfig, StepIndicator } from "./StepIndicator";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+
+/**
+ * Bridge flow step configuration with labels, descriptions, and time estimates
+ */
+const BRIDGE_STEPS: StepConfig[] = [
+  {
+    label: "Approve TokenPortal",
+    description: "Approving TokenPortal to spend your USDC on L1",
+    estimatedSeconds: 15,
+  },
+  {
+    label: "Deposit to TokenPortal",
+    description: "Locking USDC and creating L1→L2 message",
+    estimatedSeconds: 30,
+  },
+  {
+    label: "Claim on L2",
+    description: "Claiming bridged tokens on Aztec L2",
+    estimatedSeconds: 60,
+  },
+];
+
+/**
+ * Props for BridgeFlow component
+ */
+export interface BridgeFlowProps {
+  /** Callback when bridge is initiated */
+  onBridge?: (amount: bigint) => void;
+  /** Optional: CSS class for the container */
+  class?: string;
+}
+
+/**
+ * Validate amount input
+ * @returns Error message or null if valid
+ */
+function validateAmount(amountStr: string, maxBalance: bigint): string | null {
+  if (!amountStr || amountStr.trim() === "") {
+    return "Amount is required";
+  }
+
+  const amount = parseFloat(amountStr);
+  if (Number.isNaN(amount)) {
+    return "Invalid amount";
+  }
+
+  if (amount <= 0) {
+    return "Amount must be positive";
+  }
+
+  // Convert to raw units (6 decimals for USDC)
+  const amountRaw = parseAmountToRaw(amountStr);
+  if (amountRaw > maxBalance) {
+    return "Amount exceeds L1 USDC balance";
+  }
+
+  return null;
+}
+
+/**
+ * Parse amount string to raw units (6 decimals for USDC)
+ */
+function parseAmountToRaw(amountStr: string): bigint {
+  const parts = amountStr.split(".");
+  const wholePart = parts[0] || "0";
+  let decimalPart = parts[1] || "";
+
+  // Pad or truncate to 6 decimals
+  decimalPart = decimalPart.slice(0, 6).padEnd(6, "0");
+
+  return BigInt(wholePart + decimalPart);
+}
+
+/**
+ * Format raw amount for display (6 decimals)
+ */
+function formatAmount(raw: bigint): string {
+  const wholePart = raw / 1_000_000n;
+  const decimalPart = raw % 1_000_000n;
+  const decimalStr = decimalPart.toString().padStart(6, "0").replace(/0+$/, "");
+
+  if (decimalStr) {
+    return `${wholePart}.${decimalStr}`;
+  }
+  return wholePart.toString();
+}
+
+/**
+ * BridgeFlow renders a bridge interface with:
+ * - Amount input with validation
+ * - Step indicator during active bridge (3 steps)
+ * - Error display
+ * - Action button
+ *
+ * @example
+ * ```tsx
+ * <BridgeFlow
+ *   onBridge={(amount) => {
+ *     console.log(`Bridge ${amount} USDC to L2`);
+ *   }}
+ * />
+ * ```
+ */
+export function BridgeFlow(props: BridgeFlowProps) {
+  const { state } = useApp();
+
+  // Local form state
+  const [amount, setAmount] = createSignal("");
+  const [validationError, setValidationError] = createSignal<string | null>(null);
+
+  // Derived state - bridge uses "deposit" operation type for UI consistency
+  const isOperationActive = () => state.operation.type === "deposit";
+  const isProcessing = () => isOperationActive() && state.operation.status === "pending";
+
+  const currentStepConfig = () => {
+    if (!isOperationActive()) return null;
+    const step = state.operation.step;
+    return BRIDGE_STEPS[step - 1] ?? null;
+  };
+
+  const currentStepLabel = () => currentStepConfig()?.label ?? "";
+  const currentStepDescription = () => currentStepConfig()?.description ?? "";
+  const currentStepEstimate = () => currentStepConfig()?.estimatedSeconds;
+
+  // Use L1 USDC balance (this would need to be added to state for production)
+  // For now, we'll use a placeholder that would be passed in or fetched
+  const maxL1Balance = () => fromBigIntString(state.wallet.usdcBalance);
+
+  const canBridge = () => {
+    // Must have L1 wallet connected
+    if (!state.wallet.l1Address) {
+      return false;
+    }
+
+    // Must have L2 wallet connected
+    if (!state.wallet.l2Address) {
+      return false;
+    }
+
+    // Must not have active operation
+    if (state.operation.type !== "idle") {
+      return false;
+    }
+
+    // Must have valid amount
+    const amountError = validateAmount(amount(), maxL1Balance());
+    if (amountError) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleAmountChange = (value: string) => {
+    // Only allow valid number input
+    if (value === "" || /^\d*\.?\d*$/.test(value)) {
+      setAmount(value);
+      // Clear validation error on input
+      setValidationError(null);
+    }
+  };
+
+  const handleBridge = () => {
+    // Validate amount
+    const amountError = validateAmount(amount(), maxL1Balance());
+    if (amountError) {
+      setValidationError(amountError);
+      return;
+    }
+
+    // Parse amount and call handler
+    const amountRaw = parseAmountToRaw(amount());
+    props.onBridge?.(amountRaw);
+  };
+
+  const handleMaxClick = () => {
+    // Set amount to max L1 balance
+    const balance = maxL1Balance();
+    if (balance > 0n) {
+      setAmount(formatAmount(balance));
+      setValidationError(null);
+    }
+  };
+
+  // Determine error to display (validation error or operation error)
+  const displayError = () => validationError() ?? state.operation.error;
+
+  return (
+    <Card class={props.class}>
+      <CardHeader>
+        <CardTitle class="text-lg">Bridge USDC to L2</CardTitle>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        {/* Info Alert */}
+        <Alert>
+          <AlertDescription>
+            Bridge USDC from Ethereum L1 to Aztec L2 before depositing to Aave with privacy.
+          </AlertDescription>
+        </Alert>
+
+        {/* Amount Input */}
+        <div class="space-y-2">
+          <div class="flex justify-between">
+            <Label for="bridge-amount">Amount (USDC)</Label>
+            <button
+              type="button"
+              class="text-xs text-primary hover:underline"
+              onClick={handleMaxClick}
+              disabled={isProcessing()}
+            >
+              Max
+            </button>
+          </div>
+          <Input
+            id="bridge-amount"
+            type="text"
+            inputMode="decimal"
+            placeholder="0.00"
+            value={amount()}
+            onInput={(e) => handleAmountChange(e.currentTarget.value)}
+            disabled={isProcessing()}
+          />
+        </div>
+
+        {/* Step Progress */}
+        <Show when={isOperationActive()}>
+          <StepIndicator
+            currentStep={state.operation.step}
+            totalSteps={BRIDGE_STEPS.length}
+            stepLabel={currentStepLabel()}
+            description={currentStepDescription()}
+            estimatedSecondsRemaining={currentStepEstimate()}
+          />
+        </Show>
+
+        {/* Error Alert */}
+        <Show when={displayError()}>
+          <Alert variant="destructive">
+            <AlertDescription>{displayError()}</AlertDescription>
+          </Alert>
+        </Show>
+      </CardContent>
+      <CardFooter>
+        <Button class="w-full" disabled={!canBridge() || isProcessing()} onClick={handleBridge}>
+          <Switch fallback="Bridge to L2">
+            <Match when={isProcessing()}>Processing...</Match>
+            <Match when={!state.wallet.l1Address}>Connect ETH Wallet</Match>
+            <Match when={!state.wallet.l2Address}>Connect Aztec Wallet</Match>
+          </Switch>
+        </Button>
+      </CardFooter>
+    </Card>
+  );
+}

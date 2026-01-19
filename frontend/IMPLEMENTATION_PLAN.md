@@ -153,7 +153,7 @@ test -f frontend/src/flows/bridge.ts && grep -q "executeBridgeFlow" frontend/src
 
 ---
 
-### Step 8: Create BridgeFlow UI component
+### Step 8: Create BridgeFlow UI component **COMPLETE**
 
 #### Goal
 Create UI component for bridging USDC from L1 to L2 before deposit.
