@@ -237,7 +237,7 @@ grep -q "TokenPortal" frontend/src/flows/deposit.ts && echo "OK"
 
 ---
 
-### Step 12: Add fee display to DepositFlow component
+### Step 12: Add fee display to DepositFlow component **COMPLETE**
 
 #### Goal
 Display protocol fee and net amount after fee in the deposit UI.

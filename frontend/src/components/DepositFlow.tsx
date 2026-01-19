@@ -6,7 +6,7 @@
  */
 
 import { createSignal, Match, Show, Switch } from "solid-js";
-import { DEADLINE_CONSTRAINTS } from "../config/constants.js";
+import { DEADLINE_CONSTRAINTS, FEE_CONFIG } from "../config/constants.js";
 import { useApp } from "../store/hooks.js";
 import { fromBigIntString } from "../types/state.js";
 import { type StepConfig, StepIndicator } from "./StepIndicator";
@@ -133,6 +133,30 @@ function parseAmountToRaw(amountStr: string): bigint {
 }
 
 /**
+ * Calculate protocol fee for a given amount
+ * Fee = amount * BASIS_POINTS / DENOMINATOR
+ */
+function calculateFee(amountRaw: bigint): bigint {
+  return (amountRaw * BigInt(FEE_CONFIG.BASIS_POINTS)) / BigInt(FEE_CONFIG.DENOMINATOR);
+}
+
+/**
+ * Format raw amount (6 decimals) to display string
+ */
+function formatAmount(amountRaw: bigint): string {
+  if (amountRaw === 0n) return "0.00";
+
+  const wholePart = amountRaw / 1_000_000n;
+  const decimalPart = amountRaw % 1_000_000n;
+  const decimalStr = decimalPart.toString().padStart(6, "0");
+
+  // Always show at least 2 decimal places, trim trailing zeros beyond that
+  const trimmed = decimalStr.slice(0, 2) + decimalStr.slice(2).replace(/0+$/, "");
+
+  return `${wholePart}.${trimmed || "00"}`;
+}
+
+/**
  * DepositFlow renders a deposit interface with:
  * - Amount input with validation
  * - Deadline selector with min/max constraints
@@ -174,6 +198,19 @@ export function DepositFlow(props: DepositFlowProps) {
   const currentStepEstimate = () => currentStepConfig()?.estimatedSeconds;
 
   const maxBalance = () => fromBigIntString(state.wallet.usdcBalance);
+
+  // Fee calculation derived state
+  const parsedAmount = () => {
+    const amountStr = amount();
+    if (!amountStr || amountStr.trim() === "" || !/^\d*\.?\d*$/.test(amountStr)) {
+      return 0n;
+    }
+    return parseAmountToRaw(amountStr);
+  };
+
+  const feeAmount = () => calculateFee(parsedAmount());
+  const netAmount = () => parsedAmount() - feeAmount();
+  const feePercentage = () => (FEE_CONFIG.BASIS_POINTS / 100).toFixed(1);
 
   const canDeposit = () => {
     // Must have wallet connected
@@ -291,6 +328,24 @@ export function DepositFlow(props: DepositFlowProps) {
             disabled={isProcessing()}
           />
         </div>
+
+        {/* Fee Display */}
+        <Show when={parsedAmount() > 0n}>
+          <div class="rounded-md bg-muted p-3 text-sm space-y-1">
+            <div class="flex justify-between">
+              <span class="text-muted-foreground">Deposit amount</span>
+              <span>{formatAmount(parsedAmount())} USDC</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-muted-foreground">Protocol fee ({feePercentage()}%)</span>
+              <span class="text-destructive">-{formatAmount(feeAmount())} USDC</span>
+            </div>
+            <div class="flex justify-between font-medium border-t border-border pt-1 mt-1">
+              <span>Net amount to Aave</span>
+              <span>{formatAmount(netAmount())} USDC</span>
+            </div>
+          </div>
+        </Show>
 
         {/* Deadline Selector */}
         <div class="space-y-2">
