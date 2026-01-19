@@ -76,6 +76,11 @@ export interface DepositFlowProps {
 }
 
 /**
+ * Minimum deposit amount in raw units (100 USDC = 100 * 10^6)
+ */
+const MIN_DEPOSIT_AMOUNT = BigInt(FEE_CONFIG.MIN_DEPOSIT) * 1_000_000n;
+
+/**
  * Validate amount input
  * @returns Error message or null if valid
  */
@@ -95,6 +100,11 @@ function validateAmount(amountStr: string, maxBalance: bigint): string | null {
 
   // Convert to raw units (6 decimals for USDC)
   const amountRaw = parseAmountToRaw(amountStr);
+
+  if (amountRaw < MIN_DEPOSIT_AMOUNT) {
+    return `Minimum deposit is ${FEE_CONFIG.MIN_DEPOSIT} USDC`;
+  }
+
   if (amountRaw > maxBalance) {
     return "Amount exceeds balance";
   }

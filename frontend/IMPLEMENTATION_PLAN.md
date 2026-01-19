@@ -256,7 +256,7 @@ grep -q "fee" frontend/src/components/DepositFlow.tsx && echo "OK"
 
 ---
 
-### Step 13: Add minimum deposit validation
+### Step 13: Add minimum deposit validation **COMPLETE**
 
 #### Goal
 Enforce 100 token minimum deposit as per spec (DEPOSIT_TRANSACTION_FLOW.md line 273).
