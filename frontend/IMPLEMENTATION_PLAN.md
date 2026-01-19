@@ -190,7 +190,7 @@ grep -q "l2UsdcBalance" frontend/src/types/state.ts && grep -q "tokenPortal" fro
 
 ---
 
-## Phase 3: Update Deposit Flow for Privacy
+## Phase 3: Update Deposit Flow for Privacy **COMPLETE**
 
 Remove direct L1 USDC transfer and integrate with burn-based privacy model.
 
@@ -301,7 +301,7 @@ Implement deposit cancellation for expired intents.
 cd frontend && npm run build && npm run typecheck
 ```
 
-### Step 15: Create cancel deposit flow orchestrator
+### Step 15: Create cancel deposit flow orchestrator **COMPLETE**
 
 #### Goal
 Implement cancel_deposit flow for reclaiming tokens when deadline passes without L1 execution.
