@@ -141,6 +141,8 @@ export interface WalletState {
   ethBalance: string;
   /** USDC balance as string */
   usdcBalance: string;
+  /** L2 USDC balance as string (bridged tokens) */
+  l2UsdcBalance: string;
   /** aToken balance as string */
   aTokenBalance: string;
 }
@@ -155,6 +157,8 @@ export interface WalletState {
 export interface L1Addresses {
   /** Portal contract address */
   portal: Address | null;
+  /** Token portal contract address for L1<->L2 token bridging */
+  tokenPortal: Address | null;
   /** Mock USDC token address */
   mockUsdc: Address | null;
   /** Mock Aave lending pool address */
@@ -245,10 +249,12 @@ export function createInitialAppState(): AppState {
       l2Address: null,
       ethBalance: "0",
       usdcBalance: "0",
+      l2UsdcBalance: "0",
       aTokenBalance: "0",
     },
     contracts: {
       portal: null,
+      tokenPortal: null,
       mockUsdc: null,
       mockLendingPool: null,
       l2Wrapper: null,

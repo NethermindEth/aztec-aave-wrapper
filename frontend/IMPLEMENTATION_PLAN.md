@@ -172,7 +172,7 @@ test -f frontend/src/components/BridgeFlow.tsx && echo "OK"
 
 ---
 
-### Step 9: Add bridge configuration to state
+### Step 9: Add bridge configuration to state **COMPLETE**
 
 #### Goal
 Add L2 token balance tracking and TokenPortal address to application state.
