@@ -134,7 +134,7 @@ test -f frontend/src/services/l1/tokenPortal.ts && echo "OK"
 
 ---
 
-### Step 7: Create bridge flow orchestrator
+### Step 7: Create bridge flow orchestrator **COMPLETE**
 
 #### Goal
 Implement the bridge flow that transfers USDC from L1 to L2 (prerequisite for privacy-preserving deposit).
