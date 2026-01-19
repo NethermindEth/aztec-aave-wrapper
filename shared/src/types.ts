@@ -26,16 +26,21 @@ export type TxHash = `0x${string}`;
 /**
  * Status of an intent in the system
  * Maps to u8 values used in Noir contract
+ * See DEPOSIT_TRANSACTION_FLOW.md lines 617-623 for specification
  */
 export enum IntentStatus {
-  /** Deposit requested, awaiting execution */
-  PendingDeposit = 0,
-  /** Position is active (deposit confirmed) */
-  Active = 1,
-  /** Withdrawal requested, awaiting execution */
-  PendingWithdraw = 2,
-  /** Intent has been consumed/finalized */
-  Consumed = 3,
+  /** Intent has not been submitted */
+  Unknown = 0,
+  /** Intent submitted, awaiting L1 execution */
+  PendingDeposit = 1,
+  /** Intent successfully executed and confirmed */
+  Confirmed = 2,
+  /** Intent execution failed */
+  Failed = 3,
+  /** Withdrawal requested, awaiting L1 execution */
+  PendingWithdraw = 4,
+  /** Deposit cancelled after deadline passed */
+  Cancelled = 5,
 }
 
 /**

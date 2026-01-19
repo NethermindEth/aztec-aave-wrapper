@@ -3,6 +3,23 @@
  */
 
 // =============================================================================
+// Protocol Fee Configuration
+// =============================================================================
+
+/**
+ * Fee configuration for the Aztec Aave Wrapper protocol.
+ * Used for calculating and displaying protocol fees on deposits/withdrawals.
+ */
+export const FEE_CONFIG = {
+  /** Fee in basis points (0.1% = 10 basis points) */
+  BASIS_POINTS: 10,
+  /** Denominator for basis point calculations (10000 = 100%) */
+  DENOMINATOR: 10000,
+  /** Minimum deposit amount in token units (before decimals) */
+  MIN_DEPOSIT: 100,
+} as const;
+
+// =============================================================================
 // Deadline Constraints
 // =============================================================================
 

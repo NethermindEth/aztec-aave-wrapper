@@ -1,14 +1,15 @@
 # Withdraw Transaction Flow
 
-This document details every transaction signed during the withdrawal flow in the Aztec Aave Wrapper frontend.
+This document details every transaction signed during the withdrawal flow in the Aztec Aave Wrapper.
 
 ## Transaction Summary
 
-| # | Chain | TX Type | Signer | Function | File | Line |
-|---|-------|---------|--------|----------|------|------|
-| 1 | L2 | Request Withdraw | User (Azguard) | `request_withdraw()` | operations.ts | 551 |
-| 2 | L1 | Execute Withdraw | Relayer | `executeWithdraw()` | portal.ts | 376 |
-| 3 | L2 | Finalize Withdraw | User (Azguard) | `finalize_withdraw()` | operations.ts | 626 |
+| # | Chain | TX Type | Signer | Function | Description |
+|---|-------|---------|--------|----------|-------------|
+| 1 | L2 | Request Withdraw | User (Azguard) | `request_withdraw()` | Nullifies position, creates withdrawal intent |
+| 2 | L1 | Execute Withdraw | Anyone | `executeWithdraw()` | Withdraws from Aave, deposits to TokenPortal |
+| 3 | L2 | Finalize Withdraw | User (Azguard) | `finalize_withdraw()` | Nullifies pending note, completes position |
+| 4 | L2 | Claim Tokens | User (Azguard) | `BridgedToken.claim_private()` | Claims tokens from TokenPortal (separate flow) |
 
 ---
 
@@ -19,12 +20,11 @@ This document details every transaction signed during the withdrawal flow in the
 │                          WITHDRAW TRANSACTION FLOW                                       │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 
-User clicks "Withdraw" button (selects position)
+User selects position and clicks "Withdraw"
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  STEP 0: Generate Secret Pair (no signature)                                            │
-│  File: frontend/src/flows/withdraw.ts:451                                               │
 │  - Generates secret + secretHash for privacy                                            │
 │  - Computes ownerHash = poseidon2_hash(userL2Address)                                   │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
@@ -37,15 +37,14 @@ User clicks "Withdraw" button (selects position)
 ║  Contract:  AaveWrapper (L2)                                                            ║
 ║  Function:  request_withdraw(nonce, amount, deadline, secret_hash)                      ║
 ║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── withdraw.ts:481-510 → operations.ts:527-584 → SIGN at line 551                     ║
-║                                                                                         ║
 ║  State Changes:                                                                         ║
 ║  ├── Finds PositionReceiptNote by nonce (original deposit intentId)                     ║
+║  ├── Verifies receipt status is ACTIVE and amount equals full shares (MVP)              ║
 ║  ├── Nullifies ACTIVE note, creates PENDING_WITHDRAW note                               ║
 ║  ├── Computes ownerHash = Poseidon(userL2Address) for privacy                           ║
 ║  ├── Stores intent_owners[intentId] = caller for finalization routing                   ║
 ║  ├── Stores intent_deadlines[intentId] = deadline for refund validation                 ║
+║  ├── Updates intent_status[intentId] = PENDING_WITHDRAW                                 ║
 ║  └── Sends L2→L1 message to Aztec outbox                                                ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
          │
@@ -54,42 +53,36 @@ User clicks "Withdraw" button (selects position)
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  WAIT: Poll for L2→L1 message availability                                              │
-│  File: frontend/src/flows/withdraw.ts:517-524                                           │
 │  - Fetches L2→L1 message proof from Aztec node                                          │
-│  - Polls up to 30 times with 2-second intervals                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ╔═════════════════════════════════════════════════════════════════════════════════════════╗
 ║  TX #2: EXECUTE WITHDRAW (L1 - Ethereum)                                                ║
 ╠═════════════════════════════════════════════════════════════════════════════════════════╣
-║  Signer:    Relayer wallet (NOT user - preserves privacy)                               ║
+║  Signer:    Anyone (relayer or user from fresh wallet - preserves privacy)              ║
 ║  Contract:  AztecAavePortalL1                                                           ║
 ║  Function:  executeWithdraw(intent, secretHash, l2BlockNumber, leafIndex, siblingPath)  ║
 ║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── withdraw.ts:569-576 → portal.ts:357-388 → SIGN at line 376                         ║
-║                                                                                         ║
 ║  State Changes:                                                                         ║
+║  ├── Validates deadline within bounds (5 min to 24 hours)                               ║
 ║  ├── Consumes L2→L1 message from Aztec outbox                                           ║
 ║  ├── Verifies message proof against outbox Merkle tree                                  ║
-║  ├── Calls Aave LendingPool.withdraw(asset, shares, portal)                             ║
+║  ├── Marks consumedIntents[intentId] = true                                             ║
 ║  ├── Clears intentShares[intentId] and intentAssets[intentId]                           ║
-║  ├── Approves Token Portal and deposits tokens to L2                                    ║
+║  ├── Calls Aave LendingPool.withdraw(asset, shares, portal)                             ║
+║  ├── Approves TokenPortal and deposits tokens via depositToAztecPrivate                 ║
 ║  ├── Sends L1→L2 confirmation message via Aztec inbox                                   ║
-║  └── Emits L2MessageSent(messageLeaf, messageIndex)                                     ║
+║  └── Emits WithdrawExecuted, TokensDepositedToL2, L2MessageSent                         ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
          │
-         │  L1 → L2 Message (async, ~10 blocks)
-         │  Contains: intentId, asset, withdrawnAmount
-         │
-         │  Token Portal Message (async)
-         │  Contains: amount, secretHash (for private token claim)
+         │  L1 → L2 Messages (async, ~10 blocks):
+         │  1. Confirmation: intentId, asset, withdrawnAmount
+         │  2. TokenPortal: amount, secretHash (for private token claim)
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  WAIT: Poll for L1→L2 message availability                                              │
-│  File: frontend/src/flows/withdraw.ts:588                                               │
-│  - Waits for message to be consumable on L2                                             │
+│  - Waits for confirmation message to be consumable on L2                                │
 │  - Fetches membership witness proof                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
          │
@@ -100,9 +93,6 @@ User clicks "Withdraw" button (selects position)
 ║  Signer:    User via Azguard Wallet                                                     ║
 ║  Contract:  AaveWrapper (L2)                                                            ║
 ║  Function:  finalize_withdraw(intentId, assetId, amount, secret, messageLeafIndex)      ║
-║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── withdraw.ts:590-600 → operations.ts:605-639 → SIGN at line 626                     ║
 ║                                                                                         ║
 ║  State Changes:                                                                         ║
 ║  ├── Consumes L1→L2 confirmation message from Aztec inbox                               ║
@@ -115,9 +105,9 @@ User clicks "Withdraw" button (selects position)
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│  TOKEN CLAIM (separate flow)                                                            │
-│  - User claims tokens from Token Portal using secret                                    │
-│  - Tokens minted to user's private balance on L2                                        │
+│  TX #4: TOKEN CLAIM (separate flow via BridgedToken)                                    │
+│  - User claims tokens from TokenPortal using secret                                     │
+│  - Tokens minted to user's private balance on L2 via BridgedToken                       │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -132,7 +122,7 @@ User clicks "Withdraw" button (selects position)
 
 ### TX #1: request_withdraw (L2 Noir)
 
-**Contract**: `aztec/src/main.nr:602-679`
+**Contract**: `AaveWrapper (L2)`
 
 ```noir
 #[external("private")]
@@ -223,7 +213,7 @@ fn request_withdraw(
 
 ### TX #2: executeWithdraw (L1 Solidity)
 
-**Contract**: `eth/contracts/AztecAavePortalL1.sol:289-386`
+**Contract**: `AztecAavePortalL1`
 
 ```solidity
 function executeWithdraw(
@@ -349,7 +339,7 @@ struct WithdrawIntent {
 
 ### TX #3: finalize_withdraw (L2 Noir)
 
-**Contract**: `aztec/src/main.nr:744-808`
+**Contract**: `AaveWrapper (L2)`
 
 ```noir
 #[external("private")]
@@ -427,78 +417,40 @@ fn finalize_withdraw(
 
 ---
 
-## Detailed Transaction Breakdown
+## Token Flow Diagram
 
-### TX #1: Request Withdraw (L2)
-
-**Entry Point**: `WithdrawFlow.tsx:166` → `App.tsx:257` → `withdraw.ts:419`
-
-**Code References**:
 ```
-frontend/src/flows/withdraw.ts:481-510        # Flow orchestration
-frontend/src/services/l2/operations.ts:527-584   # Contract call construction
-frontend/src/services/l2/operations.ts:551       # Actual signing point
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           TOKEN FLOW (WITHDRAWAL)                                │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   WITHDRAW PHASE (privacy-preserving):                                          │
+│   ════════════════════════════════════                                          │
+│                                                                                 │
+│   L2: User has PositionReceiptNote (encrypted)                                  │
+│            │                                                                    │
+│            └──request_withdraw──► AaveWrapper (nullifies note, creates pending) │
+│                                          │                                      │
+│                                          │ L2→L1 message                        │
+│                                          ▼                                      │
+│   L1: AavePortal ──withdraw──► Aave Pool                                        │
+│            │          (shares → tokens)                                         │
+│            │                                                                    │
+│            └──depositToAztecPrivate──► TokenPortal (holds tokens)               │
+│                                              │                                  │
+│                                              │ L1→L2 message                    │
+│                                              ▼                                  │
+│   L2: finalize_withdraw ──nullifies──► PENDING_WITHDRAW note (deleted)          │
+│                                                                                 │
+│   TOKEN CLAIM (separate flow):                                                  │
+│   ════════════════════════════                                                  │
+│                                                                                 │
+│   L2: User claims from TokenPortal using secret                                 │
+│            │                                                                    │
+│            └──► BridgedToken mints ──► User L2 Balance (private)                │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
-
-**What Gets Signed**:
-- Aztec transaction calling `request_withdraw` on AaveWrapper contract
-- Fee payment via SponsoredFPC (gas-less for user)
-
-**Parameters**:
-```
-nonce = position.depositIntentId  // Original deposit's intentId
-amount = position.shares          // Full withdrawal required (MVP)
-deadline = l1Timestamp + 3600     // 1 hour from now
-secretHash = hash(secret)         // For L1→L2 message claim
-```
-
----
-
-### TX #2: Execute Withdraw (L1)
-
-**Code References**:
-```
-frontend/src/flows/withdraw.ts:569-576     # Flow trigger
-frontend/src/services/l1/portal.ts:357-388    # Execute implementation
-frontend/src/services/l1/portal.ts:376        # Actual signing point
-```
-
-**Signer**: Relayer wallet (hardcoded in `DevnetAccounts.relayer`)
-- This is intentional for privacy - user identity not linked to L1 execution
-
-**What Gets Signed (Relayer)**:
-```solidity
-AztecAavePortalL1.executeWithdraw(
-    intent,           // WithdrawIntent struct
-    secretHash,       // For token portal deposit
-    l2BlockNumber,    // For proof verification
-    leafIndex,        // Message position in tree
-    siblingPath       // Merkle proof
-)
-```
-
-**Key Actions**:
-1. Consumes L2→L1 message from Aztec outbox
-2. Withdraws tokens from Aave (converts aTokens → underlying)
-3. Deposits tokens to Aztec Token Portal (for private claim on L2)
-4. Sends L1→L2 confirmation message
-
----
-
-### TX #3: Finalize Withdraw (L2)
-
-**Code References**:
-```
-frontend/src/flows/withdraw.ts:590-600     # Flow orchestration
-frontend/src/services/l2/operations.ts:605-639  # Contract call construction
-frontend/src/services/l2/operations.ts:626      # Actual signing point
-```
-
-**What Gets Signed**:
-- Aztec transaction calling `finalize_withdraw` on AaveWrapper contract
-- Fee payment via SponsoredFPC
-
-**Note**: This transaction may fail in devnet without real L1→L2 messaging infrastructure
 
 ---
 
@@ -553,7 +505,7 @@ The relayer handles all L1 interactions.
 
 ## MVP Constraints
 
-**Full Withdrawal Only** (`aztec/src/main.nr:631-635`):
+**Full Withdrawal Only**:
 ```noir
 // MVP: Enforce full withdrawal only (no partial withdrawals)
 assert(
@@ -568,26 +520,74 @@ This simplifies the note lifecycle - no need to track partial positions.
 
 ## Refund Flow (Expired Withdrawals)
 
-If a withdrawal request expires (deadline passes without L1 execution), users can claim a refund:
+If a withdrawal request expires (deadline passes without L1 execution), users can claim a refund to restore their position:
 
-**Contract**: `aztec/src/main.nr:872-929`
+**Contract**: `AaveWrapper (L2)`
 
 ```noir
 #[external("private")]
 fn claim_refund(nonce: Field, current_time: u64) {
-    // Find and nullify PENDING_WITHDRAW note
-    // Create new ACTIVE note with same position details (different nonce)
-    // Enqueue public call to verify deadline expired and reset status
+    // Validate current_time is non-zero
+    assert(current_time > 0, "Current time must be greater than zero");
+
+    // Get the caller's address (must be the owner of the note)
+    let owner = self.msg_sender().unwrap();
+
+    // Find the PendingWithdraw receipt note by nonce
+    let options = NoteGetterOptions::new()
+        .select(PositionReceiptNote::properties().nonce, Comparator.EQ, nonce)
+        .set_limit(1);
+
+    let notes = self.storage.receipts.at(owner).pop_notes(options);
+
+    // Ensure we found exactly one note with PENDING_WITHDRAW status
+    assert(notes.len() == 1, "Pending withdraw receipt note not found");
+    let receipt = notes.get(0);
+    assert(receipt.owner == owner, "Not the owner of this position");
+    assert(receipt.status == PositionStatus::PENDING_WITHDRAW, "Position is not pending withdrawal");
+
+    // Generate a new nonce for the refunded note (ensures unique nullifier)
+    let new_nonce = poseidon2_hash([receipt.nonce, owner.to_field()]);
+
+    // Create a new ACTIVE note with the same position details but new nonce
+    let refunded_receipt = PositionReceiptNote {
+        owner,
+        nonce: new_nonce,
+        asset_id: receipt.asset_id,
+        shares: receipt.shares,
+        aave_market_id: receipt.aave_market_id,
+        status: PositionStatus::ACTIVE,
+    };
+
+    // Insert the refunded note
+    self.storage.receipts.at(owner).insert(refunded_receipt).deliver(
+        MessageDelivery.CONSTRAINED_ONCHAIN,
+    );
+
+    // Enqueue public call to verify deadline and mark refund as claimed
+    AaveWrapper::at(self.context.this_address())
+        ._claim_refund_public(receipt.nonce, current_time)
+        .enqueue(self.context);
 }
 ```
+
+**Public Function `_claim_refund_public`**:
+- Verifies intent status is PENDING_WITHDRAW
+- Reads stored deadline from `intent_deadlines[intentId]`
+- Verifies `current_time >= deadline` (deadline has expired)
+- Updates intent status back to CONFIRMED
+- Clears `intent_owners` and `intent_deadlines` mappings
 
 **State Changes**:
 | Storage | Before | After |
 |---------|--------|-------|
 | `receipts` (private) | `PENDING_WITHDRAW` note | Nullified |
-| `receipts` (private) | - | New `ACTIVE` note (different nonce) |
+| `receipts` (private) | - | New `ACTIVE` note (with new nonce) |
 | `intent_status[intentId]` | `4 (PENDING_WITHDRAW)` | `2 (CONFIRMED)` |
-| `intent_owners[intentId]` | `caller` | `0x0` |
+| `intent_owners[intentId]` | `caller` | `0x0` (cleared) |
+| `intent_deadlines[intentId]` | `deadline` | `0` (cleared) |
+
+**Note**: The new ACTIVE note has a different nonce (`hash(original_nonce, owner)`) to ensure unique nullifiers and prevent replay attacks.
 
 ---
 
@@ -597,24 +597,48 @@ If any transaction fails, the flow stops at that step:
 - **TX #1 fails**: No state changed (note not nullified), user can retry
 - **TX #2 fails**: L2 note is PENDING_WITHDRAW, user can:
   - Wait and retry L1 execution
-  - Claim refund after deadline expires
+  - Claim refund via `claim_refund()` after deadline expires
+- **TX #2 deadline expires**: User can restore position via `claim_refund()`
 - **TX #3 fails**: L1 already executed, tokens in portal - can retry finalization
+- **TX #4 fails**: Tokens remain in TokenPortal - can retry claim
 
-**Error Detection** (`withdraw.ts:639-650`):
-- User rejection errors (user cancelled)
-- Network errors (RPC issues)
-- Timeout errors (message not found)
-- Position not found errors
+---
 
-**Automatic Retry** (`withdraw.ts:669-704`):
-- `executeWithdrawFlowWithRetry()` provides automatic retry
-- Excludes permanent failures (user rejection, position not found)
+## Deadline Validation
+
+Deadlines are validated differently on L2 and L1:
+
+| Layer | Validation | Bounds |
+|-------|------------|--------|
+| L2 (request_withdraw) | `deadline > 0` | No max bound on L2 (no block.timestamp access) |
+| L1 (executeWithdraw) | `block.timestamp < deadline` | 5 minutes minimum, 24 hours maximum |
+
+**L1 Deadline Constants**:
+```solidity
+uint256 public constant MIN_DEADLINE = 5 minutes;
+uint256 public constant MAX_DEADLINE = 24 hours;
+```
+
+**Note**: L2 cannot access `block.timestamp`, so deadline validation is enforced on L1. The L2 only checks that deadline is non-zero.
+
+---
+
+## Intent Status Constants
+
+| Status | Value | Description |
+|--------|-------|-------------|
+| UNKNOWN | 0 | Intent has not been submitted |
+| PENDING_DEPOSIT | 1 | Deposit intent submitted, awaiting L1 execution |
+| CONFIRMED | 2 | Intent successfully executed and confirmed |
+| FAILED | 3 | Intent execution failed |
+| PENDING_WITHDRAW | 4 | Withdrawal requested, awaiting L1 execution |
+| CANCELLED | 5 | Deposit cancelled after deadline passed |
 
 ---
 
 ## Events Emitted
 
-### L1 Events (`AztecAavePortalL1.sol`):
+### L1 Events (AztecAavePortalL1):
 ```solidity
 event WithdrawExecuted(bytes32 indexed intentId, address indexed asset, uint256 amount);
 event WithdrawConfirmed(bytes32 indexed intentId, uint256 amount, ConfirmationStatus status);
@@ -622,8 +646,24 @@ event L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf, uint256 messa
 event TokensDepositedToL2(bytes32 indexed intentId, bytes32 messageKey, uint256 messageIndex);
 ```
 
-### L2 Events (`main.nr`):
+### L2 Events (AaveWrapper):
 ```noir
 IntentStatusChangedEvent { intent_id, new_status: PENDING_WITHDRAW }  // After request_withdraw
 IntentStatusChangedEvent { intent_id, new_status: CONFIRMED }         // After finalize_withdraw
+IntentStatusChangedEvent { intent_id, new_status: CONFIRMED }         // After claim_refund
 ```
+
+---
+
+## Comparison: Deposit vs Withdrawal
+
+| Aspect | Deposit | Withdrawal |
+|--------|---------|------------|
+| Initiates from | User L2 balance | PositionReceiptNote |
+| Creates | PositionReceiptNote | Tokens in TokenPortal |
+| Nullifies | L2 tokens (burn) | PositionReceiptNote |
+| L1 action | Supply to Aave | Withdraw from Aave |
+| Token movement | L2 → L1 (via burn) | L1 → L2 (via TokenPortal) |
+| Final result | aTokens held by AavePortal | Tokens claimable on L2 |
+| Refund mechanism | `cancel_deposit()` | `claim_refund()` |
+| Protocol fee | 0.1% on deposit | None |
