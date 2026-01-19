@@ -34,10 +34,8 @@ import {
 import { mineL1Block } from "../services/l1/mining.js";
 import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
 import {
-  approve,
   balanceOf,
   type L1AddressesForBalances,
-  transfer,
 } from "../services/l1/tokens.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
@@ -127,8 +125,6 @@ export interface DepositResult {
   /** Transaction hashes for each step */
   txHashes: {
     l2Request?: string;
-    l1Approve?: string;
-    l1Transfer?: string;
     l1Execute?: string;
     l2Finalize?: string;
   };
@@ -489,27 +485,10 @@ export async function executeDepositFlow(
       );
     }
 
-    // Approve portal to spend USDC
-    logSection("L1", "Approving portal to spend USDC...");
-    const approveResult = await approve(
-      publicClient,
-      userWallet,
-      l1Addresses.mockUsdc,
-      l1Addresses.portal,
-      config.amount
-    );
-    txHashes.l1Approve = approveResult.txHash;
-
-    // Transfer USDC to portal
-    logSection("L1", "Transferring USDC to portal...");
-    const transferResult = await transfer(
-      publicClient,
-      userWallet,
-      l1Addresses.mockUsdc,
-      l1Addresses.portal,
-      config.amount
-    );
-    txHashes.l1Transfer = transferResult.txHash;
+    // NOTE: No direct L1 approve/transfer from user's wallet here
+    // Tokens flow through TokenPortal: user's L2 tokens were already burned in request_deposit,
+    // and the L1 portal claims from TokenPortal during executeDeposit.
+    // This preserves privacy - no direct link between user's L1 wallet and the deposit.
 
     // Create deposit intent for L1
     const salt = generateSalt();

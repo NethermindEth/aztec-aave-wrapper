@@ -87,7 +87,7 @@ test -f frontend/src/utils/fees.ts && echo "OK"
 
 ---
 
-## Phase 2: Bridge Flow Infrastructure
+## Phase 2: Bridge Flow Infrastructure **COMPLETE**
 
 Create the prerequisite bridge flow that moves USDC from L1 to L2 via TokenPortal, which is required for the privacy-preserving architecture.
 
@@ -199,7 +199,7 @@ Remove direct L1 USDC transfer and integrate with burn-based privacy model.
 cd frontend && npm run build && npm run typecheck
 ```
 
-### Step 10: Remove L1 approve and transfer from deposit flow
+### Step 10: Remove L1 approve and transfer from deposit flow **COMPLETE**
 
 #### Goal
 Remove the privacy-violating direct USDC transfer from user's L1 wallet (deposit.ts lines 492-511).
