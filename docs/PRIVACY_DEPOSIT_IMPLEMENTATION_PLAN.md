@@ -446,7 +446,7 @@ cd e2e && bun run test --match bridge
 
 ---
 
-### Step 20: Update E2E deposit test for new flow
+### Step 20: Update E2E deposit test for new flow **COMPLETE**
 
 #### Goal
 Update the main E2E deposit test to use bridged L2 tokens instead of L1 direct transfer.

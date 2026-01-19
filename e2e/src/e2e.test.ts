@@ -102,8 +102,9 @@ describe("Aztec Aave Wrapper E2E", () => {
   // Relayer wallets (different from user for privacy)
   let l1RelayerWallet: ReturnType<typeof createWalletClient>;
 
-  // Contract instance
+  // Contract instances
   let aaveWrapper: ContractInstance;
+  let bridgedToken: ContractInstance;
 
   // Aztec helper
   let aztecHelper: AztecHelper;
@@ -164,6 +165,65 @@ describe("Aztec Aave Wrapper E2E", () => {
 
     if (status.contractsDeployed) {
       aaveWrapper = harness.contracts.aaveWrapper;
+      bridgedToken = harness.contracts.bridgedToken;
+
+      if (!bridgedToken) {
+        console.warn("BridgedToken contract not deployed - some tests may fail");
+      }
+
+      // Set up BridgedToken authorization for the new token flow:
+      // 1. Set admin as minter on BridgedToken (to mint test tokens)
+      // 2. Authorize AaveWrapper as burner on BridgedToken (for request_deposit)
+      const adminWallet = harness.accounts.admin.wallet;
+      const adminAddress = harness.accounts.admin.address;
+      const aaveWrapperAddress = aaveWrapper.address;
+
+      try {
+        // Direct contract calls instead of helpers to avoid address property issues
+        const bridgedTokenWithAdmin = bridgedToken.withWallet(adminWallet);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const bridgedMethods = bridgedTokenWithAdmin.methods as any;
+
+        // Set admin as minter so we can mint tokens to test users
+        await bridgedMethods.set_minter(adminAddress).send({ from: adminAddress }).wait();
+        logger.l2("BridgedToken minter set to admin", { minter: adminAddress.toString() });
+
+        // Authorize AaveWrapper to burn tokens during deposits
+        await bridgedMethods
+          .authorize_burner(aaveWrapperAddress, true)
+          .send({ from: adminAddress })
+          .wait();
+        logger.l2("AaveWrapper authorized as burner on BridgedToken", {
+          burner: aaveWrapperAddress.toString(),
+        });
+      } catch (error) {
+        console.error(
+          "Failed to set up BridgedToken authorization (tests may fail):",
+          error instanceof Error ? error.message : error
+        );
+        throw error;  // Re-throw to fail fast if authorization setup fails
+      }
+
+      // Register admin as sender for user wallets so they can discover minted notes
+      // In Aztec, recipients must register senders to enable note discovery
+      try {
+        if (harness.accounts.user?.wallet) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (harness.accounts.user.wallet as any).registerSender(adminAddress);
+          logger.l2("Admin registered as sender for user wallet");
+        }
+        if (harness.accounts.user2?.wallet) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (harness.accounts.user2.wallet as any).registerSender(adminAddress);
+          logger.l2("Admin registered as sender for user2 wallet");
+        }
+      } catch (error) {
+        console.error(
+          "Failed to register admin as sender (tests may fail):",
+          error instanceof Error ? error.message : error
+        );
+        throw error;  // Re-throw to fail fast if sender registration fails
+      }
     }
 
     // Create separate L1/Target relayer wallets (different from user)
@@ -202,6 +262,43 @@ describe("Aztec Aave Wrapper E2E", () => {
     // Reset state for test isolation
   });
 
+  /**
+   * Helper function to mint L2 tokens to a user for testing.
+   * This simulates the bridging process by directly minting via the admin minter.
+   *
+   * @param recipient - The recipient Aztec address
+   * @param amount - Amount to mint
+   * @returns Transaction hash of the mint operation
+   */
+  async function mintTokensToUser(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recipient: any,
+    amount: bigint
+  ): Promise<string | undefined> {
+    if (!bridgedToken) {
+      throw new Error("BridgedToken contract not available - cannot mint tokens");
+    }
+
+    const adminWallet = harness.accounts.admin.wallet;
+    const adminAddress = harness.accounts.admin.address;
+    const randomness = Fr.random();
+
+    const bridgedTokenWithMinter = bridgedToken.withWallet(adminWallet);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bridgedTokenMethods = bridgedTokenWithMinter.methods as any;
+
+    const mintTx = await bridgedTokenMethods
+      .mint_private(recipient, amount, randomness)
+      .send({ from: adminAddress })
+      .wait();
+
+    // Wait a bit for note discovery/delivery to complete in PXE
+    // This ensures the recipient's wallet can access the new notes
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    return mintTx.txHash?.toString();
+  }
+
   // ==========================================================================
   // Deposit Flow Tests
   // ==========================================================================
@@ -209,12 +306,11 @@ describe("Aztec Aave Wrapper E2E", () => {
   describe("Deposit Flow", () => {
     /**
      * Full deposit cycle test (L1-only architecture) as specified in spec.md §4.1:
-     * 1. Aztec account creation
-     * 2. Token minting via token portal
-     * 3. request_deposit on L2
-     * 4. executeDeposit on L1 portal (direct Aave supply)
-     * 5. finalize_deposit on L2
-     * 6. PositionReceiptNote verification
+     * 1. Bridge USDC to L2 (mint L2 tokens to user)
+     * 2. request_deposit on L2 (burns L2 tokens)
+     * 3. executeDeposit on L1 portal (claims from TokenPortal, supplies to Aave)
+     * 4. finalize_deposit on L2
+     * 5. PositionReceiptNote verification
      *
      * Privacy Property: Different relayer executes L1 steps
      */
@@ -232,8 +328,23 @@ describe("Aztec Aave Wrapper E2E", () => {
         deadline: deadlineFromOffset(TEST_CONFIG.deadlineOffset),
       });
 
-      // Step 1: Prepare deposit parameters
-      logger.step(1, "Generate secret and compute secret hash for authorization");
+      // Step 1: Bridge USDC to L2 (mint L2 tokens to user)
+      logger.step(1, "Bridge USDC to L2 (mint L2 tokens to user)");
+
+      // Mint tokens to the user using BridgedToken.mint_private
+      // The admin is set as minter in beforeAll
+      const mintTxHash = await mintTokensToUser(userAddress!, TEST_CONFIG.depositAmount);
+      expect(mintTxHash).toBeDefined();
+
+      // Note: Verifying L2 balance via unconstrained function requires wallet context
+      // The minting succeeded (tx hash exists), proceed with the flow
+      logger.l2("L2 tokens minted to user (simulates bridge from L1)", {
+        amount: TEST_CONFIG.depositAmount.toString(),
+        txHash: mintTxHash,
+      });
+
+      // Step 2: Prepare deposit parameters
+      logger.step(2, "Generate secret and compute secret hash for authorization");
       const secret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
       const secretHash = await computeSecretHash(secret);
@@ -242,7 +353,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify deadline is in the future
       assertDeadlineInFuture(deadline);
 
-      // Step 2: Get user and relayer addresses for privacy verification
+      // Get user and relayer addresses for privacy verification
       // Note: Using module-level addresses since TestWallet doesn't have getAddress()
       const localUserAddress = userAddress!;
       const localRelayerAddress = relayerAddress!;
@@ -250,8 +361,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify relayer is different from user (privacy property)
       expect(localUserAddress.equals(localRelayerAddress)).toBe(false);
 
-      // Step 3: Execute L2 request_deposit
-      logger.step(2, "Submit deposit request on Aztec L2");
+      // Step 3: Execute L2 request_deposit (burns L2 tokens)
+      logger.step(3, "Submit deposit request on Aztec L2 (burns L2 tokens)");
       const userContract = aaveWrapper.withWallet(userWallet);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const methods = userContract.methods as any;
@@ -266,18 +377,45 @@ describe("Aztec Aave Wrapper E2E", () => {
       );
 
       // Simulate to get intent ID
-      const intentId = await depositCall.simulate({ from: userAddress! });
+      let intentId;
+      try {
+        intentId = await depositCall.simulate({ from: userAddress! });
+      } catch (simError) {
+        console.error(
+          "Simulation failed:",
+          simError instanceof Error ? simError.message : String(simError)
+        );
+        throw simError;
+      }
 
       // Verify intent ID is non-zero
       assertIntentIdNonZero(intentId);
 
       // Send the transaction
-      const tx = await depositCall.send({ from: userAddress! }).wait();
+      let tx;
+      try {
+        tx = await depositCall.send({ from: userAddress! }).wait();
+      } catch (sendError) {
+        console.error(
+          "Send failed:",
+          sendError instanceof Error ? sendError.message : String(sendError)
+        );
+        throw sendError;
+      }
       expect(tx.txHash).toBeDefined();
 
-      logger.l2("Deposit request created", {
+      // Token burn happens during request_deposit via BridgedToken.burn_from
+      // Net amount = amount - fee; Fee = amount * FEE_BPS / 10000 where FEE_BPS = 10
+      // This is equivalent to amount / 1000, but use the contract formula for accuracy
+      const feeBps = 10n;
+      const expectedFee = (TEST_CONFIG.depositAmount * feeBps) / 10000n;
+      const expectedNetBurn = TEST_CONFIG.depositAmount - expectedFee;
+
+      logger.l2("Deposit request created (L2 tokens burned)", {
         intentId: intentId.toString(),
         txHash: tx.txHash?.toString(),
+        tokensBurned: expectedNetBurn.toString(),
+        feeTransferred: expectedFee.toString(),
       });
       logger.privacy("User identity hidden behind ownerHash in L2→L1 message");
 
@@ -286,7 +424,7 @@ describe("Aztec Aave Wrapper E2E", () => {
       // For mock mode, we proceed with simulated L1 execution
 
       // Step 5: Simulate L1 portal execution with direct Aave supply (relayer executes, not user)
-      logger.step(3, "L1 Portal consumes message and supplies to Aave (executed by relayer)");
+      logger.step(4, "L1 Portal consumes message and supplies to Aave (executed by relayer)");
       const l1RelayerAccount = l1RelayerWallet.account;
       expect(l1RelayerAccount?.address).toBeDefined();
 
@@ -322,8 +460,8 @@ describe("Aztec Aave Wrapper E2E", () => {
       expect(privacyCheck.l1PrivacyOk).toBe(true);
       expect(privacyCheck.allPrivacyOk).toBe(true);
 
-      // Step 7: Attempt L2 finalization (will fail without real L1→L2 message)
-      logger.step(4, "Finalize deposit on L2 (creates private receipt note)");
+      // Step 5: Attempt L2 finalization (will fail without real L1→L2 message)
+      logger.step(5, "Finalize deposit on L2 (creates private receipt note)");
       try {
         const finalizeCall = methods.finalize_deposit(intentId, shares, secret);
         await finalizeCall.send({ from: userAddress! }).wait();
@@ -358,6 +496,9 @@ describe("Aztec Aave Wrapper E2E", () => {
 
       logger.section("Deadline Validation Architecture");
       logger.info("Testing: L2 accepts expired deadlines (enforcement happens at L1)");
+
+      // First mint tokens to user (required for request_deposit to burn)
+      await mintTokensToUser(userAddress!, TEST_CONFIG.depositAmount);
 
       const secret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
@@ -420,6 +561,9 @@ describe("Aztec Aave Wrapper E2E", () => {
 
       logger.section("Replay Protection (State Machine)");
       logger.info("Testing: Cannot re-use pending intent ID");
+
+      // First mint tokens to user (required for request_deposit to burn)
+      await mintTokensToUser(userAddress!, TEST_CONFIG.depositAmount);
 
       const secret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
@@ -503,6 +647,9 @@ describe("Aztec Aave Wrapper E2E", () => {
       // =========================================================================
 
       logger.section("Setup: Creating deposit position first");
+
+      // Mint tokens to user (required for request_deposit to burn)
+      await mintTokensToUser(userAddress!, TEST_CONFIG.depositAmount);
 
       const depositSecret = Fr.random();
       const { computeSecretHash } = await import("@aztec/stdlib/hash");
@@ -783,6 +930,12 @@ describe("Aztec Aave Wrapper E2E", () => {
       logger.multiUser(2, "Concurrent deposits from different users");
       logger.info("Testing: Each user gets unique intent ID for their deposit");
 
+      // Mint tokens to both users (required for request_deposit to burn)
+      await Promise.all([
+        mintTokensToUser(userAddress!, TEST_CONFIG.depositAmount),
+        mintTokensToUser(relayerAddress!, TEST_CONFIG.depositAmount),
+      ]);
+
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
 
       // Create secrets for each user
@@ -868,6 +1021,10 @@ describe("Aztec Aave Wrapper E2E", () => {
 
       logger.section("Same User Multiple Deposits");
       logger.info("Testing: One user can have multiple separate positions");
+
+      // Total tokens needed: depositAmount + depositAmount*2 + depositAmount = 4x depositAmount
+      const totalTokensNeeded = TEST_CONFIG.depositAmount * 4n;
+      await mintTokensToUser(userAddress!, totalTokensNeeded);
 
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
 
@@ -969,6 +1126,9 @@ describe("Aztec Aave Wrapper E2E", () => {
       logger.section("Position Isolation (Privacy)");
       logger.info("Testing: Users cannot access each other's private positions");
 
+      // Mint tokens to user (required for request_deposit to burn)
+      await mintTokensToUser(userAddress!, TEST_CONFIG.depositAmount);
+
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
       const userSecret = Fr.random();
 
@@ -1031,6 +1191,18 @@ describe("Aztec Aave Wrapper E2E", () => {
         ctx.skip();
         return;
       }
+
+      // Calculate total tokens needed for each user:
+      // User: depositAmount + depositAmount+100 + depositAmount+200 = 3*depositAmount + 300
+      // User2: depositAmount+1000 + depositAmount+1200 = 2*depositAmount + 2200
+      const userTokensNeeded = TEST_CONFIG.depositAmount * 3n + 300n;
+      const user2TokensNeeded = TEST_CONFIG.depositAmount * 2n + 2200n;
+
+      // Mint tokens to both users
+      await Promise.all([
+        mintTokensToUser(userAddress!, userTokensNeeded),
+        mintTokensToUser(relayerAddress!, user2TokensNeeded),
+      ]);
 
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
 
@@ -1146,6 +1318,16 @@ describe("Aztec Aave Wrapper E2E", () => {
       // Verify owner hashes are unique
       expect(userOwnerHash).not.toBe(user2OwnerHash);
 
+      // User deposits 1000, User2 deposits 5000
+      const userAmount = 1_000_000n;
+      const user2Amount = 5_000_000n;
+
+      // Mint tokens to both users (required for request_deposit to burn)
+      await Promise.all([
+        mintTokensToUser(userAddress!, userAmount),
+        mintTokensToUser(relayerAddress!, user2Amount),
+      ]);
+
       // Create deposits for both users
       const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
       const userSecret = Fr.random();
@@ -1162,10 +1344,6 @@ describe("Aztec Aave Wrapper E2E", () => {
       const userMethods = userContract.methods as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const user2Methods = user2Contract.methods as any;
-
-      // User deposits 1000, User2 deposits 5000
-      const userAmount = 1_000_000n;
-      const user2Amount = 5_000_000n;
 
       // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
       const userDepositCall = userMethods.request_deposit(

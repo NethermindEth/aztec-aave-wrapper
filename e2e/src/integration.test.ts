@@ -19,6 +19,10 @@ import {
   AaveWrapperContract,
   AaveWrapperContractArtifact,
 } from "../../aztec/generated/AaveWrapper";
+import {
+  BridgedTokenContract,
+  BridgedTokenContractArtifact,
+} from "../../aztec/generated/BridgedToken";
 
 // Dynamic imports to handle Node.js v23+ compatibility issues with aztec.js
 // The aztec packages use `import ... assert { type: 'json' }` which was
@@ -81,12 +85,38 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
   let userAAddress: InstanceType<typeof AztecAddress>;
   let userBAddress: InstanceType<typeof AztecAddress>;
 
-  // Contract instance (deployed per test suite)
+  // Contract instances (deployed per test suite)
   let _aaveWrapper: AaveWrapperContract;
+  let _bridgedToken: BridgedTokenContract;
   let contractAddress: InstanceType<typeof AztecAddress>;
+  let bridgedTokenAddress: InstanceType<typeof AztecAddress>;
 
   // Portal address (mock for tests)
   let portalAddress: InstanceType<typeof EthAddress>;
+
+  /**
+   * Helper function to mint tokens to a user before deposit
+   */
+  async function mintTokensToUser(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recipient: any,
+    amount: bigint
+  ): Promise<void> {
+    if (!_bridgedToken) {
+      throw new Error("BridgedToken contract not available - cannot mint tokens");
+    }
+
+    const randomness = Fr.random();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bridgedTokenWithMinter = _bridgedToken.withWallet(adminWallet) as any;
+    await bridgedTokenWithMinter.methods
+      .mint_private(recipient, amount, randomness)
+      .send({ from: adminAddress })
+      .wait();
+
+    // Wait for note discovery to complete
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
 
   beforeAll(async () => {
     // Try to import aztec packages (3.0.0 uses subpath exports)
@@ -185,19 +215,29 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
   });
 
   beforeEach(async () => {
-    // Deploy fresh contract for each test to ensure isolation
+    // Deploy fresh contracts for each test to ensure isolation
     if (!aztecAvailable || !pxeAvailable || !adminWallet) return;
 
-    // Use the generated AaveWrapperContract for type-safe deployment
-    // Use adminWallet (TestWallet instance) for deployment
-    // Use admin address as mock bridged token and fee treasury for testing
-    const mockBridgedToken = adminAddress;
+    // 1. Deploy BridgedToken contract first
+    const deployedBridgedToken = await BridgedTokenContract.deploy(
+      adminWallet,
+      adminAddress,  // initial admin
+      portalAddress  // portal address
+    )
+      .send({ from: adminAddress })
+      .deployed();
+
+    _bridgedToken = deployedBridgedToken;
+    bridgedTokenAddress = deployedBridgedToken.address;
+
+    // 2. Deploy AaveWrapper contract using real BridgedToken address
+    // Use admin address as fee treasury for testing
     const mockFeeTreasury = adminAddress;
     const deployedContract = await AaveWrapperContract.deploy(
       adminWallet,
       adminAddress,
       portalAddress,
-      mockBridgedToken,
+      bridgedTokenAddress,
       mockFeeTreasury
     )
       .send({ from: adminAddress })
@@ -206,16 +246,40 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
     _aaveWrapper = deployedContract;
     contractAddress = deployedContract.address;
 
-    // In 3.0.0 SDK, we need to register the deployed contract with other wallets
-    // so they can interact with it. The adminWallet already has it registered from deployment.
-    // We fetch the contract instance from the PXE and register it with other wallets.
-    const contractInstance = await pxe!.getContract(contractAddress);
-    if (contractInstance) {
-      await userAWallet.registerContract(contractInstance, AaveWrapperContractArtifact);
-      await userBWallet.registerContract(contractInstance, AaveWrapperContractArtifact);
+    // 3. Set up BridgedToken authorization
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bridgedTokenWithAdmin = _bridgedToken.withWallet(adminWallet) as any;
+
+    // Set admin as minter so we can mint tokens to test users
+    await bridgedTokenWithAdmin.methods.set_minter(adminAddress).send({ from: adminAddress }).wait();
+
+    // Authorize AaveWrapper to burn tokens during deposits
+    await bridgedTokenWithAdmin.methods
+      .authorize_burner(contractAddress, true)
+      .send({ from: adminAddress })
+      .wait();
+
+    // 4. Register admin as sender for user wallets so they can discover minted notes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (userAWallet as any).registerSender(adminAddress);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (userBWallet as any).registerSender(adminAddress);
+
+    // 5. Register contracts with user wallets
+    const aaveWrapperInstance = await pxe!.getContract(contractAddress);
+    const bridgedTokenInstance = await pxe!.getContract(bridgedTokenAddress);
+
+    if (aaveWrapperInstance) {
+      await userAWallet.registerContract(aaveWrapperInstance, AaveWrapperContractArtifact);
+      await userBWallet.registerContract(aaveWrapperInstance, AaveWrapperContractArtifact);
+    }
+    if (bridgedTokenInstance) {
+      await userAWallet.registerContract(bridgedTokenInstance, BridgedTokenContractArtifact);
+      await userBWallet.registerContract(bridgedTokenInstance, BridgedTokenContractArtifact);
     }
 
-    console.log("Contract deployed at:", contractAddress.toString());
+    console.log("BridgedToken deployed at:", bridgedTokenAddress.toString());
+    console.log("AaveWrapper deployed at:", contractAddress.toString());
   });
 
   // ============================================================================
@@ -238,6 +302,9 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       // In 3.0.0 SDK, we use .at() with the wallet to bind the contract
       const userAContract = AaveWrapperContract.at(contractAddress, userAWallet);
       const userBContract = AaveWrapperContract.at(contractAddress, userBWallet);
+
+      // Mint tokens to User A before deposit (new token flow requirement)
+      await mintTokensToUser(userAAddress, TEST_CONFIG.depositAmount);
 
       // User A requests deposit using typed methods
       // Signature: request_deposit(asset, amount, original_decimals, deadline, secret_hash)
@@ -310,6 +377,9 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       const userAContract = AaveWrapperContract.at(contractAddress, userAWallet);
       const adminContract = AaveWrapperContract.at(contractAddress, adminWallet);
 
+      // Mint tokens to User A before deposit (new token flow requirement)
+      await mintTokensToUser(userAAddress, TEST_CONFIG.depositAmount);
+
       // Create deposit call
       const depositCall = userAContract.methods.request_deposit(
         1n, // asset
@@ -356,6 +426,9 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
       // Create contract instances bound to specific wallets
       const userAContract = AaveWrapperContract.at(contractAddress, userAWallet);
       const adminContract = AaveWrapperContract.at(contractAddress, adminWallet);
+
+      // Mint tokens to User A before deposit (new token flow requirement)
+      await mintTokensToUser(userAAddress, TEST_CONFIG.depositAmount);
 
       // Create deposit call
       const depositCall = userAContract.methods.request_deposit(
