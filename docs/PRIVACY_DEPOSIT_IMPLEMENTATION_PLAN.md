@@ -470,7 +470,7 @@ make e2e
 
 ---
 
-### Step 21: Add cancel/refund E2E test
+### Step 21: Add cancel/refund E2E test **COMPLETE**
 
 #### Goal
 Create E2E test for the timeout refund flow when L1 execution doesn't happen.
