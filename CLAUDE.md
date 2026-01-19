@@ -48,17 +48,19 @@ make install         # bun install + forge install for l1
 
 ## Key Files
 
-**L2 Contract (Noir)**:
-- `aztec/src/main.nr` - AaveWrapper contract with request_deposit, finalize_deposit, request_withdraw, finalize_withdraw
-- `aztec/src/types/position_receipt.nr` - PositionReceiptNote (private encrypted note)
-- `aztec/src/types/intent.nr` - DepositIntent, WithdrawIntent structs
+**L2 Contracts (Noir)**:
+- `aztec/aave_wrapper/src/main.nr` - AaveWrapper contract with request_deposit, finalize_deposit, request_withdraw, finalize_withdraw
+- `aztec/aave_wrapper/src/types/position_receipt.nr` - PositionReceiptNote (private encrypted note)
+- `aztec/aave_wrapper/src/types/intent.nr` - DepositIntent, WithdrawIntent structs
+- `aztec/bridged_token/src/main.nr` - BridgedToken contract for L2 token representation (mint/burn)
 
 **L1 Portal (Solidity)**:
 - `eth/contracts/AztecAavePortalL1.sol` - Consumes L2 messages, executes Aave operations directly
+- `eth/contracts/TokenPortal.sol` - Token bridge portal for L1<->L2 transfers (locks tokens on L1, releases on withdraw)
 
 **Tests**:
 - `e2e/src/e2e.test.ts` - Full deposit/withdraw flow tests
-- `aztec/src/test/*.nr` - Noir unit tests
+- `aztec/aave_wrapper/src/test/*.nr` - Noir unit tests
 
 ## Dependencies & Versions
 
@@ -77,12 +79,19 @@ Docker Compose runs one service:
 
 ## Cross-Chain Message Flow
 
-**Deposit**:
-1. L2: `request_deposit()` creates DepositIntent, sends L2→L1 message
-2. L1: Portal consumes message, supplies tokens to Aave V3, tracks per-intent shares, sends L1→L2 confirmation
-3. L2: `finalize_deposit()` consumes message, creates PositionReceiptNote
+**Prerequisite (Bridge USDC to L2)**:
+1. L1: User calls `TokenPortal.depositToAztecPrivate()` - locks USDC in TokenPortal, sends L1→L2 message
+2. L2: User claims via BridgedToken - mints private L2 USDC balance
+
+**Deposit (Privacy-Preserving)**:
+1. L2: `request_deposit()` burns user's L2 tokens via BridgedToken, creates DepositIntent with ownerHash, sends L2→L1 message
+2. L1: `executeDeposit()` (callable by anyone) consumes L2→L1 message, claims tokens from TokenPortal, supplies to Aave V3, tracks per-intent shares, sends L1→L2 confirmation
+3. L2: `finalize_deposit()` consumes L1→L2 message, creates encrypted PositionReceiptNote
 
 **Withdrawal**: Similar reverse flow with `request_withdraw()` and `finalize_withdraw()`
+1. L2: `request_withdraw()` nullifies PositionReceiptNote, sends L2→L1 message
+2. L1: `executeWithdraw()` consumes message, withdraws from Aave, deposits to TokenPortal, sends L1→L2 confirmation
+3. L2: `finalize_withdraw()` consumes message, mints L2 tokens back to user via BridgedToken
 
 ## Architecture Details
 
