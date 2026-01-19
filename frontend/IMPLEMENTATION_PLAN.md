@@ -406,7 +406,7 @@ grep -q "claimPrivate" frontend/src/services/l2/bridgedToken.ts && echo "OK"
 
 ---
 
-### Step 20: Create token claim flow orchestrator
+### Step 20: Create token claim flow orchestrator **COMPLETE**
 
 #### Goal
 Implement flow for claiming tokens after withdrawal executes on L1.

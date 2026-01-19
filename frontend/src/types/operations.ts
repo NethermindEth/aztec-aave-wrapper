@@ -17,7 +17,7 @@ export type OperationStatus = "pending" | "success" | "error";
 /**
  * Type of operation being performed
  */
-export type OperationType = "idle" | "deposit" | "withdraw";
+export type OperationType = "idle" | "deposit" | "withdraw" | "claim";
 
 // =============================================================================
 // Step Configuration Types
@@ -44,6 +44,11 @@ export type DepositStep = "approve" | "request" | "confirm_l2" | "execute_l1" | 
  * Withdrawal flow steps
  */
 export type WithdrawStep = "request" | "confirm_l2" | "execute_l1" | "finalize";
+
+/**
+ * Claim flow steps (after withdrawal L1 execution)
+ */
+export type ClaimStep = "wait_message" | "claim";
 
 /**
  * Deposit step configurations
@@ -103,6 +108,22 @@ export const WITHDRAW_STEPS: Record<WithdrawStep, StepConfig> = {
 };
 
 /**
+ * Claim step configurations (after withdrawal L1 execution)
+ */
+export const CLAIM_STEPS: Record<ClaimStep, StepConfig> = {
+  wait_message: {
+    id: "wait_message",
+    label: "Wait for Message",
+    description: "Wait for L1→L2 message to be available",
+  },
+  claim: {
+    id: "claim",
+    label: "Claim Tokens",
+    description: "Claim tokens on L2 via BridgedToken",
+  },
+};
+
+/**
  * Get the total number of steps for a deposit operation
  */
 export function getDepositStepCount(): number {
@@ -129,5 +150,20 @@ export function getDepositStepIndex(step: DepositStep): number {
  */
 export function getWithdrawStepIndex(step: WithdrawStep): number {
   const steps: WithdrawStep[] = ["request", "confirm_l2", "execute_l1", "finalize"];
+  return steps.indexOf(step) + 1;
+}
+
+/**
+ * Get the total number of steps for a claim operation
+ */
+export function getClaimStepCount(): number {
+  return Object.keys(CLAIM_STEPS).length;
+}
+
+/**
+ * Get step index (1-based) for claim step
+ */
+export function getClaimStepIndex(step: ClaimStep): number {
+  const steps: ClaimStep[] = ["wait_message", "claim"];
   return steps.indexOf(step) + 1;
 }
