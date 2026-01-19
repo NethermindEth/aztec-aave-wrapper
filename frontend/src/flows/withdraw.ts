@@ -1,14 +1,18 @@
 /**
  * Withdraw Flow Orchestrator
  *
- * Implements complete withdraw flow combining all 4 steps from e2e/scripts/full-flow.ts.
+ * Implements complete withdraw flow for privacy-preserving Aave withdrawals.
  * Coordinates L2 → L1 → L2 operations with step tracking and logging.
  *
- * WITHDRAW FLOW:
+ * PRIVACY-PRESERVING WITHDRAW FLOW:
  * 1. Generate secret and prepare parameters
- * 2. Call request_withdraw on L2 (requires existing position note)
+ * 2. Call request_withdraw on L2 - nullifies PositionReceiptNote
  * 3. Wait for L2→L1 message to be available
- * 4. Execute withdraw on L1 (relayer executes Aave withdrawal)
+ * 4. Execute withdraw on L1 - relayer withdraws from Aave and deposits to TokenPortal
+ * 5. Finalize on L2 - user can later claim tokens from TokenPortal using their secret
+ *
+ * The TokenPortal claim step enables privacy: L1 portal deposits withdrawn tokens
+ * into TokenPortal (not directly to user), then user claims privately on L2.
  *
  * NOTE: Full withdrawal only - MVP constraint enforces withdrawing entire position.
  */

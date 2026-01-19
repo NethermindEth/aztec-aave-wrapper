@@ -660,7 +660,7 @@ test -f frontend/src/utils/fees.test.ts && echo "OK"
 
 ---
 
-### Step 32: Update flow documentation comments
+### Step 32: Update flow documentation comments **COMPLETE**
 
 #### Goal
 Update JSDoc comments in flow files to reflect new privacy-preserving architecture.

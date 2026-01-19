@@ -1,16 +1,20 @@
 /**
  * Deposit Flow Orchestrator
  *
- * Implements complete deposit flow combining all 6 steps from e2e/scripts/full-flow.ts.
+ * Implements complete deposit flow for privacy-preserving Aave deposits.
  * Coordinates L2 → L1 → L2 operations with step tracking and logging.
  *
- * DEPOSIT FLOW:
+ * PRIVACY-PRESERVING DEPOSIT FLOW:
  * 1. Generate secret and prepare parameters
- * 2. Call request_deposit on L2
+ * 2. Call request_deposit on L2 - burns user's L2 tokens via BridgedToken
  * 3. Wait for L2→L1 message to be available
- * 4. Execute deposit on L1 (fund portal + execute)
+ * 4. Execute deposit on L1 - relayer claims from TokenPortal and supplies to Aave
  * 5. Wait for L1→L2 message
- * 6. Call finalize_deposit on L2
+ * 6. Call finalize_deposit on L2 - creates encrypted PositionReceiptNote
+ *
+ * The burn-based flow ensures privacy: user's L2 tokens are burned during request,
+ * then the L1 portal claims equivalent tokens from TokenPortal. This breaks the
+ * direct link between the user's L1 wallet and the Aave deposit.
  */
 
 import {
