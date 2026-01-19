@@ -37,14 +37,14 @@ const DEPOSIT_STEPS: StepConfig[] = [
     estimatedSeconds: 60,
   },
   {
-    label: "Fund portal with USDC",
-    description: "Transferring USDC to the portal contract",
-    estimatedSeconds: 30,
-  },
-  {
     label: "Execute deposit on L1",
     description: "Executing Aave deposit on Ethereum",
     estimatedSeconds: 30,
+  },
+  {
+    label: "Wait for L1→L2 message",
+    description: "Waiting for confirmation message to propagate",
+    estimatedSeconds: 60,
   },
   {
     label: "Finalize deposit on L2",

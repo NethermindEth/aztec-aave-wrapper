@@ -274,7 +274,7 @@ grep -q "MIN_DEPOSIT" frontend/src/components/DepositFlow.tsx && echo "OK"
 
 ---
 
-### Step 14: Fix deposit step configuration
+### Step 14: Fix deposit step configuration **COMPLETE**
 
 #### Goal
 Update DEPOSIT_STEPS to match spec - remove "Fund portal with USDC" step, add "Wait for L1→L2 message" step.
