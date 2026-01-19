@@ -596,7 +596,7 @@ grep -q "handleBridge" frontend/src/App.tsx && echo "OK"
 
 ---
 
-### Step 29: Add L2 balance display to DepositFlow
+### Step 29: Add L2 balance display to DepositFlow **COMPLETE**
 
 #### Goal
 Show user's L2 USDC balance and validate deposit against L2 balance (not L1).

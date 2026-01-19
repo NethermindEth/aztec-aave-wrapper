@@ -207,7 +207,8 @@ export function DepositFlow(props: DepositFlowProps) {
   const currentStepDescription = () => currentStepConfig()?.description ?? "";
   const currentStepEstimate = () => currentStepConfig()?.estimatedSeconds;
 
-  const maxBalance = () => fromBigIntString(state.wallet.usdcBalance);
+  const l2UsdcBalance = () => fromBigIntString(state.wallet.l2UsdcBalance);
+  const maxBalance = () => l2UsdcBalance();
 
   // Fee calculation derived state
   const parsedAmount = () => {
@@ -317,16 +318,21 @@ export function DepositFlow(props: DepositFlowProps) {
       <CardContent class="space-y-4">
         {/* Amount Input */}
         <div class="space-y-2">
-          <div class="flex justify-between">
+          <div class="flex justify-between items-center">
             <Label for="deposit-amount">Amount (USDC)</Label>
-            <button
-              type="button"
-              class="text-xs text-primary hover:underline"
-              onClick={handleMaxClick}
-              disabled={isProcessing()}
-            >
-              Max
-            </button>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-muted-foreground">
+                Balance: {formatAmount(l2UsdcBalance())} USDC
+              </span>
+              <button
+                type="button"
+                class="text-xs text-primary hover:underline"
+                onClick={handleMaxClick}
+                disabled={isProcessing()}
+              >
+                Max
+              </button>
+            </div>
           </div>
           <Input
             id="deposit-amount"
