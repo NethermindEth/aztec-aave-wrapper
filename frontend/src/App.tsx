@@ -29,6 +29,10 @@ import {
   type CancelL2Context,
   executeCancelDeposit,
 } from "./flows/cancel";
+import {
+  executeClaimRefundFlow,
+  type RefundL2Context,
+} from "./flows/refund";
 import { getPositionStatusLabel, usePositions } from "./hooks/usePositions.js";
 import { createL1PublicClient, createL1WalletClient, DevnetAccounts } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
@@ -59,6 +63,7 @@ const App: Component = () => {
   const [isDepositing, setIsDepositing] = createSignal(false);
   const [isWithdrawing, setIsWithdrawing] = createSignal(false);
   const [isCancelling, setIsCancelling] = createSignal(false);
+  const [isClaimingRefund, setIsClaimingRefund] = createSignal(false);
 
   /**
    * Add a log entry
@@ -455,6 +460,83 @@ const App: Component = () => {
     }
   };
 
+  /**
+   * Handle claim refund operation for expired pending withdrawals.
+   * Allows users to restore their position when L1 execution doesn't happen before deadline.
+   */
+  const handleClaimRefund = async (
+    intentId: string,
+    deadline: bigint,
+    shares: bigint,
+    assetId: string
+  ) => {
+    // Prevent duplicate submissions
+    if (isClaimingRefund()) {
+      addLog("Refund claim already in progress", LogLevel.WARNING);
+      return;
+    }
+
+    // Validate contracts are loaded
+    if (!state.contracts.l2Wrapper) {
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+      return;
+    }
+
+    const l2WrapperAddress = state.contracts.l2Wrapper;
+
+    setIsClaimingRefund(true);
+    addLog(`Initiating refund claim for withdrawal: ${intentId.slice(0, 16)}...`);
+    addLog(`Shares to restore: ${formatAmount(shares)}`);
+
+    try {
+      // Create L1 public client for timestamp queries
+      const publicClient = createL1PublicClient();
+
+      // Initialize L2 context
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectAztecWallet();
+
+      addLog("Loading AaveWrapper contract...");
+      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      // Build L2 context
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const { Fr } = await import("@aztec/aztec.js/fields");
+      const l2Context: RefundL2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        contract,
+      };
+
+      // Convert intentId string to Fr for refund flow
+      const nonce = Fr.fromString(intentId);
+
+      // Execute the claim refund flow
+      addLog("Executing claim refund flow...");
+      const result = await executeClaimRefundFlow(publicClient, l2Context, {
+        pendingWithdraw: {
+          nonce,
+          deadline,
+          shares,
+          assetId: BigInt(assetId),
+        },
+      });
+
+      // Update position status back to Active
+      updatePositionStatus(intentId, IntentStatus.Active);
+      addLog(`Refund claimed! Original nonce: ${result.originalNonce.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Position restored with ${formatAmount(result.shares)} shares`, LogLevel.SUCCESS);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Claim refund failed: ${message}`, LogLevel.ERROR);
+    } finally {
+      setIsClaimingRefund(false);
+    }
+  };
+
   return (
     <>
       {/* Fixed TopBar */}
@@ -492,6 +574,7 @@ const App: Component = () => {
             <PositionsList
               onWithdraw={handleWithdraw}
               onCancel={handleCancelDeposit}
+              onClaimRefund={handleClaimRefund}
               onRefresh={handleRefreshPositions}
               isRefreshing={isRefreshing()}
             />

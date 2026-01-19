@@ -22,6 +22,8 @@ export interface PositionCardProps {
   onWithdraw: (intentId: string) => void;
   /** Callback when cancel button is clicked for expired pending deposits */
   onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
+  /** Callback when refund button is clicked for expired pending withdrawals */
+  onClaimRefund?: (intentId: string, deadline: bigint, shares: bigint, assetId: string) => void;
   /** Current L1 timestamp for deadline comparison (use L1 time, not local) */
   currentL1Timestamp?: bigint;
   /** Optional: CSS class for the container */
@@ -129,6 +131,31 @@ export function PositionCard(props: PositionCardProps) {
     }
   };
 
+  // Check if this is a pending withdrawal that can be refunded
+  // Refund is allowed when:
+  // 1. Status is PendingWithdraw
+  // 2. Deadline has passed (currentL1Timestamp >= deadline)
+  // 3. We have the required data (deadline, shares, onClaimRefund callback)
+  const canClaimRefund = () => {
+    if (props.position.status !== IntentStatus.PendingWithdraw) return false;
+    if (!props.onClaimRefund) return false;
+    if (!props.currentL1Timestamp) return false;
+    if (props.position.deadline === 0n) return false;
+    // Contract uses: current_time >= deadline
+    return props.currentL1Timestamp >= props.position.deadline;
+  };
+
+  const handleClaimRefund = () => {
+    if (props.onClaimRefund && canClaimRefund()) {
+      props.onClaimRefund(
+        props.position.intentId,
+        props.position.deadline,
+        props.position.shares,
+        props.position.assetId
+      );
+    }
+  };
+
   return (
     <Card class={props.class}>
       <CardHeader class="flex flex-row items-center justify-between pb-2">
@@ -157,6 +184,16 @@ export function PositionCard(props: PositionCardProps) {
             onClick={handleCancel}
           >
             Cancel Deposit
+          </Button>
+        </Show>
+        <Show when={canClaimRefund()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            class="mt-2"
+            onClick={handleClaimRefund}
+          >
+            Claim Refund
           </Button>
         </Show>
       </CardContent>

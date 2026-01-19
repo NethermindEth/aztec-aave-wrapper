@@ -529,7 +529,7 @@ test -f frontend/src/flows/refund.ts && grep -q "executeClaimRefund" frontend/sr
 
 ---
 
-### Step 26: Add refund button to pending withdrawals
+### Step 26: Add refund button to pending withdrawals **COMPLETE**
 
 #### Goal
 Show refund option for withdrawals that have passed their deadline.

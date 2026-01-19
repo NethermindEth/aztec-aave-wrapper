@@ -17,6 +17,8 @@ export interface PositionsListProps {
   onWithdraw: (intentId: string) => void;
   /** Callback when cancel is requested for a pending deposit */
   onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
+  /** Callback when refund is requested for an expired pending withdrawal */
+  onClaimRefund?: (intentId: string, deadline: bigint, shares: bigint, assetId: string) => void;
   /** Callback to refresh positions from L2 */
   onRefresh?: () => void;
   /** Whether positions are currently being refreshed from L2 */
@@ -117,6 +119,7 @@ export function PositionsList(props: PositionsListProps) {
                   position={position}
                   onWithdraw={props.onWithdraw}
                   onCancel={props.onCancel}
+                  onClaimRefund={props.onClaimRefund}
                   currentL1Timestamp={props.currentL1Timestamp}
                 />
               )}
