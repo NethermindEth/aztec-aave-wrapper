@@ -14,6 +14,7 @@ interface DeploymentsFile {
   l1: {
     mockUsdc: string;
     mockLendingPool: string;
+    tokenPortal: string;
     portal: string;
   };
   l2: {
@@ -31,6 +32,7 @@ interface DeploymentsFile {
 export interface DeploymentAddresses {
   l1: {
     portal: Address;
+    tokenPortal: Address;
     mockUsdc: Address;
     mockLendingPool: Address;
   };
@@ -63,6 +65,7 @@ export async function fetchDeploymentAddresses(): Promise<DeploymentAddresses> {
   return {
     l1: {
       portal: data.l1.portal as Address,
+      tokenPortal: data.l1.tokenPortal as Address,
       mockUsdc: data.l1.mockUsdc as Address,
       mockLendingPool: data.l1.mockLendingPool as Address,
     },

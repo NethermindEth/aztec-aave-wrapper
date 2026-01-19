@@ -115,7 +115,7 @@ test -f frontend/src/services/l2/bridgedToken.ts && echo "OK"
 
 ---
 
-### Step 6: Add TokenPortal service for L1 bridge operations
+### Step 6: Add TokenPortal service for L1 bridge operations **COMPLETE**
 
 #### Goal
 Create service to interact with TokenPortal contract on L1 for depositToAztecPrivate.
