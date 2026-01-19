@@ -217,7 +217,7 @@ Remove the privacy-violating direct USDC transfer from user's L1 wallet (deposit
 
 ---
 
-### Step 11: Integrate TokenPortal claim into deposit L1 execution
+### Step 11: Integrate TokenPortal claim into deposit L1 execution **COMPLETE**
 
 #### Goal
 Update executeDeposit to rely on portal claiming from TokenPortal instead of direct user transfer.
