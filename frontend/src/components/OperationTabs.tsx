@@ -1,12 +1,13 @@
 /**
  * OperationTabs Component
  *
- * Tabbed interface combining deposit and withdraw flows.
+ * Tabbed interface combining bridge, deposit, and withdraw flows.
  * Handles tab switching and prevents switching during active operations.
  */
 
 import { createSignal } from "solid-js";
 import { useApp } from "../store/hooks.js";
+import { BridgeFlow, type BridgeFlowProps } from "./BridgeFlow";
 import { DepositFlow, type DepositFlowProps } from "./DepositFlow";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { WithdrawFlow, type WithdrawFlowProps } from "./WithdrawFlow";
@@ -14,14 +15,16 @@ import { WithdrawFlow, type WithdrawFlowProps } from "./WithdrawFlow";
 /**
  * Tab values for the operation tabs
  */
-type OperationTab = "deposit" | "withdraw";
+type OperationTab = "bridge" | "deposit" | "withdraw";
 
 /**
  * Props for OperationTabs component
  */
 export interface OperationTabsProps {
-  /** Initial tab to display (default: "deposit") */
+  /** Initial tab to display (default: "bridge") */
   defaultTab?: OperationTab;
+  /** Callback when bridge is initiated */
+  onBridge?: BridgeFlowProps["onBridge"];
   /** Callback when deposit is initiated */
   onDeposit?: DepositFlowProps["onDeposit"];
   /** Callback when withdrawal is initiated */
@@ -32,6 +35,7 @@ export interface OperationTabsProps {
 
 /**
  * OperationTabs renders a tabbed interface with:
+ * - Bridge tab containing BridgeFlow (first tab - prerequisite for deposits)
  * - Deposit tab containing DepositFlow
  * - Withdraw tab containing WithdrawFlow
  * - Tab switching disabled during active operations
@@ -40,7 +44,10 @@ export interface OperationTabsProps {
  * @example
  * ```tsx
  * <OperationTabs
- *   defaultTab="deposit"
+ *   defaultTab="bridge"
+ *   onBridge={(amount) => {
+ *     console.log(`Bridge ${amount} USDC from L1 to L2`);
+ *   }}
  *   onDeposit={(amount, deadline) => {
  *     console.log(`Deposit ${amount} with deadline ${deadline}s`);
  *   }}
@@ -54,7 +61,7 @@ export function OperationTabs(props: OperationTabsProps) {
   const { state } = useApp();
 
   // Track the active tab
-  const [activeTab, setActiveTab] = createSignal<OperationTab>(props.defaultTab ?? "deposit");
+  const [activeTab, setActiveTab] = createSignal<OperationTab>(props.defaultTab ?? "bridge");
 
   // Check if an operation is currently in progress
   const isOperationActive = () => state.operation.type !== "idle";
@@ -70,7 +77,10 @@ export function OperationTabs(props: OperationTabsProps) {
 
   return (
     <Tabs value={activeTab()} onValueChange={handleTabChange} class={props.class}>
-      <TabsList class="grid w-full grid-cols-2">
+      <TabsList class="grid w-full grid-cols-3">
+        <TabsTrigger value="bridge" disabled={isOperationActive() && activeTab() !== "bridge"}>
+          Bridge
+        </TabsTrigger>
         <TabsTrigger value="deposit" disabled={isOperationActive() && activeTab() !== "deposit"}>
           Deposit
         </TabsTrigger>
@@ -78,6 +88,10 @@ export function OperationTabs(props: OperationTabsProps) {
           Withdraw
         </TabsTrigger>
       </TabsList>
+
+      <TabsContent value="bridge">
+        <BridgeFlow onBridge={props.onBridge} />
+      </TabsContent>
 
       <TabsContent value="deposit">
         <DepositFlow onDeposit={props.onDeposit} />

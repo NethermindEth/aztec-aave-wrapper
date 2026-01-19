@@ -482,7 +482,7 @@ grep -q "Claim tokens" frontend/src/components/WithdrawFlow.tsx && echo "OK"
 
 ---
 
-## Phase 6: Withdraw Refund Flow
+## Phase 6: Withdraw Refund Flow **COMPLETE**
 
 Implement refund for expired withdrawal requests.
 
@@ -558,7 +558,7 @@ Wire all new flows into the main application with proper navigation.
 cd frontend && npm run build && npm run typecheck
 ```
 
-### Step 27: Add Bridge tab to OperationTabs
+### Step 27: Add Bridge tab to OperationTabs **COMPLETE**
 
 #### Goal
 Integrate BridgeFlow as a tab in the main operation interface.
