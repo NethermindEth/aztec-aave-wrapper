@@ -510,7 +510,7 @@ grep -q "executeClaimRefund" frontend/src/services/l2/operations.ts && echo "OK"
 
 ---
 
-### Step 25: Create refund flow orchestrator
+### Step 25: Create refund flow orchestrator **COMPLETE**
 
 #### Goal
 Implement claim_refund flow for restoring position when withdrawal expires.
