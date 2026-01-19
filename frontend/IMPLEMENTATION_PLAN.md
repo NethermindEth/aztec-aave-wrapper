@@ -549,7 +549,7 @@ grep -q "handleClaimRefund" frontend/src/App.tsx && echo "OK"
 
 ---
 
-## Phase 7: Integration and Tab Navigation
+## Phase 7: Integration and Tab Navigation **COMPLETE**
 
 Wire all new flows into the main application with proper navigation.
 
@@ -642,7 +642,7 @@ Verify implementation matches specification with integration tests.
 cd frontend && npm run build && npm run typecheck && npm run test
 ```
 
-### Step 31: Add unit tests for fee utilities
+### Step 31: Add unit tests for fee utilities **COMPLETE**
 
 #### Goal
 Test fee calculation functions for correctness.
