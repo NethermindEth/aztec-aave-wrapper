@@ -781,3 +781,94 @@ export async function generateSecretPair(): Promise<{
 export function deadlineFromNow(offsetSeconds: number): bigint {
   return BigInt(Math.floor(Date.now() / 1000) + offsetSeconds);
 }
+
+// =============================================================================
+// Cancel Deposit Operation
+// =============================================================================
+
+/**
+ * Parameters for cancel_deposit operation
+ */
+export interface CancelDepositParams {
+  /** The unique intent identifier of the deposit to cancel */
+  intentId: Fr;
+  /** Current timestamp for deadline validation (must be > deadline for cancel to succeed) */
+  currentTime: bigint;
+  /** The net deposit amount to be refunded (must match stored value) */
+  netAmount: bigint;
+}
+
+/**
+ * Result of a cancel deposit execution
+ */
+export interface CancelDepositResult {
+  /** Transaction hash */
+  txHash: string;
+}
+
+/**
+ * Execute a cancel deposit operation on the L2 contract.
+ *
+ * This function cancels a pending deposit after the deadline has passed,
+ * refunding the net_amount to the user. The caller must own the intent.
+ *
+ * Note: The current_time parameter should be accurate - if it's too far in the past,
+ * the transaction will fail. Using Date.now() / 1000 is recommended.
+ *
+ * @param contract - AaveWrapper contract instance
+ * @param params - Cancel deposit parameters
+ * @param from - Sender address (must be the intent owner)
+ * @returns Transaction hash
+ *
+ * @example
+ * ```ts
+ * const { txHash } = await executeCancelDeposit(contract, {
+ *   intentId,
+ *   currentTime: BigInt(Math.floor(Date.now() / 1000)),
+ *   netAmount: 999_000n, // net amount after fee deduction
+ * }, userAddress);
+ * ```
+ */
+export async function executeCancelDeposit(
+  contract: AaveWrapperContract,
+  params: CancelDepositParams,
+  from: AztecAddress
+): Promise<CancelDepositResult> {
+  logInfo("Executing cancel deposit...");
+
+  // Debug: Log parameters
+  logInfo(`  intentId: ${params.intentId?.toString?.() ?? params.intentId}`);
+  logInfo(`  currentTime: ${params.currentTime}`);
+  logInfo(`  netAmount: ${params.netAmount}`);
+  logInfo(`  from: ${from?.toString?.() ?? from}`);
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const methods = contract.methods as any;
+
+    const call = methods.cancel_deposit(params.intentId, params.currentTime, params.netAmount);
+
+    // Get the sponsored fee payment method (no Fee Juice required)
+    const paymentMethod = await getSponsoredFeePaymentMethod();
+
+    // Execute the transaction with sponsored fee payment
+    logInfo("Sending cancel deposit transaction to wallet for approval (using sponsored fees)...");
+    const tx = await call.send({ from, fee: { paymentMethod } }).wait();
+
+    logSuccess(`Cancel deposit executed, tx: ${tx.txHash?.toString()}`);
+
+    return {
+      txHash: tx.txHash?.toString() ?? "",
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    logError(`Cancel deposit failed: ${errorMessage}`);
+    if (errorStack) {
+      logError(`Stack trace: ${errorStack}`);
+    }
+    // Log the full error object for debugging
+    console.error("Full cancel deposit error:", error);
+    throw new ContractOperationError("executeCancelDeposit", error);
+  }
+}

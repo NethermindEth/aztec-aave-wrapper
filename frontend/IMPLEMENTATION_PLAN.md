@@ -320,7 +320,7 @@ test -f frontend/src/flows/cancel.ts && grep -q "executeCancelDeposit" frontend/
 
 ---
 
-### Step 16: Add cancel deposit L2 operation
+### Step 16: Add cancel deposit L2 operation **COMPLETE**
 
 #### Goal
 Add service function to call cancel_deposit on AaveWrapper contract.
