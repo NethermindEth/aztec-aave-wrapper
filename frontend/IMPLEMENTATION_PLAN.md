@@ -359,7 +359,7 @@ grep -q "onCancel" frontend/src/components/PositionsList.tsx && echo "OK"
 
 ---
 
-### Step 18: Wire cancel flow to App component
+### Step 18: Wire cancel flow to App component **COMPLETE**
 
 #### Goal
 Connect cancel deposit functionality to main application.

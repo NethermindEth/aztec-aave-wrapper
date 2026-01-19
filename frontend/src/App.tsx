@@ -25,6 +25,10 @@ import {
   type WithdrawL1Addresses,
   type WithdrawL2Context,
 } from "./flows/withdraw";
+import {
+  type CancelL2Context,
+  executeCancelDeposit,
+} from "./flows/cancel";
 import { getPositionStatusLabel, usePositions } from "./hooks/usePositions.js";
 import { createL1PublicClient, createL1WalletClient, DevnetAccounts } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
@@ -54,6 +58,7 @@ const App: Component = () => {
   const [logs, setLogs] = createSignal<LogEntry[]>([]);
   const [isDepositing, setIsDepositing] = createSignal(false);
   const [isWithdrawing, setIsWithdrawing] = createSignal(false);
+  const [isCancelling, setIsCancelling] = createSignal(false);
 
   /**
    * Add a log entry
@@ -373,6 +378,83 @@ const App: Component = () => {
     }
   };
 
+  /**
+   * Handle cancel deposit operation for expired pending deposits.
+   * Allows users to reclaim their tokens when deadline passes without L1 execution.
+   */
+  const handleCancelDeposit = async (intentId: string, deadline: bigint, netAmount: bigint) => {
+    // Prevent duplicate submissions
+    if (isCancelling()) {
+      addLog("Cancellation already in progress", LogLevel.WARNING);
+      return;
+    }
+
+    // Validate contracts are loaded
+    if (!state.contracts.l2Wrapper) {
+      addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+      return;
+    }
+
+    const l2WrapperAddress = state.contracts.l2Wrapper;
+
+    setIsCancelling(true);
+    addLog(`Initiating cancel for deposit: ${intentId.slice(0, 16)}...`);
+    addLog(`Net amount to refund: ${formatAmount(netAmount)} USDC`);
+
+    try {
+      // Create L1 public client for timestamp queries
+      const publicClient = createL1PublicClient();
+
+      // Initialize L2 context
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectAztecWallet();
+
+      addLog("Loading AaveWrapper contract...");
+      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      // Build L2 context
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const { Fr } = await import("@aztec/aztec.js/fields");
+      const l2Context: CancelL2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        contract,
+      };
+
+      // Convert intentId string to Fr for cancel flow
+      const depositIntentId = Fr.fromString(intentId);
+
+      // Execute the cancel deposit flow
+      addLog("Executing cancel deposit flow...");
+      const result = await executeCancelDeposit(publicClient, l2Context, {
+        pendingDeposit: {
+          intentId: depositIntentId,
+          deadline,
+          netAmount,
+        },
+      });
+
+      // Position is removed by the cancel flow via store action
+      addLog(`Cancel complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Refunded: ${formatAmount(result.refundedAmount)} USDC`, LogLevel.SUCCESS);
+
+      // Refresh wallet balances after successful cancel
+      const mockUsdc = state.contracts.mockUsdc;
+      if (mockUsdc) {
+        const { walletClient: ethWallet } = await connectEthereumWallet();
+        await refreshBalances(publicClient, ethWallet.account.address, mockUsdc);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Cancel failed: ${message}`, LogLevel.ERROR);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   return (
     <>
       {/* Fixed TopBar */}
@@ -409,6 +491,7 @@ const App: Component = () => {
           <ErrorBoundary>
             <PositionsList
               onWithdraw={handleWithdraw}
+              onCancel={handleCancelDeposit}
               onRefresh={handleRefreshPositions}
               isRefreshing={isRefreshing()}
             />
