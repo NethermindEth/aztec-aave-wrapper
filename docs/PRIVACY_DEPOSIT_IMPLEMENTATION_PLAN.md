@@ -523,7 +523,7 @@ cd eth && forge test -vv
 
 ---
 
-### Step 23: Update existing documentation
+### Step 23: Update existing documentation **COMPLETE**
 
 #### Goal
 Update DEPOSIT_TRANSACTION_FLOW.md to reflect the new privacy-preserving flow.

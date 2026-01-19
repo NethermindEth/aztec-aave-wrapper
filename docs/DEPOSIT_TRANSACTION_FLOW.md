@@ -4,13 +4,12 @@ This document details every transaction signed during the deposit flow in the Az
 
 ## Transaction Summary
 
-| # | Chain | TX Type | Signer | Function | File | Line |
-|---|-------|---------|--------|----------|------|------|
-| 1 | L2 | Request Deposit | User (Azguard) | `request_deposit()` | operations.ts | 345 |
-| 2 | L1 | Approve USDC | User (MetaMask) | `approve()` | tokens.ts | 308 |
-| 3 | L1 | Transfer USDC | User (MetaMask) | `transfer()` | tokens.ts | 354 |
-| 4 | L1 | Execute Deposit | Relayer | `executeDeposit()` | portal.ts | 262 |
-| 5 | L2 | Finalize Deposit | User (Azguard) | `finalize_deposit()` | operations.ts | 441 |
+| # | Chain | TX Type | Signer | Function | Description |
+|---|-------|---------|--------|----------|-------------|
+| Prerequisite | L1/L2 | Bridge USDC | User | TokenPortal + L2Token | One-time bridge to L2 (can be done in advance) |
+| 1 | L2 | Request Deposit | User (Azguard) | `request_deposit()` | Burns L2 tokens, creates intent |
+| 2 | L1 | Execute Deposit | Anyone | `executeDeposit()` | Claims from bridge, supplies to Aave |
+| 3 | L2 | Finalize Deposit | User (Azguard) | `finalize_deposit()` | Creates position receipt |
 
 ---
 
@@ -18,15 +17,26 @@ This document details every transaction signed during the deposit flow in the Az
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                           DEPOSIT TRANSACTION FLOW                                       │
+│                    PRIVACY-PRESERVING DEPOSIT FLOW                                       │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 
-User clicks "Deposit" button
+PREREQUISITE (Separate Flow - can be done days/weeks earlier):
+══════════════════════════════════════════════════════════════
+User bridges USDC from L1 to L2 via TokenPortal
+  │
+  ├── TX A: User approves TokenPortal for USDC (L1 - MetaMask)
+  ├── TX B: User calls TokenPortal.depositToAztecPrivate() (L1 - MetaMask)
+  │         └── Tokens held by TokenPortal on L1
+  └── TX C: User claims L2 USDC via L2 Token contract (L2 - Azguard)
+            └── User now has private L2 USDC balance
+
+═══════════════════════════════════════════════════════════════════════════════════════════
+
+User clicks "Deposit to Aave" button
          │
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  STEP 0: Generate Secret Pair (no signature)                                            │
-│  File: frontend/src/flows/deposit.ts:414-432                                            │
 │  - Generates secret + secretHash for privacy                                            │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
          │
@@ -38,10 +48,8 @@ User clicks "Deposit" button
 ║  Contract:  AaveWrapper (L2)                                                            ║
 ║  Function:  request_deposit(asset, amount, deadline, secret_hash)                       ║
 ║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── deposit.ts:437-459 → operations.ts:299-364 → SIGN at line 345                      ║
-║                                                                                         ║
 ║  State Changes:                                                                         ║
+║  ├── BURNS user's L2 USDC tokens (privacy-preserving)                                   ║
 ║  ├── Creates DepositIntent with unique intentId                                         ║
 ║  ├── Stores intent_owners[intentId] = caller (L2 private state)                         ║
 ║  ├── Computes ownerHash = Poseidon(userL2Address) for privacy                           ║
@@ -53,55 +61,21 @@ User clicks "Deposit" button
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  WAIT: Poll for L2→L1 message availability                                              │
-│  File: frontend/src/flows/deposit.ts:464-471                                            │
 │  - Fetches L2→L1 message proof from Aztec node                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ╔═════════════════════════════════════════════════════════════════════════════════════════╗
-║  TX #2: APPROVE USDC (L1 - Ethereum)                                                    ║
+║  TX #2: EXECUTE DEPOSIT (L1 - Ethereum)                                                 ║
 ╠═════════════════════════════════════════════════════════════════════════════════════════╣
-║  Signer:    User via MetaMask                                                           ║
-║  Contract:  USDC Token (ERC20)                                                          ║
-║  Function:  approve(portalAddress, amount)                                              ║
-║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── deposit.ts:493-501 → tokens.ts:298-320 → SIGN at line 308                          ║
-║                                                                                         ║
-║  State Changes:                                                                         ║
-║  └── allowance[user][portal] = amount                                                   ║
-╚═════════════════════════════════════════════════════════════════════════════════════════╝
-         │
-         ▼
-╔═════════════════════════════════════════════════════════════════════════════════════════╗
-║  TX #3: TRANSFER USDC (L1 - Ethereum)                                                   ║
-╠═════════════════════════════════════════════════════════════════════════════════════════╣
-║  Signer:    User via MetaMask                                                           ║
-║  Contract:  USDC Token (ERC20)                                                          ║
-║  Function:  transfer(portalAddress, amount)                                             ║
-║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── deposit.ts:504-512 → tokens.ts:344-366 → SIGN at line 354                          ║
-║                                                                                         ║
-║  State Changes:                                                                         ║
-║  ├── balances[user] -= amount                                                           ║
-║  └── balances[portal] += amount                                                         ║
-╚═════════════════════════════════════════════════════════════════════════════════════════╝
-         │
-         ▼
-╔═════════════════════════════════════════════════════════════════════════════════════════╗
-║  TX #4: EXECUTE DEPOSIT (L1 - Ethereum)                                                 ║
-╠═════════════════════════════════════════════════════════════════════════════════════════╣
-║  Signer:    Relayer wallet (NOT user - preserves privacy)                               ║
+║  Signer:    Anyone (relayer or user from fresh wallet - preserves privacy)              ║
 ║  Contract:  AztecAavePortalL1                                                           ║
 ║  Function:  executeDeposit(intent, l2BlockNumber, leafIndex, siblingPath)               ║
-║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── deposit.ts:668-674 → portal.ts:240-325 → SIGN at line 262                          ║
 ║                                                                                         ║
 ║  State Changes:                                                                         ║
 ║  ├── Consumes L2→L1 message from Aztec outbox                                           ║
 ║  ├── Verifies message proof against outbox Merkle tree                                  ║
+║  ├── Claims tokens from TokenPortal (authorized by L2 burn)                             ║
 ║  ├── Calls Aave LendingPool.supply(asset, amount, portal, 0)                            ║
 ║  ├── Portal receives aTokens (shares)                                                   ║
 ║  ├── intentShares[intentId] = receivedShares                                            ║
@@ -115,21 +89,17 @@ User clicks "Deposit" button
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  WAIT: Poll for L1→L2 message availability                                              │
-│  File: frontend/src/flows/deposit.ts:690-698                                            │
 │  - Waits for message to be consumable on L2                                             │
 │  - Fetches membership witness proof                                                     │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
 ╔═════════════════════════════════════════════════════════════════════════════════════════╗
-║  TX #5: FINALIZE DEPOSIT (L2 - Aztec)                                                   ║
+║  TX #3: FINALIZE DEPOSIT (L2 - Aztec)                                                   ║
 ╠═════════════════════════════════════════════════════════════════════════════════════════╣
 ║  Signer:    User via Azguard Wallet                                                     ║
 ║  Contract:  AaveWrapper (L2)                                                            ║
 ║  Function:  finalize_deposit(intentId, asset, shares, secret, messageLeafIndex)         ║
-║                                                                                         ║
-║  Code Path:                                                                             ║
-║  └── deposit.ts:703-746 → operations.ts:385-454 → SIGN at line 441                      ║
 ║                                                                                         ║
 ║  State Changes:                                                                         ║
 ║  ├── Consumes L1→L2 message from Aztec inbox                                            ║
@@ -148,11 +118,75 @@ User clicks "Deposit" button
 
 ---
 
+## Token Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           TOKEN FLOW                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   BRIDGE PHASE (one-time, can be done in advance):                          │
+│   ═══════════════════════════════════════════════                           │
+│                                                                             │
+│   L1: User Wallet ──USDC──► TokenPortal (holds USDC)                        │
+│                                   │                                         │
+│                                   │ L1→L2 message                           │
+│                                   ▼                                         │
+│   L2: L2Token mints ──L2USDC──► User L2 Balance (private)                   │
+│                                                                             │
+│   DEPOSIT PHASE (privacy-preserving):                                       │
+│   ══════════════════════════════════                                        │
+│                                                                             │
+│   L2: User L2 Balance ──burn──► AaveWrapper (records intent)                │
+│                                       │                                     │
+│                                       │ L2→L1 message (contains burn proof) │
+│                                       ▼                                     │
+│   L1: TokenPortal ──USDC──► AavePortal ──USDC──► Aave Pool                  │
+│                    (claim)              (supply)     │                      │
+│                                                      │                      │
+│   L1: Aave Pool ──aUSDC──► AavePortal (holds shares)                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Smart Contract Functions
+
+### Prerequisite: Bridge USDC to L2
+
+Before depositing to Aave, users must first bridge USDC from L1 to L2. This is a standard Aztec bridge operation using the TokenPortal.
+
+**TX A: Approve TokenPortal (L1)**
+```solidity
+IERC20(usdc).approve(tokenPortalAddress, amount)
+```
+
+**TX B: Deposit to Aztec (L1)**
+```solidity
+TokenPortal.depositToAztecPrivate(
+    secretHashForL2MessageConsumption,
+    amount,
+    secretHashForRedeemingMintedNotes
+)
+```
+
+**TX C: Claim L2 Tokens (L2)**
+```noir
+L2Token.claim_private(
+    secret_for_L1_to_L2_message_consumption,
+    amount,
+    secret_for_redeeming_minted_notes
+)
+```
+
+**Result**: User has private L2 USDC balance that can be used for Aave deposits.
+
+---
 
 ### TX #1: request_deposit (L2 Noir)
 
-**Contract**: `aztec/src/main.nr:372-430`
+**Contract**: `AaveWrapper (L2)`
 
 ```noir
 #[external("private")]
@@ -171,6 +205,9 @@ fn request_deposit(
 
     // Validate deadline bounds
     assert(deadline > 0, "Deadline must be greater than zero");
+
+    // BURN user's L2 tokens (privacy-preserving - no L1 transfer needed)
+    L2Token::at(bridged_token_address).burn(caller, amount);
 
     // Compute hash of owner for privacy
     let owner_hash = poseidon2_hash([caller.to_field()]);
@@ -205,63 +242,16 @@ fn request_deposit(
 **State Changes**:
 | Storage | Before | After |
 |---------|--------|-------|
+| User L2 Token balance | `X` | `X - amount` (burned) |
 | `intent_owners[intentId]` | `0x0` | `caller` |
 | `intent_status[intentId]` | `0 (UNKNOWN)` | `1 (PENDING_DEPOSIT)` |
 | `consumed_intents[intentId]` | `false` | `false` |
 
 ---
 
-### TX #2: approve (L1 ERC20)
+### TX #2: executeDeposit (L1 Solidity)
 
-**Contract**: Standard ERC20 (OpenZeppelin)
-
-```solidity
-function approve(address spender, uint256 amount) public returns (bool) {
-    _approve(msg.sender, spender, amount);
-    return true;
-}
-
-function _approve(address owner, address spender, uint256 amount) internal {
-    allowances[owner][spender] = amount;
-    emit Approval(owner, spender, amount);
-}
-```
-
-**State Changes**:
-| Storage | Before | After |
-|---------|--------|-------|
-| `allowances[user][portal]` | `0` | `amount` |
-
----
-
-### TX #3: transfer (L1 ERC20)
-
-**Contract**: Standard ERC20 (OpenZeppelin)
-
-```solidity
-function transfer(address to, uint256 amount) public returns (bool) {
-    _transfer(msg.sender, to, amount);
-    return true;
-}
-
-function _transfer(address from, address to, uint256 amount) internal {
-    balances[from] -= amount;
-    balances[to] += amount;
-    emit Transfer(from, to, amount);
-}
-```
-
-**State Changes**:
-| Storage | Before | After |
-|---------|--------|-------|
-| `balances[user]` | `X` | `X - amount` |
-| `balances[portal]` | `Y` | `Y + amount` |
-
----
-
-### TX #4: executeDeposit (L1 Solidity)
-
-**Contract**: `eth/contracts/AztecAavePortalL1.sol:182-268`
+**Contract**: `AztecAavePortalL1`
 
 ```solidity
 function executeDeposit(
@@ -303,15 +293,18 @@ function executeDeposit(
     // Step 6: Mark intent as consumed for replay protection
     consumedIntents[intent.intentId] = true;
 
-    // Step 7: Get aToken balance before supply
+    // Step 7: Claim tokens from TokenPortal (authorized by L2 burn)
+    ITokenPortal(tokenPortal).withdraw(intent.asset, intent.amount, address(this), true);
+
+    // Step 8: Get aToken balance before supply
     address aToken = _getATokenAddress(intent.asset);
     uint256 aTokenBalanceBefore = IERC20(aToken).balanceOf(address(this));
 
-    // Step 8: Approve Aave pool to spend tokens
+    // Step 9: Approve Aave pool to spend tokens
     bool approveSuccess = IERC20(intent.asset).approve(aavePool, intent.amount);
     require(approveSuccess, "Token approval failed");
 
-    // Step 9: Supply tokens to Aave (this contract receives aTokens)
+    // Step 10: Supply tokens to Aave (this contract receives aTokens)
     ILendingPool(aavePool).supply(
         intent.asset,
         intent.amount,
@@ -319,7 +312,7 @@ function executeDeposit(
         0 // referral code
     );
 
-    // Step 10: Calculate shares received (aToken balance difference)
+    // Step 11: Calculate shares received (aToken balance difference)
     uint256 aTokenBalanceAfter = IERC20(aToken).balanceOf(address(this));
     uint128 shares = uint128(aTokenBalanceAfter - aTokenBalanceBefore);
 
@@ -327,13 +320,13 @@ function executeDeposit(
         revert AaveSupplyFailed();
     }
 
-    // Step 11: Store shares for this intent (for withdrawal tracking)
+    // Step 12: Store shares for this intent (for withdrawal tracking)
     intentShares[intent.intentId] = shares;
     intentAssets[intent.intentId] = intent.asset;
 
     emit DepositExecuted(intent.intentId, intent.asset, intent.amount, shares);
 
-    // Step 12: Send L1->L2 confirmation message
+    // Step 13: Send L1->L2 confirmation message
     bytes32 messageContent = _computeDepositFinalizationMessage(
         intent.intentId, intent.ownerHash, ConfirmationStatus.SUCCESS, shares, intent.asset
     );
@@ -370,14 +363,14 @@ struct DepositIntent {
 | `consumedIntents[intentId]` | `false` | `true` |
 | `intentShares[intentId]` | `0` | `shares` |
 | `intentAssets[intentId]` | `0x0` | `asset` |
-| Aave `aToken.balanceOf(portal)` | `X` | `X + shares` |
-| USDC `balances[portal]` | `Y` | `Y - amount` |
+| TokenPortal USDC balance | `X` | `X - amount` |
+| Aave `aToken.balanceOf(portal)` | `Y` | `Y + shares` |
 
 ---
 
-### TX #5: finalize_deposit (L2 Noir)
+### TX #3: finalize_deposit (L2 Noir)
 
-**Contract**: `aztec/src/main.nr:481-531`
+**Contract**: `AaveWrapper (L2)`
 
 ```noir
 #[external("private")]
@@ -451,103 +444,6 @@ struct PositionReceiptNote {
 
 ---
 
-## Detailed Transaction Breakdown
-
-### TX #1: Request Deposit (L2)
-
-**Entry Point**: `DepositFlow.tsx:241` → `App.tsx:146` → `deposit.ts:393`
-
-**Code References**:
-```
-frontend/src/flows/deposit.ts:437-459        # Flow orchestration
-frontend/src/services/l2/operations.ts:299-364  # Contract call construction
-frontend/src/services/l2/operations.ts:345      # Actual signing point
-```
-
-**What Gets Signed**:
-- Aztec transaction calling `request_deposit` on AaveWrapper contract
-- Fee payment via SponsoredFPC (gas-less for user)
-
-**Intent Structure**:
-```
-intentId = poseidon2_hash([caller, asset, amount, original_decimals, deadline, salt])
-ownerHash = poseidon2_hash([caller])  // Privacy: never reveals actual address on L1
-salt = poseidon2_hash([caller, secret_hash])  // Ensures uniqueness
-```
-
----
-
-### TX #2: Approve USDC (L1)
-
-**Code References**:
-```
-frontend/src/flows/deposit.ts:493-501     # Flow trigger
-frontend/src/services/l1/tokens.ts:298-320   # Approve implementation
-frontend/src/services/l1/tokens.ts:308       # Actual signing point
-```
-
-**What Gets Signed (MetaMask)**:
-```solidity
-IERC20(usdc).approve(portalAddress, amount)
-```
-
----
-
-### TX #3: Transfer USDC (L1)
-
-**Code References**:
-```
-frontend/src/flows/deposit.ts:504-512     # Flow trigger
-frontend/src/services/l1/tokens.ts:344-366   # Transfer implementation
-frontend/src/services/l1/tokens.ts:354       # Actual signing point
-```
-
-**What Gets Signed (MetaMask)**:
-```solidity
-IERC20(usdc).transfer(portalAddress, amount)
-```
-
----
-
-### TX #4: Execute Deposit (L1)
-
-**Code References**:
-```
-frontend/src/flows/deposit.ts:668-674      # Flow trigger
-frontend/src/services/l1/portal.ts:240-325    # Execute implementation
-frontend/src/services/l1/portal.ts:262        # Actual signing point
-```
-
-**Signer**: Relayer wallet (hardcoded in `DevnetAccounts.relayer`)
-- This is intentional for privacy - user identity not linked to L1 execution
-
-**What Gets Signed (Relayer)**:
-```solidity
-AztecAavePortalL1.executeDeposit(
-    intent,           // DepositIntent struct
-    l2BlockNumber,    // For proof verification
-    leafIndex,        // Message position in tree
-    siblingPath       // Merkle proof
-)
-```
-
----
-
-### TX #5: Finalize Deposit (L2)
-
-**Code References**:
-```
-frontend/src/flows/deposit.ts:703-746      # Flow orchestration
-frontend/src/services/l2/operations.ts:385-454  # Contract call construction
-frontend/src/services/l2/operations.ts:441      # Actual signing point
-```
-
-**What Gets Signed**:
-- Aztec transaction calling `finalize_deposit` on AaveWrapper contract
-- Fee payment via SponsoredFPC
-
----
-
 ## Privacy Architecture
 
 ```
@@ -562,10 +458,14 @@ frontend/src/services/l2/operations.ts:441      # Actual signing point
 │         │                                     │                          │
 │         │                                     │ Never reveals            │
 │         ▼                                     │ actual address           │
+│   L2 Token Balance                            ▼                          │
+│         │                           TokenPortal holds USDC               │
+│         │ burn                                │                          │
+│         ▼                                     │ claim (no user link)     │
 │   intent_owners[id] = 0xABC                   ▼                          │
 │         │                           intentShares[id] = shares            │
 │         │                                     │                          │
-│         │                                     │ Relayer executes         │
+│         │                                     │ Anyone can execute       │
 │         ▼                                     │ (not user wallet)        │
 │   PositionReceiptNote                         ▼                          │
 │   (encrypted, private)              aTokens held by portal               │
@@ -574,10 +474,12 @@ frontend/src/services/l2/operations.ts:441      # Actual signing point
 ```
 
 **Key Privacy Features**:
-1. `ownerHash = poseidon2_hash([userL2Address])` - L1 never sees actual L2 address
-2. Relayer signs TX #4 - User's MetaMask address not linked to portal execution
-3. `PositionReceiptNote` is encrypted - Only owner can read position data
-4. Public events emit only `intentId` - No user-identifying information
+1. **L2 Token Burn**: User's L2 tokens are burned privately - no L1 transfer from user wallet
+2. `ownerHash = poseidon2_hash([userL2Address])` - L1 never sees actual L2 address
+3. **Anyone-can-execute**: TX #2 can be executed by anyone - user's L1 wallet not linked to portal
+4. **TokenPortal claim**: Tokens come from TokenPortal, not from user's L1 wallet
+5. `PositionReceiptNote` is encrypted - Only owner can read position data
+6. Public events emit only `intentId` - No user-identifying information
 
 ---
 
@@ -585,18 +487,52 @@ frontend/src/services/l2/operations.ts:441      # Actual signing point
 
 | Wallet | Transactions Signed | When |
 |--------|---------------------|------|
-| Azguard (L2) | TX #1 (Request), TX #5 (Finalize) | Start and end of flow |
-| MetaMask (L1) | TX #2 (Approve), TX #3 (Transfer) | After L2→L1 message ready |
-| Relayer (L1) | TX #4 (Execute) | After user transfers USDC |
+| MetaMask (L1) | Prerequisite: Approve + Deposit to TokenPortal | One-time bridge (can be done in advance) |
+| Azguard (L2) | Prerequisite: Claim L2 tokens | After bridge |
+| Azguard (L2) | TX #1 (Request) | Start of deposit flow |
+| Anyone (L1) | TX #2 (Execute) | After L2→L1 message ready |
+| Azguard (L2) | TX #3 (Finalize) | End of deposit flow |
 
 ---
 
 ## Error Handling
 
 If any transaction fails, the flow stops at that step:
-- **TX #1 fails**: No state changed, user can retry
-- **TX #2/3 fails**: L2 intent exists, but no funds moved - can retry L1 steps
-- **TX #4 fails**: Intent queued in portal retry queue, retryable later
-- **TX #5 fails**: Shares on L1, message exists - can retry finalization
+- **Prerequisite fails**: No state changed on L2, user can retry bridge
+- **TX #1 fails**: No tokens burned, no intent created - user can retry
+- **TX #2 fails**: Intent queued in portal retry queue, retryable by anyone later
+- **TX #2 deadline expires**: User can call `cancel_deposit()` to reclaim tokens on L2
+- **TX #3 fails**: Shares on L1, message exists - can retry finalization
 
-Code location for error handling: `deposit.ts:133-223` (catch blocks per step)
+### Timeout Refund Flow
+
+```
+User calls request_deposit()
+         │
+         ├── L2 tokens burned
+         ├── Intent created with deadline
+         │
+         ▼
+    [Deadline passes without L1 execution]
+         │
+         ▼
+User calls cancel_deposit(intentId)
+         │
+         ├── Verify deadline has passed
+         ├── Verify intent not consumed on L1
+         ├── Mint L2 tokens back to user
+         └── Mark intent as cancelled
+```
+
+---
+
+## Comparison: Old Flow vs New Flow
+
+| Aspect | Old Flow (Removed) | New Flow (Privacy-Preserving) |
+|--------|-------------------|-------------------------------|
+| Token source | User's L1 wallet | TokenPortal (via L2 burn) |
+| L1 transactions by user | 2 (Approve + Transfer) | 0 during deposit |
+| Privacy | L1 wallet linked to deposit | L1 wallet never touches portal |
+| Prerequisite | None | Bridge USDC to L2 first |
+| Execution | Relayer | Anyone (permissionless) |
+| Failed deposit recovery | Manual | Timeout + cancel_deposit() |
