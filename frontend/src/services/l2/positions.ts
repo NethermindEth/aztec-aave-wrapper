@@ -27,6 +27,10 @@ export interface L2Position {
   status: number;
   /** Aave market identifier (0 if not used) */
   aaveMarketId: string;
+  /** Deadline timestamp for pending deposits (0 if not pending or already finalized) */
+  deadline: bigint;
+  /** Net amount for pending deposit refunds (0 if not pending or already finalized) */
+  netAmount: bigint;
 }
 
 /**
@@ -123,8 +127,22 @@ export async function queryL2Positions(
       }
     }
 
+    // For pending deposits, fetch deadline and netAmount from public storage
+    const enrichedPositions = await Promise.all(
+      positions.map(async (pos) => {
+        if (pos.status === L2PositionStatus.PendingDeposit) {
+          const [deadline, netAmount] = await Promise.all([
+            queryIntentDeadline(contract, pos.intentId),
+            queryIntentNetAmount(contract, pos.intentId),
+          ]);
+          return { ...pos, deadline, netAmount };
+        }
+        return pos;
+      })
+    );
+
     return {
-      positions,
+      positions: enrichedPositions,
       success: true,
     };
   } catch (error) {
@@ -185,6 +203,60 @@ export async function isIntentConsumed(
   }
 }
 
+/**
+ * Query the deadline for a pending deposit intent.
+ * This reads from the public intent_deadlines mapping.
+ *
+ * @param contract - AaveWrapper contract instance
+ * @param intentId - Intent ID to query
+ * @returns Deadline timestamp as bigint (0 if not found or not pending)
+ */
+export async function queryIntentDeadline(
+  contract: AaveWrapperContract,
+  intentId: string
+): Promise<bigint> {
+  try {
+    const { Fr } = await import("@aztec/aztec.js/fields");
+    const intentIdField = Fr.fromString(intentId);
+
+    // Read from public storage using storageRead
+    // intent_deadlines is a Map<Field, PublicMutable<u64>>
+    const result = await (contract.methods as any).get_intent_deadline(intentIdField).simulate({});
+    return BigInt(result);
+  } catch (error) {
+    // If no getter exists, deadline is not available
+    console.warn("Failed to query intent deadline:", error);
+    return 0n;
+  }
+}
+
+/**
+ * Query the net amount for a pending deposit intent.
+ * This reads from the public intent_net_amounts mapping.
+ *
+ * @param contract - AaveWrapper contract instance
+ * @param intentId - Intent ID to query
+ * @returns Net amount as bigint (0 if not found or not pending)
+ */
+export async function queryIntentNetAmount(
+  contract: AaveWrapperContract,
+  intentId: string
+): Promise<bigint> {
+  try {
+    const { Fr } = await import("@aztec/aztec.js/fields");
+    const intentIdField = Fr.fromString(intentId);
+
+    // Read from public storage using storageRead
+    // intent_net_amounts is a Map<Field, PublicMutable<u128>>
+    const result = await (contract.methods as any).get_intent_net_amount(intentIdField).simulate({});
+    return BigInt(result);
+  } catch (error) {
+    // If no getter exists, net amount is not available
+    console.warn("Failed to query intent net amount:", error);
+    return 0n;
+  }
+}
+
 // =============================================================================
 // Helper Functions
 // =============================================================================
@@ -213,12 +285,16 @@ function parsePositionNote(note: unknown): L2Position {
   const status = noteObj.status;
 
   // Convert to standard format
+  // Note: deadline and netAmount are not in the note - they're in public storage
+  // and will be populated separately for pending deposits
   return {
     intentId: fieldToHexString(nonce),
     assetId: fieldToHexString(assetId),
     shares: fieldToBigInt(shares),
     status: Number(fieldToBigInt(status)),
     aaveMarketId: fieldToHexString(aaveMarketId),
+    deadline: 0n,
+    netAmount: 0n,
   };
 }
 

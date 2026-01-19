@@ -61,6 +61,10 @@ export interface Position {
   status: IntentStatus;
   /** Whether a secret is stored for this position (for withdrawal finalization) */
   hasStoredSecret: boolean;
+  /** Deadline timestamp for pending deposits (unix seconds, 0 if not pending) */
+  deadline: bigint;
+  /** Net amount for pending deposit refunds (0 if not pending) */
+  netAmount: bigint;
 }
 
 /**
@@ -174,6 +178,8 @@ function toPosition(display: PositionDisplay): Position {
     sharesFormatted: display.sharesFormatted,
     status: display.status,
     hasStoredSecret: hasSecret(display.intentId),
+    deadline: display.deadline ? fromBigIntString(display.deadline) : 0n,
+    netAmount: display.netAmount ? fromBigIntString(display.netAmount) : 0n,
   };
 }
 
@@ -268,6 +274,8 @@ export function usePositions(): UsePositionsResult {
         shares: toBigIntString(p.shares),
         sharesFormatted: formatUSDC(p.shares),
         status: mapL2StatusToIntentStatus(p.status),
+        deadline: p.deadline > 0n ? toBigIntString(p.deadline) : undefined,
+        netAmount: p.netAmount > 0n ? toBigIntString(p.netAmount) : undefined,
       }));
 
       // Replace all positions with L2 data (L2 is source of truth)

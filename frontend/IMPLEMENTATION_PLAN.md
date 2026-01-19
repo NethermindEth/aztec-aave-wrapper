@@ -339,7 +339,7 @@ grep -q "executeCancelDeposit" frontend/src/services/l2/operations.ts && echo "O
 
 ---
 
-### Step 17: Add cancel button to pending deposits
+### Step 17: Add cancel button to pending deposits **COMPLETE**
 
 #### Goal
 Show cancel option for deposits that have passed their deadline.

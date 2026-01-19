@@ -95,6 +95,10 @@ export interface PositionDisplay {
   sharesFormatted: string;
   /** Current status of the position */
   status: IntentStatus;
+  /** Deadline timestamp for pending deposits (unix seconds as string, "0" if not pending) */
+  deadline?: string;
+  /** Net amount for pending deposit refunds (as string, "0" if not pending) */
+  netAmount?: string;
 }
 
 // =============================================================================

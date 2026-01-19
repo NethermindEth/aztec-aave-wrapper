@@ -20,6 +20,10 @@ export interface PositionCardProps {
   position: Position;
   /** Callback when withdraw button is clicked */
   onWithdraw: (intentId: string) => void;
+  /** Callback when cancel button is clicked for expired pending deposits */
+  onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
+  /** Current L1 timestamp for deadline comparison (use L1 time, not local) */
+  currentL1Timestamp?: bigint;
   /** Optional: CSS class for the container */
   class?: string;
 }
@@ -101,6 +105,30 @@ export function PositionCard(props: PositionCardProps) {
   const statusVariant = () => getStatusVariant(props.position.status);
   const statusLabel = () => getStatusLabel(props.position.status);
 
+  // Check if this is a pending deposit that can be cancelled
+  // Cancellation is allowed when:
+  // 1. Status is PendingDeposit
+  // 2. Deadline has passed (currentL1Timestamp > deadline)
+  // 3. We have the required data (deadline, netAmount, onCancel callback)
+  const canCancel = () => {
+    if (props.position.status !== IntentStatus.PendingDeposit) return false;
+    if (!props.onCancel) return false;
+    if (!props.currentL1Timestamp) return false;
+    if (props.position.deadline === 0n) return false;
+    // L1 uses strict greater than: current_time > deadline
+    return props.currentL1Timestamp > props.position.deadline;
+  };
+
+  const handleCancel = () => {
+    if (props.onCancel && canCancel()) {
+      props.onCancel(
+        props.position.intentId,
+        props.position.deadline,
+        props.position.netAmount
+      );
+    }
+  };
+
   return (
     <Card class={props.class}>
       <CardHeader class="flex flex-row items-center justify-between pb-2">
@@ -119,6 +147,16 @@ export function PositionCard(props: PositionCardProps) {
             onClick={() => props.onWithdraw(props.position.intentId)}
           >
             Withdraw
+          </Button>
+        </Show>
+        <Show when={canCancel()}>
+          <Button
+            variant="destructive"
+            size="sm"
+            class="mt-2"
+            onClick={handleCancel}
+          >
+            Cancel Deposit
           </Button>
         </Show>
       </CardContent>

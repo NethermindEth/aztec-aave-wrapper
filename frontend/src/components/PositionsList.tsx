@@ -15,12 +15,16 @@ import { PositionCard } from "./PositionCard.js";
 export interface PositionsListProps {
   /** Callback when withdraw is requested for a position */
   onWithdraw: (intentId: string) => void;
+  /** Callback when cancel is requested for a pending deposit */
+  onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
   /** Callback to refresh positions from L2 */
   onRefresh?: () => void;
   /** Whether positions are currently being refreshed from L2 */
   isRefreshing?: boolean;
   /** Whether positions are currently being loaded */
   loading?: boolean;
+  /** Current L1 timestamp for deadline comparison (use L1 time, not local) */
+  currentL1Timestamp?: bigint;
   /** Optional: CSS class for the container */
   class?: string;
 }
@@ -108,7 +112,14 @@ export function PositionsList(props: PositionsListProps) {
         >
           <div class="grid gap-4">
             <For each={positions()}>
-              {(position) => <PositionCard position={position} onWithdraw={props.onWithdraw} />}
+              {(position) => (
+                <PositionCard
+                  position={position}
+                  onWithdraw={props.onWithdraw}
+                  onCancel={props.onCancel}
+                  currentL1Timestamp={props.currentL1Timestamp}
+                />
+              )}
             </For>
           </div>
         </Show>
