@@ -24,14 +24,12 @@ export const FEE_CONFIG = {
 // =============================================================================
 
 /**
- * Deadline constraints - intersection of L1 and L2 requirements:
+ * Deadline constraints matching L1 portal requirements:
  * - L1 portal enforces: MIN=5 minutes, MAX=24 hours
- * - L2 contract enforces: MIN=30 minutes, MAX=7 days
- * - Frontend uses intersection: MIN=30 minutes, MAX=24 hours
  */
 export const DEADLINE_CONSTRAINTS = {
-  /** 30 minutes - L2 constraint (more restrictive than L1's 5 min) */
-  MIN_OFFSET_SECONDS: 30 * 60,
+  /** 5 minutes - matches L1 portal minimum */
+  MIN_OFFSET_SECONDS: 5 * 60,
   /** 24 hours - L1 constraint (more restrictive than L2's 7 days) */
   MAX_OFFSET_SECONDS: 24 * 60 * 60,
   /** 1 hour default */

@@ -50,7 +50,7 @@ grep -q "FEE_CONFIG" frontend/src/config/constants.ts && echo "OK"
 
 ---
 
-### Step 3: Update deadline minimum to match spec
+### Step 3: Update deadline minimum to match spec **COMPLETE**
 
 #### Goal
 Change MIN_OFFSET_SECONDS from 30 minutes to 5 minutes to match L1 spec (DEPOSIT_TRANSACTION_FLOW.md line 605).
