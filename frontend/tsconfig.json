@@ -21,7 +21,8 @@
     // Path Aliases
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": ["./src/*"],
+      "@generated/*": ["../aztec/generated/*"]
     }
   },
   "include": ["src"],

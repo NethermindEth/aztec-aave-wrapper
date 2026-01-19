@@ -4,7 +4,7 @@ This plan addresses the divergences between the specification and current implem
 
 ---
 
-## Phase 1: Intent Status Expansion and Fee Constants
+## Phase 1: Intent Status Expansion and Fee Constants **COMPLETE**
 
 Establish foundational data models and constants before implementing features that depend on them.
 
@@ -96,7 +96,7 @@ Create the prerequisite bridge flow that moves USDC from L1 to L2 via TokenPorta
 cd frontend && npm run build && npm run typecheck
 ```
 
-### Step 5: Add BridgedToken service for L2 token operations
+### Step 5: Add BridgedToken service for L2 token operations **COMPLETE**
 
 #### Goal
 Create service to interact with the BridgedToken contract on L2 for claim_private operations.
