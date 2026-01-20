@@ -443,6 +443,15 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         return intentAssets[intentId];
     }
 
+    /**
+     * @notice Get the deadline constraints for intent validation
+     * @return minDeadline Minimum deadline offset in seconds (5 minutes)
+     * @return maxDeadline Maximum deadline offset in seconds (24 hours)
+     */
+    function getDeadlineConstraints() external pure returns (uint256 minDeadline, uint256 maxDeadline) {
+        return (MIN_DEADLINE, MAX_DEADLINE);
+    }
+
     // ============ Admin Functions ============
 
     /**

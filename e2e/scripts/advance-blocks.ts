@@ -138,3 +138,6 @@ main()
     console.error("\n✗ Error:", error instanceof Error ? error.message : error);
     process.exit(1);
   });
+
+// Make this file a module to avoid "duplicate function" errors in TypeScript
+export {};

@@ -53,6 +53,7 @@ interface DeploymentAddresses {
     portal: string;
   };
   l2: {
+    bridgedToken: string;
     aaveWrapper: string;
   };
   config: {
@@ -259,8 +260,13 @@ function fetchSandboxL1Addresses(): SandboxL1Addresses {
 // Aztec L2 Deployment
 // =============================================================================
 
-async function deployL2Contract(portalAddress: string): Promise<string> {
-  console.log("\n  Deploying AaveWrapper on Aztec L2...");
+interface L2DeployResult {
+  bridgedToken: string;
+  aaveWrapper: string;
+}
+
+async function deployL2Contracts(portalAddress: string, tokenPortalAddress: string): Promise<L2DeployResult> {
+  console.log("\n  Deploying L2 contracts on Aztec...");
 
   // Use the generated TypeScript contract wrapper for deployment
   // Script runs from e2e directory where @aztec packages are installed
@@ -270,7 +276,20 @@ async function deployL2Contract(portalAddress: string): Promise<string> {
     import { TestWallet } from "@aztec/test-wallet/server";
     import { getInitialTestAccountsData } from "@aztec/accounts/testing";
     import { AaveWrapperContract } from "./src/generated/AaveWrapper";
+    import { BridgedTokenContract } from "./src/generated/BridgedToken";
     import { EthAddress } from "@aztec/foundation/eth-address";
+    import { Fr } from "@aztec/aztec.js/fields";
+
+    // Helper to convert string to Field (packed bytes)
+    function stringToField(str: string): Fr {
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(str);
+      let value = 0n;
+      for (let i = 0; i < bytes.length && i < 31; i++) {
+        value = (value << 8n) | BigInt(bytes[i]);
+      }
+      return new Fr(value);
+    }
 
     async function deploy() {
       const node = createAztecNodeClient("${PXE_URL}");
@@ -282,16 +301,60 @@ async function deployL2Contract(portalAddress: string): Promise<string> {
       const account = await wallet.createSchnorrAccount(alice.secret, alice.salt);
       const adminAddress = account.address;
 
-      // Deploy AaveWrapper
-      const portalEthAddress = EthAddress.fromString("${portalAddress}");
-      // Use admin address as mock bridged token and fee treasury for local deployment
-      const mockBridgedToken = adminAddress;
-      const mockFeeTreasury = adminAddress;
-      const contract = await AaveWrapperContract.deploy(wallet, adminAddress, portalEthAddress, mockBridgedToken, mockFeeTreasury)
+      // Step 1: Deploy BridgedToken (L2 USDC representation)
+      console.error("  Deploying BridgedToken...");
+      const tokenPortalEthAddress = EthAddress.fromString("${tokenPortalAddress}");
+      const tokenName = stringToField("USDC");
+      const tokenSymbol = stringToField("USDC");
+      const tokenDecimals = 6;
+
+      const bridgedToken = await BridgedTokenContract.deploy(
+        wallet,
+        adminAddress,
+        tokenPortalEthAddress,
+        tokenName,
+        tokenSymbol,
+        tokenDecimals
+      )
         .send({ from: adminAddress })
         .deployed();
+      console.error("    ✓ BridgedToken: " + bridgedToken.address.toString());
 
-      console.log(contract.address.toString());
+      // Step 2: Deploy AaveWrapper with real BridgedToken address
+      console.error("  Deploying AaveWrapper...");
+      const portalEthAddress = EthAddress.fromString("${portalAddress}");
+      const feeTreasury = adminAddress; // Use admin as fee treasury for local dev
+
+      const aaveWrapper = await AaveWrapperContract.deploy(
+        wallet,
+        adminAddress,
+        portalEthAddress,
+        bridgedToken.address,
+        feeTreasury
+      )
+        .send({ from: adminAddress })
+        .deployed();
+      console.error("    ✓ AaveWrapper: " + aaveWrapper.address.toString());
+
+      // Step 3: Configure BridgedToken - set AaveWrapper as minter
+      console.error("  Configuring BridgedToken minter...");
+      await bridgedToken.methods.set_minter(aaveWrapper.address)
+        .send({ from: adminAddress })
+        .wait();
+      console.error("    ✓ Minter set to AaveWrapper");
+
+      // Step 4: Authorize AaveWrapper as a burner
+      console.error("  Authorizing AaveWrapper as burner...");
+      await bridgedToken.methods.authorize_burner(aaveWrapper.address, true)
+        .send({ from: adminAddress })
+        .wait();
+      console.error("    ✓ AaveWrapper authorized as burner");
+
+      // Output addresses as JSON for parsing
+      console.log(JSON.stringify({
+        bridgedToken: bridgedToken.address.toString(),
+        aaveWrapper: aaveWrapper.address.toString()
+      }));
     }
 
     deploy().catch((e) => {
@@ -311,20 +374,25 @@ async function deployL2Contract(portalAddress: string): Promise<string> {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    // Extract the address from output (last line)
+    // Extract the JSON from output (last line)
     const lines = output.trim().split("\n");
-    const address = lines[lines.length - 1];
+    const jsonLine = lines[lines.length - 1];
 
-    if (!address || !address.startsWith("0x")) {
-      throw new Error(`Invalid L2 address output: ${output}`);
+    let result: L2DeployResult;
+    try {
+      result = JSON.parse(jsonLine) as L2DeployResult;
+    } catch {
+      throw new Error(`Invalid L2 deployment output: ${output}`);
     }
 
-    console.log(`    ✓ ${address}`);
+    if (!result.bridgedToken || !result.aaveWrapper) {
+      throw new Error(`Missing addresses in L2 deployment output: ${jsonLine}`);
+    }
 
     // Cleanup temp file
     execSync(`rm -f ${tempScriptPath}`);
 
-    return address;
+    return result;
   } catch (error) {
     // Cleanup temp file on error
     execSync(`rm -f ${tempScriptPath}`);
@@ -334,43 +402,6 @@ async function deployL2Contract(portalAddress: string): Promise<string> {
     );
     throw error;
   }
-}
-
-// =============================================================================
-// Address File Updates
-// =============================================================================
-
-function updateAddressesJson(addresses: DeploymentAddresses): void {
-  const addressesPath = join(__dirname, "../e2e/src/config/addresses.json");
-
-  const addressesJson = {
-    local: {
-      l2: {
-        aaveWrapper: addresses.l2.aaveWrapper,
-      },
-      l1: {
-        portal: addresses.l1.portal,
-        tokenPortal: addresses.l1.tokenPortal,
-        mockUsdc: addresses.l1.mockUsdc,
-        mockLendingPool: addresses.l1.mockLendingPool,
-      },
-    },
-    testnet: {
-      l2: {
-        aaveWrapper:
-          "0x0000000000000000000000000000000000000000000000000000000000000000",
-      },
-      l1: {
-        portal: "0x0000000000000000000000000000000000000000",
-        tokenPortal: "0x0000000000000000000000000000000000000000",
-        mockUsdc: "0x0000000000000000000000000000000000000000",
-        mockLendingPool: "0x0000000000000000000000000000000000000000",
-      },
-    },
-  };
-
-  writeFileSync(addressesPath, JSON.stringify(addressesJson, null, 2) + "\n");
-  console.log(`  Updated: ${addressesPath}`);
 }
 
 // =============================================================================
@@ -535,19 +566,18 @@ async function main() {
   execSync(setAuthorizedWithdrawerCmd, { encoding: "utf-8", stdio: "pipe" });
   console.log(`    ✓ Portal authorized: ${addresses.l1.portal.slice(0, 10)}...`);
 
-  // Mint USDC to TokenPortal for testing
-  // In production, users deposit USDC to the TokenPortal when bridging to L2
-  console.log("\n  Funding TokenPortal with USDC for testing...");
-  mintTokens(addresses.l1.mockUsdc, addresses.l1.tokenPortal, INITIAL_USDC_MINT, L1_RPC);
+  // ---------------------------------------------------------------------------
+  // Deploy L2 Contracts (BridgedToken + AaveWrapper)
+  // ---------------------------------------------------------------------------
+  console.log("\n[3/3] Deploying L2 contracts...");
 
-  // ---------------------------------------------------------------------------
-  // Deploy L2 AaveWrapper
-  // ---------------------------------------------------------------------------
-  console.log("\n[3/3] Deploying L2 AaveWrapper...");
+  const zeroAddress = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
   if (pxeRunning) {
     try {
-      addresses.l2.aaveWrapper = await deployL2Contract(addresses.l1.portal);
+      const l2Result = await deployL2Contracts(addresses.l1.portal, addresses.l1.tokenPortal);
+      addresses.l2.bridgedToken = l2Result.bridgedToken;
+      addresses.l2.aaveWrapper = l2Result.aaveWrapper;
 
       // Update L1 portal with the actual L2 contract address
       // This is required because L1 portal was deployed first with a placeholder address
@@ -562,18 +592,32 @@ async function main() {
       ].join(" ");
       execSync(updateL2AddressCmd, { encoding: "utf-8", stdio: "pipe" });
       console.log(`    ✓ L2 address set: ${addresses.l2.aaveWrapper.slice(0, 18)}...`);
+
+      // Update TokenPortal with the actual L2 BridgedToken address
+      // This is required because TokenPortal was deployed first with a placeholder l2Bridge
+      console.log("\n  Updating TokenPortal with L2 BridgedToken address...");
+      const setL2BridgeCmd = [
+        "cast send",
+        addresses.l1.tokenPortal,
+        '"setL2Bridge(bytes32)"',
+        addresses.l2.bridgedToken,
+        "--rpc-url", L1_RPC,
+        "--private-key", DEPLOYER_PRIVATE_KEY,
+      ].join(" ");
+      execSync(setL2BridgeCmd, { encoding: "utf-8", stdio: "pipe" });
+      console.log(`    ✓ L2 bridge set: ${addresses.l2.bridgedToken.slice(0, 18)}...`);
     } catch (error) {
       console.log(
         "    ⚠ L2 deployment failed (e2e tests will deploy):",
         error instanceof Error ? error.message : error
       );
-      addresses.l2.aaveWrapper =
-        "0x0000000000000000000000000000000000000000000000000000000000000000";
+      addresses.l2.bridgedToken = zeroAddress;
+      addresses.l2.aaveWrapper = zeroAddress;
     }
   } else {
     console.log("    ⚠ PXE not running - e2e tests will deploy the contract");
-    addresses.l2.aaveWrapper =
-      "0x0000000000000000000000000000000000000000000000000000000000000000";
+    addresses.l2.bridgedToken = zeroAddress;
+    addresses.l2.aaveWrapper = zeroAddress;
   }
 
   // ---------------------------------------------------------------------------
@@ -587,8 +631,10 @@ async function main() {
   writeFileSync(deploymentsPath, JSON.stringify(addresses, null, 2) + "\n");
   console.log(`  Created: ${deploymentsPath}`);
 
-  // Update e2e addresses.json
-  updateAddressesJson(addresses);
+  // Copy to frontend public folder (served by vite dev server)
+  const frontendPublicPath = join(__dirname, "../frontend/public/.deployments.local.json");
+  writeFileSync(frontendPublicPath, JSON.stringify(addresses, null, 2) + "\n");
+  console.log(`  Created: ${frontendPublicPath}`);
 
   // ---------------------------------------------------------------------------
   // Summary
@@ -604,6 +650,7 @@ async function main() {
   console.log(`  AztecAavePortal:       ${addresses.l1.portal}`);
 
   console.log("\nL2 Contracts (Aztec :8080):");
+  console.log(`  BridgedToken (USDC): ${addresses.l2.bridgedToken || "(not deployed)"}`);
   console.log(`  AaveWrapper:         ${addresses.l2.aaveWrapper || "(not deployed)"}`);
 
   console.log("\nTest Tokens:");

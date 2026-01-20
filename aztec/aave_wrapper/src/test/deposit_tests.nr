@@ -505,7 +505,7 @@ use crate::AaveWrapper::FeeConfig;
 ///
 /// FEE_BASIS_POINTS = 10 (0.1% fee)
 /// BASIS_POINTS_DENOMINATOR = 10000 (100% = 10000)
-/// MIN_DEPOSIT_AMOUNT = 100
+/// MIN_DEPOSIT_AMOUNT = 1_000_000 (1 USDC with 6 decimals)
 #[test]
 unconstrained fn test_fee_config_constants() {
     assert(FeeConfig::FEE_BASIS_POINTS == 10, "FEE_BASIS_POINTS should be 10");
@@ -513,7 +513,7 @@ unconstrained fn test_fee_config_constants() {
         FeeConfig::BASIS_POINTS_DENOMINATOR == 10000,
         "BASIS_POINTS_DENOMINATOR should be 10000",
     );
-    assert(FeeConfig::MIN_DEPOSIT_AMOUNT == 100, "MIN_DEPOSIT_AMOUNT should be 100");
+    assert(FeeConfig::MIN_DEPOSIT_AMOUNT == 1_000_000, "MIN_DEPOSIT_AMOUNT should be 1_000_000");
 }
 
 /// Test fee calculation produces correct results.
@@ -548,20 +548,20 @@ unconstrained fn test_fee_calculation_basic() {
 
 /// Test fee calculation at minimum deposit amount.
 ///
-/// With MIN_DEPOSIT_AMOUNT = 100 and 0.1% fee:
-/// - fee = 100 * 10 / 10000 = 0 (integer division)
-/// - net = 100 - 0 = 100
+/// With MIN_DEPOSIT_AMOUNT = 1_000_000 (1 USDC) and 0.1% fee:
+/// - fee = 1_000_000 * 10 / 10000 = 1000
+/// - net = 1_000_000 - 1000 = 999_000
 ///
-/// This edge case shows that very small deposits have zero fee due to rounding.
+/// This ensures meaningful deposits have meaningful fees.
 #[test]
 unconstrained fn test_fee_calculation_minimum_amount() {
-    let amount: u128 = FeeConfig::MIN_DEPOSIT_AMOUNT; // 100
+    let amount: u128 = FeeConfig::MIN_DEPOSIT_AMOUNT; // 1_000_000
     let fee = (amount * FeeConfig::FEE_BASIS_POINTS) / FeeConfig::BASIS_POINTS_DENOMINATOR;
     let net = amount - fee;
 
-    // With integer division: 100 * 10 / 10000 = 0
-    assert(fee == 0, "Fee for minimum amount should be 0 due to integer division");
-    assert(net == 100, "Net should equal original amount when fee rounds to 0");
+    // With 1_000_000 * 10 / 10000 = 1000
+    assert(fee == 1000, "Fee for 1 USDC should be 0.001 USDC (1000 base units)");
+    assert(net == 999_000, "Net should be 0.999 USDC");
     assert(net > 0, "Net amount must always be positive");
 }
 

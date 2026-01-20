@@ -7,10 +7,12 @@ pub contract BridgedToken {
         messages::message_delivery::MessageDelivery,
         note::{
             constants::MAX_NOTES_PER_PAGE, note_getter_options::NoteGetterOptions,
-            note_viewer_options::NoteViewerOptions,
+            note_interface::NoteProperties, note_viewer_options::NoteViewerOptions,
         },
+        utils::comparison::Comparator,
         protocol_types::{
-            address::AztecAddress,
+            address::{AztecAddress, EthAddress},
+            hash::{poseidon2_hash, sha256_to_field},
             traits::{Deserialize, FromField, Packable, Serialize, ToField},
         },
         state_vars::{Map, Owned, PrivateSet, PublicImmutable, PublicMutable},
@@ -31,6 +33,29 @@ pub contract BridgedToken {
         pub randomness: Field,
     }
 
+    /// A private note tracking a pending L1->L2 bridge claim.
+    ///
+    /// This note is created when a user registers a pending bridge after
+    /// initiating a deposit on L1. It allows the contract to track pending
+    /// bridges without requiring off-chain storage.
+    ///
+    /// The secret itself is NOT stored on-chain (only the hash) because
+    /// anyone with the secret could claim the tokens.
+    #[derive(Deserialize, Eq, Packable, Serialize)]
+    #[note]
+    pub struct PendingClaimNote {
+        /// The Aztec address that owns this pending claim
+        pub owner: AztecAddress,
+        /// The L1->L2 message content hash (for matching during claim)
+        pub message_key: Field,
+        /// The amount of tokens being bridged
+        pub amount: u128,
+        /// Hash of the secret (NOT the secret itself)
+        pub secret_hash: Field,
+        /// L1 block number when the deposit was made (for ordering/debugging)
+        pub l1_block_number: u64,
+    }
+
     /// Storage layout for the BridgedToken contract.
     #[storage]
     struct Storage<Context> {
@@ -39,6 +64,9 @@ pub contract BridgedToken {
 
         /// The AaveWrapper contract address authorized to mint/burn
         minter: PublicMutable<AztecAddress, Context>,
+
+        /// The L1 TokenPortal address for L1->L2 message verification
+        portal_address: PublicImmutable<EthAddress, Context>,
 
         /// Mapping of contract addresses authorized to burn tokens on behalf of users
         /// Key: contract address, Value: whether authorized (stored as Field, 1 = authorized, 0 = not)
@@ -59,6 +87,10 @@ pub contract BridgedToken {
         /// Private balances for each user
         /// Uses Owned wrapper per aztec-nr conventions
         balances: Map<AztecAddress, Owned<PrivateSet<TokenNote, Context>, Context>, Context>,
+
+        /// Pending bridge claims for each user
+        /// Tracks L1->L2 bridge operations that have been initiated but not yet claimed
+        pending_claims: Map<AztecAddress, Owned<PrivateSet<PendingClaimNote, Context>, Context>, Context>,
     }
 
     /// Event emitted when tokens are minted
@@ -91,14 +123,22 @@ pub contract BridgedToken {
     ///
     /// # Arguments
     /// * `admin` - The initial admin address
+    /// * `portal_address` - The L1 TokenPortal address for message verification
     /// * `name` - Token name as a Field
     /// * `symbol` - Token symbol as a Field
     /// * `decimals` - Token decimals
     #[external("public")]
     #[initializer]
-    fn constructor(admin: AztecAddress, name: Field, symbol: Field, decimals: u8) {
+    fn constructor(
+        admin: AztecAddress,
+        portal_address: EthAddress,
+        name: Field,
+        symbol: Field,
+        decimals: u8,
+    ) {
         self.storage.admin.write(admin);
         self.storage.minter.write(AztecAddress::from_field(0));
+        self.storage.portal_address.initialize(portal_address);
         self.storage.name.initialize(name);
         self.storage.symbol.initialize(symbol);
         self.storage.decimals.initialize(decimals);
@@ -206,6 +246,164 @@ pub contract BridgedToken {
         self.storage.total_supply.write(current_supply + amount);
 
         self.emit(MintEvent { amount });
+    }
+
+    /// Claims bridged tokens from L1 by consuming the L1->L2 message.
+    ///
+    /// This function is called by users who bridged tokens from L1 via TokenPortal.
+    /// It consumes the L1->L2 message (proving the secret) and mints tokens to the caller.
+    ///
+    /// # Arguments
+    /// * `amount` - Amount of tokens being claimed (must match L1 deposit)
+    /// * `secret` - Secret that hashes to the secretHash used in L1 deposit
+    /// * `message_leaf_index` - Index of the L1->L2 message in the message tree
+    ///
+    /// # Message Content
+    /// The L1 TokenPortal sends: sha256ToField([amount, secretHash])
+    /// This function verifies the secret hashes to the expected secretHash.
+    ///
+    /// # Privacy
+    /// - The claimer's identity is private (not linked to L1 depositor)
+    /// - Only the secret holder can claim the tokens
+    #[external("private")]
+    fn claim_private(amount: u128, secret: Field, message_leaf_index: Field) {
+        assert(amount > 0, "Amount must be greater than zero");
+
+        // Get the caller who will receive the tokens
+        let to = self.msg_sender().unwrap();
+
+        // Compute secret_hash using GeneratorIndex.SECRET_HASH (20) as domain separator
+        // This matches Aztec's computeSecretHash: poseidon2Hash([20, secret])
+        // which is used by consume_l1_to_l2_message to look up messages
+        let secret_hash = poseidon2_hash([20, secret]);
+
+        // Try to remove any matching pending claim note (if user registered one)
+        // This is best-effort - if no matching note exists, we continue without error
+        // because the user may not have called register_pending_bridge
+        let options = NoteGetterOptions::new()
+            .select(PendingClaimNote::properties().secret_hash, Comparator.EQ, secret_hash)
+            .set_limit(1);
+        let _ = self.storage.pending_claims.at(to).at(to).pop_notes(options);
+
+        // Compute message content to match L1 TokenPortal format:
+        // sha256ToField(abi.encodePacked(amount, secretHash))
+        // We need to pack amount as 32 bytes (u256) and secretHash as 32 bytes
+        let mut data: [u8; 64] = [0; 64];
+
+        // Pack amount as big-endian u256 (32 bytes) - amount is u128, pad with zeros
+        let amount_field = amount as Field;
+        let amount_bytes: [u8; 32] = amount_field.to_be_bytes();
+        for i in 0..32 {
+            data[i] = amount_bytes[i];
+        }
+
+        // Pack secret_hash as 32 bytes
+        let secret_hash_bytes: [u8; 32] = secret_hash.to_be_bytes();
+        for i in 0..32 {
+            data[32 + i] = secret_hash_bytes[i];
+        }
+
+        // Compute content hash matching L1's Hash.sha256ToField
+        let content = sha256_to_field(data);
+
+        // Get portal address from storage via public call
+        // We enqueue a public call to read and verify the message
+        BridgedToken::at(self.context.this_address())
+            ._claim_public(to, amount, content, secret, message_leaf_index)
+            .enqueue(self.context);
+
+        // Create a token note for the claimer
+        // Use secret as randomness source for the note
+        let randomness = poseidon2_hash([secret, to.to_field(), amount as Field]);
+        let note = TokenNote { owner: to, amount, randomness };
+
+        // Insert the note into the claimer's private balance set
+        self.storage.balances.at(to).at(to).insert(note).deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+    }
+
+    /// Internal public function to consume L1->L2 message and update total supply.
+    ///
+    /// # Arguments
+    /// * `to` - The recipient of the tokens
+    /// * `amount` - Amount being claimed
+    /// * `content` - The computed message content hash
+    /// * `secret` - The secret for message consumption
+    /// * `message_leaf_index` - Index of the message in the tree
+    #[external("public")]
+    fn _claim_public(
+        to: AztecAddress,
+        amount: u128,
+        content: Field,
+        secret: Field,
+        message_leaf_index: Field,
+    ) {
+        // Get portal address from storage
+        let portal = self.storage.portal_address.read();
+
+        // Consume the L1->L2 message
+        // This will revert if:
+        // - The message doesn't exist
+        // - The secret doesn't hash to the expected secretHash
+        // - The message was already consumed
+        self.context.consume_l1_to_l2_message(content, secret, portal, message_leaf_index);
+
+        // Update total supply
+        let current_supply = self.storage.total_supply.read();
+        self.storage.total_supply.write(current_supply + amount);
+
+        self.emit(MintEvent { amount });
+    }
+
+    /// Registers a pending bridge claim after initiating a deposit on L1.
+    ///
+    /// This function should be called by the user after they have initiated
+    /// a deposit on L1 via TokenPortal.depositToAztecPrivate(). It creates
+    /// a private note that tracks the pending claim, allowing the frontend
+    /// to query pending bridges from the contract instead of relying on
+    /// off-chain storage.
+    ///
+    /// # Arguments
+    /// * `message_key` - The L1->L2 message content hash (from L1 event)
+    /// * `amount` - The amount of tokens being bridged
+    /// * `secret_hash` - Hash of the secret (NOT the secret itself)
+    /// * `l1_block_number` - The L1 block number when the deposit was made
+    ///
+    /// # Privacy
+    /// - The pending claim note is encrypted for the caller
+    /// - The secret is NOT stored on-chain (only the hash)
+    /// - Other users cannot see your pending bridges
+    ///
+    /// # Usage
+    /// After calling depositToAztecPrivate on L1:
+    /// 1. Get the messageKey from the L1 event
+    /// 2. Call this function to register the pending claim
+    /// 3. Later, call claim_private with the secret to complete the claim
+    #[external("private")]
+    fn register_pending_bridge(
+        message_key: Field,
+        amount: u128,
+        secret_hash: Field,
+        l1_block_number: u64,
+    ) {
+        assert(amount > 0, "Amount must be greater than zero");
+        assert(message_key != 0, "Message key cannot be zero");
+        assert(secret_hash != 0, "Secret hash cannot be zero");
+
+        let owner = self.msg_sender().unwrap();
+
+        // Create a pending claim note
+        let note = PendingClaimNote {
+            owner,
+            message_key,
+            amount,
+            secret_hash,
+            l1_block_number,
+        };
+
+        // Insert the note into the caller's pending claims set
+        self.storage.pending_claims.at(owner).at(owner).insert(note).deliver(
+            MessageDelivery.CONSTRAINED_ONCHAIN,
+        );
     }
 
     /// Burns tokens from the caller's private balance.
@@ -675,6 +873,15 @@ pub contract BridgedToken {
         self.storage.admin.read()
     }
 
+    /// Get the L1 TokenPortal address.
+    ///
+    /// # Returns
+    /// * `EthAddress` - The L1 TokenPortal address
+    #[external("utility")]
+    unconstrained fn portal_address() -> pub EthAddress {
+        self.storage.portal_address.read()
+    }
+
     /// Check if an address is an authorized burner.
     ///
     /// # Arguments
@@ -685,5 +892,39 @@ pub contract BridgedToken {
     #[external("utility")]
     unconstrained fn is_authorized_burner(burner: AztecAddress) -> pub bool {
         self.storage.authorized_burners.at(burner).read() == 1
+    }
+
+    /// Get all pending bridge claims for an owner.
+    ///
+    /// This utility function queries the user's pending claim notes from the PXE.
+    /// Only the owner can decrypt and view their own pending bridges.
+    ///
+    /// # Arguments
+    /// * `owner` - The Aztec address to query
+    ///
+    /// # Returns
+    /// * `BoundedVec<PendingClaimNote, MAX_NOTES_PER_PAGE>` - The user's pending bridge claims
+    ///
+    /// # Privacy
+    /// This function runs in the user's PXE and only returns notes encrypted for them.
+    /// No information is revealed on-chain.
+    #[external("utility")]
+    unconstrained fn get_pending_bridges(
+        owner: AztecAddress,
+    ) -> pub BoundedVec<PendingClaimNote, MAX_NOTES_PER_PAGE> {
+        self.storage.pending_claims.at(owner).at(owner).view_notes(NoteViewerOptions::new())
+    }
+
+    /// Get the count of pending bridge claims for an owner.
+    ///
+    /// # Arguments
+    /// * `owner` - The Aztec address to query
+    ///
+    /// # Returns
+    /// * `u32` - The number of pending bridge claims
+    #[external("utility")]
+    unconstrained fn get_pending_bridge_count(owner: AztecAddress) -> pub u32 {
+        let notes = self.storage.pending_claims.at(owner).at(owner).view_notes(NoteViewerOptions::new());
+        notes.len()
     }
 }

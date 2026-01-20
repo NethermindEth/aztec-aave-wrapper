@@ -43,11 +43,15 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
     /// @notice Aztec L2->L1 message outbox
     address public immutable outbox;
 
-    /// @notice The L2 bridge contract address on Aztec
-    bytes32 public immutable l2Bridge;
-
     /// @notice Aztec instance version (read from inbox at construction)
     uint256 public immutable aztecVersion;
+
+    // ============ Mutable State ============
+
+    /// @notice The L2 bridge contract address on Aztec
+    /// @dev Made settable to handle deployment ordering (TokenPortal must be deployed before BridgedToken
+    ///      since BridgedToken needs the TokenPortal address, but TokenPortal needs BridgedToken address)
+    bytes32 public l2Bridge;
 
     // ============ State ============
 
@@ -61,6 +65,7 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
     error ZeroAmount();
     error InvalidWithdrawAmount();
     error UnauthorizedWithdrawer();
+    error L2BridgeNotSet();
 
     // ============ Events ============
 
@@ -79,6 +84,8 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
     event WithdrawFromAztec(address indexed recipient, uint256 amount);
 
     event AuthorizedWithdrawerSet(address indexed withdrawer, bool authorized);
+
+    event L2BridgeSet(bytes32 indexed l2Bridge);
 
     // ============ Constructor ============
 
@@ -134,6 +141,9 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         if (_amount == 0) {
             revert ZeroAmount();
         }
+        if (l2Bridge == bytes32(0)) {
+            revert L2BridgeNotSet();
+        }
 
         // Lock tokens on L1 (transfer from sender to this contract)
         IERC20(underlying).safeTransferFrom(msg.sender, address(this), _amount);
@@ -169,6 +179,9 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
     ) external override returns (bytes32 messageKey, uint256 messageIndex) {
         if (_amount == 0) {
             revert ZeroAmount();
+        }
+        if (l2Bridge == bytes32(0)) {
+            revert L2BridgeNotSet();
         }
 
         // Lock tokens on L1 (transfer from sender to this contract)
@@ -287,5 +300,23 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         }
         authorizedWithdrawers[_withdrawer] = _authorized;
         emit AuthorizedWithdrawerSet(_withdrawer, _authorized);
+    }
+
+    /**
+     * @notice Set the L2 bridge contract address
+     * @dev Only callable by owner. Required to set after deployment since BridgedToken
+     *      needs TokenPortal address for initialization (circular dependency).
+     *      Can only be set once to prevent malicious changes after tokens are bridged.
+     * @param _l2Bridge The L2 BridgedToken contract address on Aztec (as bytes32)
+     */
+    function setL2Bridge(bytes32 _l2Bridge) external onlyOwner {
+        if (_l2Bridge == bytes32(0)) {
+            revert ZeroAddress();
+        }
+        if (l2Bridge != bytes32(0)) {
+            revert("L2 bridge already set");
+        }
+        l2Bridge = _l2Bridge;
+        emit L2BridgeSet(_l2Bridge);
     }
 }

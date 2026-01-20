@@ -234,15 +234,8 @@ pub(crate) contract AaveWrapper {
     use crate::types::{DepositIntent, PositionReceiptNote, PositionStatus, WithdrawIntent};
     use bridged_token::BridgedToken;
 
-    /// Deadline validation constants.
-    /// Min deadline: 30 minutes = 1800 seconds
-    /// Max deadline: 7 days = 604800 seconds
-    mod DeadlineConfig {
-        /// Minimum deadline duration from current time (30 minutes)
-        pub global MIN_DEADLINE_DURATION: u64 = 1800;
-        /// Maximum deadline duration from current time (7 days)
-        pub global MAX_DEADLINE_DURATION: u64 = 604800;
-    }
+    // Note: Deadline validation is performed on L1 portal (MIN=5min, MAX=24h).
+    // L2 cannot access block.timestamp, so we only validate deadline > 0.
 
     /// Fee configuration.
     /// FEE_BASIS_POINTS: 10 = 0.1% fee
@@ -252,10 +245,9 @@ pub(crate) contract AaveWrapper {
         pub global FEE_BASIS_POINTS: u128 = 10;
         /// Denominator for basis point calculations (10000 = 100%)
         pub global BASIS_POINTS_DENOMINATOR: u128 = 10000;
-        /// Minimum deposit amount to ensure non-zero net_amount after fee deduction.
-        /// Note: With integer division, deposits under 1000 tokens result in zero fee.
-        /// This minimum (100) ensures net_amount > 0 and accepts zero-fee small deposits.
-        pub global MIN_DEPOSIT_AMOUNT: u128 = 100;
+        /// Minimum deposit amount in base units (1 USDC = 1_000_000 with 6 decimals).
+        /// This ensures meaningful deposits and non-zero fees.
+        pub global MIN_DEPOSIT_AMOUNT: u128 = 1_000_000;
     }
 
     /// Intent status constants for public state tracking.
@@ -1243,5 +1235,79 @@ pub(crate) contract AaveWrapper {
     #[external("utility")]
     unconstrained fn is_intent_consumed(intent_id: Field) -> pub bool {
         self.storage.consumed_intents.at(intent_id).read()
+    }
+
+    /// Get the deadline for a pending deposit or withdraw intent.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent identifier to query
+    ///
+    /// # Returns
+    /// * `u64` - Unix timestamp deadline (0 if not found or already finalized)
+    #[external("utility")]
+    unconstrained fn get_intent_deadline(intent_id: Field) -> pub u64 {
+        self.storage.intent_deadlines.at(intent_id).read()
+    }
+
+    /// Get the net amount for a pending deposit intent.
+    ///
+    /// This is the amount after fee deduction that would be refunded on cancellation.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent identifier to query
+    ///
+    /// # Returns
+    /// * `u128` - Net amount in base units (0 if not found or already finalized)
+    #[external("utility")]
+    unconstrained fn get_intent_net_amount(intent_id: Field) -> pub u128 {
+        self.storage.intent_net_amounts.at(intent_id).read()
+    }
+
+    /// Get the owner of a pending intent.
+    ///
+    /// # Arguments
+    /// * `intent_id` - The intent identifier to query
+    ///
+    /// # Returns
+    /// * `AztecAddress` - Owner address (zero address if not found or already finalized)
+    #[external("utility")]
+    unconstrained fn get_intent_owner(intent_id: Field) -> pub AztecAddress {
+        self.storage.intent_owners.at(intent_id).read()
+    }
+
+    /// Get the protocol fee in basis points.
+    ///
+    /// # Returns
+    /// * `u128` - Fee basis points (10 = 0.1%)
+    #[external("utility")]
+    unconstrained fn get_fee_basis_points() -> pub u128 {
+        FeeConfig::FEE_BASIS_POINTS
+    }
+
+    /// Get the basis points denominator.
+    ///
+    /// # Returns
+    /// * `u128` - Denominator (10000 = 100%)
+    #[external("utility")]
+    unconstrained fn get_basis_points_denominator() -> pub u128 {
+        FeeConfig::BASIS_POINTS_DENOMINATOR
+    }
+
+    /// Get the minimum deposit amount in base units.
+    ///
+    /// # Returns
+    /// * `u128` - Minimum deposit amount (1_000_000 for 1 USDC with 6 decimals)
+    #[external("utility")]
+    unconstrained fn get_min_deposit_amount() -> pub u128 {
+        FeeConfig::MIN_DEPOSIT_AMOUNT
+    }
+
+    /// Get all fee configuration values at once.
+    ///
+    /// # Returns
+    /// * `(u128, u128, u128)` - Tuple of (fee_basis_points, basis_points_denominator, min_deposit_amount)
+    #[external("utility")]
+    unconstrained fn get_fee_config() -> pub (u128, u128, u128) {
+        (FeeConfig::FEE_BASIS_POINTS, FeeConfig::BASIS_POINTS_DENOMINATOR, FeeConfig::MIN_DEPOSIT_AMOUNT)
     }
 }

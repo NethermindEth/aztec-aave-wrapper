@@ -1,15 +1,16 @@
 {
   "l1": {
-    "mockUsdc": "0x5f3f1dBD7B74C6B46e8c44f98792A1dAf8d69154",
-    "mockLendingPool": "0xCD8a1C3ba11CF5ECfa6267617243239504a98d90",
-    "tokenPortal": "0x7bc06c482DEAd17c0e297aFbC32f6e63d3846650",
-    "portal": "0xc351628EB244ec633d5f21fBD6621e1a683B1181"
+    "mockUsdc": "0x998abeb3E57409262aE5b751f60747921B33613E",
+    "mockLendingPool": "0x4826533B4897376654Bb4d4AD88B7faFD0C98528",
+    "tokenPortal": "0x9d4454B023096f34B160D6B654540c56A1F81688",
+    "portal": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"
   },
   "l2": {
-    "aaveWrapper": "0x033ad714ba54223ae40b1711bcbda2a4fa57472852d96dc64b43c2ab302ed81a"
+    "aaveWrapper": "0x2684b69e3cd93a646608029dacb57d9001ec6389c6038a64759cff78ac66d626",
+    "bridgedToken": "0x22a359aead26982bc8474b546d56b387dc3ea0fe46001eea1eb1b113b87ecf69"
   },
   "config": {
     "l1ChainId": 31337,
-    "deployedAt": "2026-01-18T23:04:36.400Z"
+    "deployedAt": "2026-01-20T06:32:57.917Z"
   }
 }

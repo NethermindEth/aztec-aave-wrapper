@@ -66,14 +66,14 @@ export class BridgedTokenContract extends ContractBase {
   /**
    * Creates a tx to deploy a new instance of this contract.
    */
-  public static deploy(wallet: Wallet, admin: AztecAddressLike, name: FieldLike, symbol: FieldLike, decimals: (bigint | number)) {
+  public static deploy(wallet: Wallet, admin: AztecAddressLike, portal_address: EthAddressLike, name: FieldLike, symbol: FieldLike, decimals: (bigint | number)) {
     return new DeployMethod<BridgedTokenContract>(PublicKeys.default(), wallet, BridgedTokenContractArtifact, (instance, wallet) => BridgedTokenContract.at(instance.address, wallet), Array.from(arguments).slice(1));
   }
 
   /**
    * Creates a tx to deploy a new instance of this contract using the specified public keys hash to derive the address.
    */
-  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, name: FieldLike, symbol: FieldLike, decimals: (bigint | number)) {
+  public static deployWithPublicKeys(publicKeys: PublicKeys, wallet: Wallet, admin: AztecAddressLike, portal_address: EthAddressLike, name: FieldLike, symbol: FieldLike, decimals: (bigint | number)) {
     return new DeployMethod<BridgedTokenContract>(publicKeys, wallet, BridgedTokenContractArtifact, (instance, wallet) => BridgedTokenContract.at(instance.address, wallet), Array.from(arguments).slice(2));
   }
 
@@ -111,7 +111,7 @@ export class BridgedTokenContract extends ContractBase {
   }
   
 
-  public static get storage(): ContractStorageLayout<'admin' | 'minter' | 'authorized_burners' | 'name' | 'symbol' | 'decimals' | 'total_supply' | 'balances'> {
+  public static get storage(): ContractStorageLayout<'admin' | 'minter' | 'portal_address' | 'authorized_burners' | 'name' | 'symbol' | 'decimals' | 'total_supply' | 'balances' | 'pending_claims'> {
       return {
         admin: {
       slot: new Fr(1n),
@@ -119,25 +119,31 @@ export class BridgedTokenContract extends ContractBase {
 minter: {
       slot: new Fr(2n),
     },
-authorized_burners: {
+portal_address: {
       slot: new Fr(3n),
     },
-name: {
-      slot: new Fr(4n),
+authorized_burners: {
+      slot: new Fr(5n),
     },
-symbol: {
+name: {
       slot: new Fr(6n),
     },
-decimals: {
+symbol: {
       slot: new Fr(8n),
     },
-total_supply: {
+decimals: {
       slot: new Fr(10n),
     },
+total_supply: {
+      slot: new Fr(12n),
+    },
 balances: {
-      slot: new Fr(11n),
+      slot: new Fr(13n),
+    },
+pending_claims: {
+      slot: new Fr(14n),
     }
-      } as ContractStorageLayout<'admin' | 'minter' | 'authorized_burners' | 'name' | 'symbol' | 'decimals' | 'total_supply' | 'balances'>;
+      } as ContractStorageLayout<'admin' | 'minter' | 'portal_address' | 'authorized_burners' | 'name' | 'symbol' | 'decimals' | 'total_supply' | 'balances' | 'pending_claims'>;
     }
     
 
@@ -149,6 +155,9 @@ balances: {
 
     /** _burn_public(caller: struct, amount: integer) */
     _burn_public: ((caller: AztecAddressLike, amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** _claim_public(to: struct, amount: integer, content: field, secret: field, message_leaf_index: field) */
+    _claim_public: ((to: AztecAddressLike, amount: (bigint | number), content: FieldLike, secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** _mint_public(caller: struct, amount: integer) */
     _mint_public: ((caller: AztecAddressLike, amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -171,14 +180,23 @@ balances: {
     /** burn_private(amount: integer) */
     burn_private: ((amount: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
-    /** constructor(admin: struct, name: field, symbol: field, decimals: integer) */
-    constructor: ((admin: AztecAddressLike, name: FieldLike, symbol: FieldLike, decimals: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+    /** claim_private(amount: integer, secret: field, message_leaf_index: field) */
+    claim_private: ((amount: (bigint | number), secret: FieldLike, message_leaf_index: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** constructor(admin: struct, portal_address: struct, name: field, symbol: field, decimals: integer) */
+    constructor: ((admin: AztecAddressLike, portal_address: EthAddressLike, name: FieldLike, symbol: FieldLike, decimals: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** decimals() */
     decimals: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** get_notes(owner: struct) */
     get_notes: ((owner: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** get_pending_bridge_count(owner: struct) */
+    get_pending_bridge_count: ((owner: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** get_pending_bridges(owner: struct) */
+    get_pending_bridges: ((owner: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** is_authorized_burner(burner: struct) */
     is_authorized_burner: ((burner: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
@@ -192,11 +210,17 @@ balances: {
     /** name() */
     name: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
+    /** portal_address() */
+    portal_address: (() => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
     /** process_message(message_ciphertext: struct, message_context: struct) */
     process_message: ((message_ciphertext: FieldLike[], message_context: { tx_hash: FieldLike, unique_note_hashes_in_tx: FieldLike[], first_nullifier_in_tx: FieldLike, recipient: AztecAddressLike }) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** public_dispatch(selector: field) */
     public_dispatch: ((selector: FieldLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
+
+    /** register_pending_bridge(message_key: field, amount: integer, secret_hash: field, l1_block_number: integer) */
+    register_pending_bridge: ((message_key: FieldLike, amount: (bigint | number), secret_hash: FieldLike, l1_block_number: (bigint | number)) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
 
     /** set_minter(new_minter: struct) */
     set_minter: ((new_minter: AztecAddressLike) => ContractFunctionInteraction) & Pick<ContractMethod, 'selector'>;
