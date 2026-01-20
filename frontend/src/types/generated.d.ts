@@ -43,7 +43,13 @@ declare module "@generated/AaveWrapper" {
   }
 
   export const AaveWrapperContract: {
-    deploy(wallet: unknown, admin: AztecAddressType, portalAddress: unknown): DeploymentResult;
+    deploy(
+      wallet: unknown,
+      admin: AztecAddressType,
+      portalAddress: unknown,
+      bridgedTokenAddress: AztecAddressType,
+      feeTreasuryAddress: AztecAddressType
+    ): DeploymentResult;
     at(address: AztecAddressType, wallet: unknown): AaveWrapperContract;
   };
 

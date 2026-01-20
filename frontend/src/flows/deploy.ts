@@ -114,6 +114,10 @@ export interface L2DeploymentContext {
   wallet: TestWallet;
   /** Wallet address (becomes contract admin) */
   walletAddress: AztecAddress;
+  /** L2 bridged token contract address */
+  bridgedTokenAddress: AztecAddress;
+  /** L2 fee treasury address */
+  feeTreasuryAddress: AztecAddress;
 }
 
 /**
@@ -202,6 +206,8 @@ async function deployL2WithPortalAddress(
 
   const result = await deployL2Contract(context.wallet, context.walletAddress, {
     portalAddress: portalAddress,
+    bridgedTokenAddress: context.bridgedTokenAddress,
+    feeTreasuryAddress: context.feeTreasuryAddress,
   });
 
   logSuccess(`L2 contract deployed at ${result.address.toString()}`);

@@ -53,3 +53,6 @@ async function main() {
 }
 
 main().catch(console.error);
+
+// Make this file a module to avoid "duplicate function" errors in TypeScript
+export {};

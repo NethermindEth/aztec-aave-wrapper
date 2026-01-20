@@ -433,23 +433,5 @@ export function formatAddress(address: { toString(): string }): string {
   return `${str.slice(0, 10)}...${str.slice(-8)}`;
 }
 
-/**
- * Convert a deadline offset to absolute timestamp.
- *
- * @param offsetSeconds - Seconds from now
- * @returns Unix timestamp in seconds
- */
-export function deadlineFromOffset(offsetSeconds: number): bigint {
-  return BigInt(Math.floor(Date.now() / 1000) + offsetSeconds);
-}
-
-/**
- * Check if a deadline has passed.
- *
- * @param deadline - Deadline timestamp
- * @returns true if deadline is in the past
- */
-export function isDeadlinePassed(deadline: bigint): boolean {
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  return deadline < now;
-}
+// Note: deadlineFromOffset and isDeadlinePassed moved to ./time.ts
+// for deterministic testing support via TestClock

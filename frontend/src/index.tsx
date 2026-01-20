@@ -6,6 +6,9 @@ import "./index.css";
 import App from "./App";
 import { AppProvider } from "./store";
 
+// Expose debug utilities on window.aztecDebug for browser console
+import "./debug";
+
 const root = document.getElementById("root");
 
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {

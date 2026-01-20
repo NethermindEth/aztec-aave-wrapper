@@ -175,6 +175,26 @@ export function generateSalt(): Hex {
 }
 
 /**
+ * Deadline constraints for validation.
+ * Can be provided from contract config or defaults to hardcoded values.
+ */
+export interface DeadlineConstraints {
+  /** Minimum deadline offset in seconds */
+  minOffsetSeconds: bigint;
+  /** Maximum deadline offset in seconds */
+  maxOffsetSeconds: bigint;
+}
+
+/**
+ * Default deadline constraints matching L1 portal values.
+ * Used when contract config is not available.
+ */
+const DEFAULT_DEADLINE_CONSTRAINTS: DeadlineConstraints = {
+  minOffsetSeconds: 5n * 60n, // 5 minutes
+  maxOffsetSeconds: 24n * 60n * 60n, // 24 hours
+};
+
+/**
  * Validate that a deadline is within acceptable bounds for L1 execution.
  *
  * The L1 portal enforces:
@@ -182,29 +202,30 @@ export function generateSalt(): Hex {
  * - MAX_DEADLINE: 24 hours (to prevent stale intents)
  *
  * @param deadline - Unix timestamp to validate
+ * @param constraints - Optional deadline constraints (defaults to L1 portal values)
  * @returns Object with isValid and error message if invalid
  */
-export function validateDeadline(deadline: bigint): {
+export function validateDeadline(
+  deadline: bigint,
+  constraints: DeadlineConstraints = DEFAULT_DEADLINE_CONSTRAINTS
+): {
   isValid: boolean;
   error?: string;
 } {
   const now = BigInt(Math.floor(Date.now() / 1000));
   const timeUntilDeadline = deadline > now ? deadline - now : 0n;
 
-  const MIN_DEADLINE = 5n * 60n; // 5 minutes in seconds
-  const MAX_DEADLINE = 24n * 60n * 60n; // 24 hours in seconds
-
-  if (timeUntilDeadline < MIN_DEADLINE) {
+  if (timeUntilDeadline < constraints.minOffsetSeconds) {
     return {
       isValid: false,
-      error: `Deadline too soon: ${timeUntilDeadline}s until deadline, minimum is ${MIN_DEADLINE}s`,
+      error: `Deadline too soon: ${timeUntilDeadline}s until deadline, minimum is ${constraints.minOffsetSeconds}s`,
     };
   }
 
-  if (timeUntilDeadline > MAX_DEADLINE) {
+  if (timeUntilDeadline > constraints.maxOffsetSeconds) {
     return {
       isValid: false,
-      error: `Deadline too far: ${timeUntilDeadline}s until deadline, maximum is ${MAX_DEADLINE}s`,
+      error: `Deadline too far: ${timeUntilDeadline}s until deadline, maximum is ${constraints.maxOffsetSeconds}s`,
     };
   }
 

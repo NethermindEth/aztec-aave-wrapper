@@ -8,7 +8,8 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { areAddressesDeployed, getConfig, getConfigFromEnv, type TestConfig } from "./config";
 import { TestHarness, waitForChain, waitForPXE } from "./setup";
-import { computeSecretHash, deadlineFromOffset, generateSecret } from "./utils/aztec";
+import { computeSecretHash, generateSecret } from "./utils/aztec";
+import { deadlineFromOffset } from "./utils/time";
 
 describe("E2E Setup Infrastructure", () => {
   let config: TestConfig;
@@ -48,7 +49,7 @@ describe("E2E Setup Infrastructure", () => {
     it("should detect undeployed addresses", () => {
       const testnetConfig = getConfig("testnet");
 
-      // Testnet addresses.json has zero addresses, so should return false
+      // Testnet uses zero addresses (not yet deployed), so should return false
       const deployed = areAddressesDeployed(testnetConfig);
       expect(deployed).toBe(false);
     });

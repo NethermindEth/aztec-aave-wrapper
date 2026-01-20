@@ -65,22 +65,30 @@ export async function generateSecret(): Promise<Fr> {
  * Generate a secret and its hash for authentication.
  *
  * The secret is kept private by the user, while the secretHash
- * is included in L2→L1 messages. During finalization, the user
+ * is included in L1→L2 messages. During finalization, the user
  * reveals the secret to prove authorization.
+ *
+ * IMPORTANT: Uses computeSecretHash which adds GeneratorIndex.SECRET_HASH
+ * as a domain separator. This matches what Aztec's consume_l1_to_l2_message
+ * expects when looking up messages.
  *
  * @returns Object containing secret and secretHash
  *
  * @example
  * ```ts
  * const { secret, secretHash } = await generateSecretPair();
- * // Use secretHash in request_deposit
- * // Use secret in finalize_deposit
+ * // Use secretHash in depositToAztecPrivate
+ * // Use secret in claim_private
  * ```
  */
 export async function generateSecretPair(): Promise<SecretPair> {
   const { Fr, computeSecretHash } = await loadAztecModules();
 
   const secret = Fr.random();
+  // Use computeSecretHash which internally does:
+  // poseidon2HashWithSeparator([secret], GeneratorIndex.SECRET_HASH)
+  // This equals poseidon2Hash([20, secret]) where 20 = SECRET_HASH generator index
+  // This matches what Aztec's consume_l1_to_l2_message uses internally
   const secretHash = await computeSecretHash(secret);
 
   return { secret, secretHash };
@@ -89,10 +97,11 @@ export async function generateSecretPair(): Promise<SecretPair> {
 /**
  * Compute the hash of a secret value.
  *
- * Uses Aztec's standard computeSecretHash function which internally uses:
- * `poseidon2HashWithSeparator([secret], GeneratorIndex.SECRET_HASH)`
+ * Uses computeSecretHash which adds GeneratorIndex.SECRET_HASH (20)
+ * as a domain separator. This matches what Aztec's consume_l1_to_l2_message
+ * expects when looking up L1→L2 messages.
  *
- * This matches the secret_hash verification in the Noir contract.
+ * Internally equivalent to: poseidon2Hash([20, secret])
  *
  * @param secret - The secret value (Fr or bigint)
  * @returns The computed secret hash as Fr
@@ -106,7 +115,9 @@ export async function generateSecretPair(): Promise<SecretPair> {
 export async function computeSecretHashFromValue(secret: Fr | bigint): Promise<Fr> {
   const { Fr, computeSecretHash } = await loadAztecModules();
 
+  // Convert bigint to Fr if needed
   const secretFr = typeof secret === "bigint" ? new Fr(secret) : secret;
+  // Use computeSecretHash for consistent domain-separated hashing
   return computeSecretHash(secretFr);
 }
 

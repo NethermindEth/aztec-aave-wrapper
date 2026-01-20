@@ -12,9 +12,84 @@
 
 import type { ChainConfig, ContractAddresses } from "@aztec-aave-wrapper/shared";
 import { CHAIN_IDS, LOCAL_RPC_URLS } from "@aztec-aave-wrapper/shared";
+import * as fs from "fs";
+import * as path from "path";
 
-// Import deployed addresses (populated by deployment scripts)
-import addresses from "./config/addresses.json" with { type: "json" };
+// =============================================================================
+// Deployment File Types
+// =============================================================================
+
+/**
+ * Structure of .deployments.local.json
+ */
+interface DeploymentsFile {
+  l1: {
+    mockUsdc: string;
+    mockLendingPool: string;
+    tokenPortal: string;
+    portal: string;
+  };
+  l2: {
+    bridgedToken: string;
+    aaveWrapper: string;
+  };
+  config: {
+    l1ChainId: number;
+    deployedAt: string;
+  };
+}
+
+/**
+ * Zero addresses for testnet (not yet deployed)
+ */
+const ZERO_ADDRESSES: ContractAddresses = {
+  l1: {
+    portal: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    tokenPortal: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    mockUsdc: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+    mockLendingPool: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+  },
+  l2: {
+    bridgedToken: "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
+    aaveWrapper: "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`,
+  },
+};
+
+/**
+ * Load addresses from .deployments.local.json
+ */
+function loadLocalAddresses(): ContractAddresses {
+  const deploymentsPath = path.resolve(__dirname, "../../.deployments.local.json");
+
+  if (!fs.existsSync(deploymentsPath)) {
+    console.warn(`Deployments file not found at ${deploymentsPath}. Using zero addresses.`);
+    return ZERO_ADDRESSES;
+  }
+
+  try {
+    const content = fs.readFileSync(deploymentsPath, "utf-8");
+    const deployments: DeploymentsFile = JSON.parse(content);
+
+    return {
+      l1: {
+        portal: deployments.l1.portal as `0x${string}`,
+        tokenPortal: deployments.l1.tokenPortal as `0x${string}`,
+        mockUsdc: deployments.l1.mockUsdc as `0x${string}`,
+        mockLendingPool: deployments.l1.mockLendingPool as `0x${string}`,
+      },
+      l2: {
+        bridgedToken: deployments.l2.bridgedToken as `0x${string}`,
+        aaveWrapper: deployments.l2.aaveWrapper as `0x${string}`,
+      },
+    };
+  } catch (error) {
+    console.warn(`Failed to load deployments file: ${error}. Using zero addresses.`);
+    return ZERO_ADDRESSES;
+  }
+}
+
+// Load addresses once at module initialization
+const localAddresses = loadLocalAddresses();
 
 // =============================================================================
 // Environment Types
@@ -91,7 +166,7 @@ function createLocalConfig(mode: TestMode): TestConfig {
         rpcUrl: LOCAL_RPC_URLS.PXE,
       },
     },
-    addresses: addresses.local as ContractAddresses,
+    addresses: localAddresses,
     timeouts: {
       pxeConnection: 30_000,
       deployment: 60_000,
@@ -126,7 +201,7 @@ function createTestnetConfig(mode: TestMode): TestConfig {
         rpcUrl: process.env.AZTEC_DEVNET_URL || "http://localhost:8080",
       },
     },
-    addresses: addresses.testnet as ContractAddresses,
+    addresses: ZERO_ADDRESSES, // Testnet addresses not yet deployed
     timeouts: {
       pxeConnection: 60_000,
       deployment: 120_000,

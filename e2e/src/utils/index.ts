@@ -6,3 +6,6 @@
 
 // Aztec PXE helpers
 export * from "./aztec";
+
+// Time utilities for deterministic testing
+export * from "./time";
