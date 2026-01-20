@@ -272,15 +272,19 @@ export function usePositions(): UsePositionsResult {
       }
 
       // Convert L2 positions to PositionDisplay format
-      const l2Positions: PositionDisplay[] = result.positions.map((p) => ({
-        intentId: p.intentId,
-        assetId: p.assetId,
-        shares: toBigIntString(p.shares),
-        sharesFormatted: formatUSDC(p.shares),
-        status: mapL2StatusToIntentStatus(p.status),
-        deadline: p.deadline > 0n ? toBigIntString(p.deadline) : undefined,
-        netAmount: p.netAmount > 0n ? toBigIntString(p.netAmount) : undefined,
-      }));
+      const l2Positions: PositionDisplay[] = result.positions.map((p) => {
+        const mappedStatus = mapL2StatusToIntentStatus(p.status);
+        console.log(`[refreshFromL2] Position ${p.intentId.slice(0,16)}... L2 status: ${p.status} -> IntentStatus: ${mappedStatus}`);
+        return {
+          intentId: p.intentId,
+          assetId: p.assetId,
+          shares: toBigIntString(p.shares),
+          sharesFormatted: formatUSDC(p.shares),
+          status: mappedStatus,
+          deadline: p.deadline > 0n ? toBigIntString(p.deadline) : undefined,
+          netAmount: p.netAmount > 0n ? toBigIntString(p.netAmount) : undefined,
+        };
+      });
 
       // Replace all positions with L2 data (L2 is source of truth)
       console.log("[refreshFromL2] Setting", l2Positions.length, "positions in state");

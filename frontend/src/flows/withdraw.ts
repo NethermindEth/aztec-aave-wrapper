@@ -47,6 +47,7 @@ import {
 import type { AztecAddress } from "../services/l2/wallet.js";
 import { storeWithdrawSecret } from "../services/secrets.js";
 import {
+  clearOperation,
   removePosition,
   setOperationError,
   setOperationIntentId,
@@ -427,6 +428,7 @@ export async function executeWithdrawFlow(
   l2Context: WithdrawL2Context,
   config: WithdrawConfig
 ): Promise<WithdrawResult> {
+  console.log("=== WITHDRAW FLOW STARTED ===");
   const { publicClient, relayerWallet } = l1Clients;
   const { node, wallet, contract } = l2Context;
   const totalSteps = getWithdrawStepCount();
@@ -438,6 +440,12 @@ export async function executeWithdrawFlow(
   // Extract position data
   const { position, deadlineOffset } = config;
   const withdrawAmount = position.shares; // Full withdrawal only
+
+  console.log("=== WITHDRAW CONFIG ===");
+  console.log(`  position.depositIntentId: ${position.depositIntentId.toString()}`);
+  console.log(`  position.shares: ${position.shares}`);
+  console.log(`  withdrawAmount: ${withdrawAmount}`);
+  console.log(`  deadlineOffset: ${deadlineOffset}`);
 
   // Validate full withdrawal constraint
   validateFullWithdrawal(withdrawAmount, position.shares);
@@ -481,6 +489,12 @@ export async function executeWithdrawFlow(
       `Position nonce (deposit intent ID): ${position.depositIntentId.toString().slice(0, 16)}...`
     );
 
+    console.log("=== STEP 2: REQUEST_WITHDRAW ===");
+    console.log(`  nonce (depositIntentId): ${position.depositIntentId.toString()}`);
+    console.log(`  amount: ${withdrawAmount}`);
+    console.log(`  deadline: ${deadline}`);
+    console.log(`  secretHash: ${secretHash.toString()}`);
+
     let intentId: Fr;
     try {
       const withdrawResult = await executeRequestWithdraw(
@@ -499,6 +513,9 @@ export async function executeWithdrawFlow(
 
       const intentIdStr = intentId.toString();
       setOperationIntentId(intentIdStr);
+      console.log("=== REQUEST_WITHDRAW SUCCESS ===");
+      console.log(`  intentId: ${intentIdStr}`);
+      console.log(`  txHash: ${withdrawResult.txHash}`);
       logSuccess(`Withdraw Intent ID: ${intentIdStr.slice(0, 16)}...`);
       logSuccess(`L2 tx: ${withdrawResult.txHash}`);
     } catch (error) {
@@ -523,7 +540,9 @@ export async function executeWithdrawFlow(
     logStep(3, totalSteps, "Wait for L2→L1 message");
     setOperationStep(3);
 
+    console.log("=== STEP 3: WAIT FOR L2→L1 MESSAGE ===");
     const messageAvailable = await waitForL2ToL1Message(node);
+    console.log(`  messageAvailable: ${messageAvailable}`);
     if (!messageAvailable) {
       throw new Error("Timeout waiting for L2→L1 message availability");
     }
@@ -534,6 +553,8 @@ export async function executeWithdrawFlow(
     currentStep = 4;
     logStep(4, totalSteps, "Execute withdraw on L1");
     setOperationStep(4);
+
+    console.log("=== STEP 4: EXECUTE WITHDRAW ON L1 ===");
 
     // Create withdraw intent for L1
     const intentIdHex = pad(toHex(BigInt(intentIdStr)), { size: 32 }) as Hex;
@@ -547,8 +568,16 @@ export async function executeWithdrawFlow(
       deadline,
     };
 
+    console.log("=== WITHDRAW INTENT VALUES ===");
+    console.log(`  intentId: ${intentIdHex}`);
+    console.log(`  ownerHash: ${ownerHashHex}`);
+    console.log(`  amount: ${withdrawAmount}`);
+    console.log(`  deadline: ${deadline}`);
+    console.log(`  secretHash: ${secretHashHex}`);
+
     // Compute message hash and set it as valid in mock outbox
     const messageHash = computeWithdrawIntentHash(withdrawIntent);
+    console.log(`  messageHash: ${messageHash}`);
 
     const l2BlockNumber = 100n; // Mock L2 block number for devnet
     await setMockOutboxMessageValid(
@@ -571,6 +600,7 @@ export async function executeWithdrawFlow(
       siblingPath: [],
     };
 
+    console.log("Executing withdraw on L1...");
     const executeResult = await executeWithdraw(
       publicClient,
       relayerWallet,
@@ -581,6 +611,8 @@ export async function executeWithdrawFlow(
     );
     txHashes.l1Execute = executeResult.txHash;
 
+    console.log("=== L1 EXECUTE WITHDRAW SUCCESS ===");
+    console.log(`  txHash: ${executeResult.txHash}`);
     logSuccess(`Withdraw executed on L1 (tx: ${executeResult.txHash.slice(0, 10)}...)`);
 
     // Store secret for later token claim
@@ -600,9 +632,12 @@ export async function executeWithdrawFlow(
     // Note: In devnet without real L1→L2 messaging, finalize may fail
     // This step would complete the flow by consuming the L1→L2 message
 
+    console.log("=== OPTIONAL: FINALIZE WITHDRAW ON L2 ===");
     try {
+      console.log("Waiting for L1→L2 message...");
       await waitForL1ToL2Message(publicClient, node);
 
+      console.log("Executing finalize_withdraw...");
       const finalizeResult = await executeFinalizeWithdraw(
         contract,
         {
@@ -615,9 +650,13 @@ export async function executeWithdrawFlow(
         wallet.address
       );
       txHashes.l2Finalize = finalizeResult.txHash;
+      console.log("=== FINALIZE_WITHDRAW SUCCESS ===");
+      console.log(`  txHash: ${finalizeResult.txHash}`);
       logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
     } catch (error) {
       // In devnet without real L1→L2 messaging, finalize may fail
+      console.log("=== FINALIZE_WITHDRAW FAILED ===");
+      console.log(`  error: ${error instanceof Error ? error.message : "Unknown error"}`);
       logSection("L2", "finalize_withdraw may fail without real L1→L2 message", "warning");
       logInfo(error instanceof Error ? error.message.slice(0, 100) : "Unknown error");
     }
@@ -666,6 +705,9 @@ export async function executeWithdrawFlow(
 
     // Fall through to generic withdraw flow error
     throw new WithdrawFlowError(currentStep, "withdraw", error);
+  } finally {
+    // Always reset operation state to idle when flow completes (success or error)
+    clearOperation();
   }
 }
 

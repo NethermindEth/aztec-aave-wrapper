@@ -117,7 +117,14 @@ export async function queryL2Positions(
       for (let i = 0; i < validCount; i++) {
         const note = boundedVec.storage[i];
         if (note) {
-          positions.push(parsePositionNote(note));
+          console.log(`[queryL2Positions] Raw note ${i}:`, JSON.stringify(note, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+          const parsed = parsePositionNote(note);
+          console.log(`[queryL2Positions] Parsed position ${i}:`, {
+            intentId: parsed.intentId,
+            status: parsed.status,
+            shares: parsed.shares.toString(),
+          });
+          positions.push(parsed);
         }
       }
     } else if (Array.isArray(result)) {

@@ -24,6 +24,7 @@ import type { AztecAddress } from "../services/l2/wallet.js";
 
 // Store
 import {
+  clearOperation,
   setOperationError,
   setOperationIntentId,
   setOperationStatus,
@@ -334,6 +335,9 @@ export async function executeCancelDeposit(
 
     // Fall through to generic cancel flow error
     throw new CancelDepositFlowError(currentStep, "cancel_deposit", error);
+  } finally {
+    // Always reset operation state to idle when flow completes (success or error)
+    clearOperation();
   }
 }
 

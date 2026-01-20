@@ -102,7 +102,14 @@ export const PORTAL_ABI = [
   },
   {
     type: "function",
-    name: "consumedIntents",
+    name: "consumedDepositIntents",
+    inputs: [{ name: "intentId", type: "bytes32" }],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "consumedWithdrawIntents",
     inputs: [{ name: "intentId", type: "bytes32" }],
     outputs: [{ name: "", type: "bool" }],
     stateMutability: "view",
@@ -440,7 +447,7 @@ export async function getIntentAsset(
 }
 
 /**
- * Check if an intent has already been consumed (executed).
+ * Check if a deposit intent has already been consumed (executed).
  *
  * @param publicClient - Viem public client
  * @param portalAddress - Portal contract address
@@ -448,7 +455,7 @@ export async function getIntentAsset(
  * @param abi - Optional custom ABI
  * @returns True if the intent has been consumed
  */
-export async function isIntentConsumed(
+export async function isDepositIntentConsumed(
   publicClient: PublicClient<Transport, Chain>,
   portalAddress: Address,
   intentId: Hex,
@@ -457,7 +464,31 @@ export async function isIntentConsumed(
   const consumed = await publicClient.readContract({
     address: portalAddress,
     abi,
-    functionName: "consumedIntents",
+    functionName: "consumedDepositIntents",
+    args: [intentId],
+  });
+  return consumed as boolean;
+}
+
+/**
+ * Check if a withdraw intent has already been consumed (executed).
+ *
+ * @param publicClient - Viem public client
+ * @param portalAddress - Portal contract address
+ * @param intentId - The intent ID to check
+ * @param abi - Optional custom ABI
+ * @returns True if the intent has been consumed
+ */
+export async function isWithdrawIntentConsumed(
+  publicClient: PublicClient<Transport, Chain>,
+  portalAddress: Address,
+  intentId: Hex,
+  abi: Abi = PORTAL_ABI as unknown as Abi
+): Promise<boolean> {
+  const consumed = await publicClient.readContract({
+    address: portalAddress,
+    abi,
+    functionName: "consumedWithdrawIntents",
     args: [intentId],
   });
   return consumed as boolean;
@@ -483,7 +514,7 @@ export async function getIntentStatus(
   asset: Address;
 }> {
   const [consumed, shares, asset] = await Promise.all([
-    isIntentConsumed(publicClient, portalAddress, intentId, abi),
+    isDepositIntentConsumed(publicClient, portalAddress, intentId, abi),
     getIntentShares(publicClient, portalAddress, intentId, abi),
     getIntentAsset(publicClient, portalAddress, intentId, abi),
   ]);

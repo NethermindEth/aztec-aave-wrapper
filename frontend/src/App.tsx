@@ -384,21 +384,27 @@ const App: Component = () => {
    * Handle withdraw operation using the real withdraw flow
    */
   const handleWithdraw = async (intentId: string) => {
+    console.log("[handleWithdraw] STARTED with intentId:", intentId);
+
     // Prevent duplicate submissions
     if (isWithdrawing()) {
+      console.log("[handleWithdraw] Already withdrawing, returning");
       addLog("Withdrawal already in progress", LogLevel.WARNING);
       return;
     }
 
     // Look up position
     const position = getPosition(intentId);
+    console.log("[handleWithdraw] Position lookup result:", position);
     if (!position) {
+      console.log("[handleWithdraw] Position not found");
       addLog(`Position not found: ${intentId}`, LogLevel.ERROR);
       return;
     }
 
     // Validate position is in withdrawable state
     if (position.status !== IntentStatus.Confirmed) {
+      console.log("[handleWithdraw] Position not in Confirmed status:", position.status);
       addLog(
         `Position is not in Active status (current: ${getPositionStatusLabel(position.status)}). Cannot withdraw.`,
         LogLevel.ERROR
@@ -408,6 +414,7 @@ const App: Component = () => {
 
     // Validate contracts are loaded
     if (!state.contracts.portal || !state.contracts.mockUsdc || !state.contracts.l2Wrapper) {
+      console.log("[handleWithdraw] Contracts not loaded");
       addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
       return;
     }
@@ -422,12 +429,15 @@ const App: Component = () => {
     addLog(`Shares: ${sharesFormatted}`);
 
     // Update position status to pending
+    console.log("[handleWithdraw] Setting status to PendingWithdraw");
     updatePositionStatus(intentId, IntentStatus.PendingWithdraw);
 
     try {
       // Connect to MetaMask for user wallet
+      console.log("[handleWithdraw] Connecting to MetaMask...");
       addLog("Connecting to L1 (MetaMask)...");
       const ethereumConnection = await connectEthereumWallet();
+      console.log("[handleWithdraw] MetaMask connected:", ethereumConnection.address);
       addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
 
       // Create L1 clients with MetaMask user wallet and hardcoded relayer
@@ -440,8 +450,10 @@ const App: Component = () => {
       };
 
       // Get mockAztecOutbox from portal contract
+      console.log("[handleWithdraw] Fetching portal configuration...");
       addLog("Fetching portal configuration...");
       const mockAztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
+      console.log("[handleWithdraw] mockAztecOutbox:", mockAztecOutbox);
 
       // Build L1 addresses for withdraw (simpler than deposit)
       const l1Addresses: WithdrawL1Addresses = {
@@ -450,14 +462,20 @@ const App: Component = () => {
       };
 
       // Initialize L2 context
+      console.log("[handleWithdraw] Connecting to Aztec L2...");
       addLog("Connecting to Aztec L2...");
       const node = await createL2NodeClient();
+      console.log("[handleWithdraw] L2 node connected");
 
+      console.log("[handleWithdraw] Connecting to Aztec wallet...");
       addLog("Connecting to Aztec wallet...");
       const { wallet, address: walletAddress } = await connectAztecWallet();
+      console.log("[handleWithdraw] Aztec wallet connected:", walletAddress);
 
+      console.log("[handleWithdraw] Loading AaveWrapper contract...");
       addLog("Loading AaveWrapper contract...");
       const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+      console.log("[handleWithdraw] AaveWrapper loaded");
 
       // Build L2 context
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
@@ -470,8 +488,10 @@ const App: Component = () => {
 
       // Convert intentId string to Fr for withdraw flow
       const depositIntentId = Fr.fromString(intentId);
+      console.log("[handleWithdraw] depositIntentId:", depositIntentId.toString());
 
       // Execute the withdraw flow
+      console.log("[handleWithdraw] Executing withdraw flow...");
       addLog("Executing withdraw flow...");
       const result = await executeWithdrawFlow(l1Clients, l1Addresses, l2Context, {
         position: {
@@ -480,6 +500,7 @@ const App: Component = () => {
         },
         deadlineOffset: 3600, // 1 hour default
       });
+      console.log("[handleWithdraw] Withdraw flow completed:", result);
 
       // Remove position from store (full withdrawal consumes it)
       removePositionById(intentId);
@@ -493,11 +514,13 @@ const App: Component = () => {
         state.contracts.mockUsdc
       );
     } catch (error) {
+      console.log("[handleWithdraw] ERROR:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
       addLog(`Withdrawal failed: ${message}`, LogLevel.ERROR);
       // Revert position status on failure
       updatePositionStatus(intentId, IntentStatus.Confirmed);
     } finally {
+      console.log("[handleWithdraw] FINISHED");
       setIsWithdrawing(false);
     }
   };

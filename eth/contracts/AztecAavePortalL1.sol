@@ -63,8 +63,11 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
     /// @notice L2 contract address on Aztec (can be updated by admin)
     bytes32 public l2ContractAddress;
 
-    /// @notice Tracks consumed intent IDs for replay protection
-    mapping(bytes32 => bool) public consumedIntents;
+    /// @notice Tracks consumed deposit intent IDs for replay protection
+    mapping(bytes32 => bool) public consumedDepositIntents;
+
+    /// @notice Tracks consumed withdraw intent IDs for replay protection
+    mapping(bytes32 => bool) public consumedWithdrawIntents;
 
     /// @notice Tracks shares per intent ID for withdrawal accounting
     /// @dev Maps intentId -> shares received from Aave (aToken balance)
@@ -186,7 +189,7 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         bytes32[] calldata siblingPath
     ) external whenNotPaused {
         // Step 1: Check for replay attack first (cheapest check)
-        if (consumedIntents[intent.intentId]) {
+        if (consumedDepositIntents[intent.intentId]) {
             revert IntentAlreadyConsumed(intent.intentId);
         }
 
@@ -210,7 +213,7 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
         // Step 6: Mark intent as consumed for replay protection
-        consumedIntents[intent.intentId] = true;
+        consumedDepositIntents[intent.intentId] = true;
 
         // Step 7: Claim tokens from TokenPortal (based on L2 burn authorization)
         ITokenPortal(tokenPortal).withdraw(intent.amount, address(this));
@@ -288,7 +291,8 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         bytes32[] calldata siblingPath
     ) external whenNotPaused {
         // Step 1: Check for replay attack first
-        if (consumedIntents[intent.intentId]) {
+        // Note: Use separate mapping from deposits since the intentId is reused
+        if (consumedWithdrawIntents[intent.intentId]) {
             revert IntentAlreadyConsumed(intent.intentId);
         }
 
@@ -320,7 +324,7 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
         // Step 7: Mark intent as consumed for replay protection
-        consumedIntents[intent.intentId] = true;
+        consumedWithdrawIntents[intent.intentId] = true;
 
         // Step 8: Clear shares for this intent (full withdrawal)
         delete intentShares[intent.intentId];

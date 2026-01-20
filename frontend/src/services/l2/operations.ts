@@ -378,7 +378,13 @@ export async function executeFinalizeDeposit(
 
   try {
     // Debug: Log all parameters for message content hash computation
-    const intentIdBigInt = params.intentId.toBigInt();
+    // Handle both Fr objects and raw bigints (depending on wallet implementation)
+    const intentIdBigInt =
+      typeof params.intentId === "bigint"
+        ? params.intentId
+        : typeof params.intentId.toBigInt === "function"
+          ? params.intentId.toBigInt()
+          : BigInt(params.intentId.toString());
     const assetIdBigInt = params.assetId;
     const sharesBigInt = params.shares;
 
@@ -529,34 +535,20 @@ export async function executeRequestWithdraw(
       params.secretHash
     );
 
+    // First, simulate to get the intent_id from the contract's own computation
+    // This is the same approach used in executeRequestDeposit
+    logInfo("Simulating request_withdraw to get intent_id from contract...");
+    const intentId = await call.simulate({ from });
+    logInfo(`Intent ID from contract: ${intentId.toString().slice(0, 16)}...`);
+
     // Get the sponsored fee payment method
     const paymentMethod = await getSponsoredFeePaymentMethod();
 
-    // Execute the transaction
-    // Note: We skip simulation because Azguard wallet's simulateTx returns Fr[] which
-    // requires manual decoding. Instead, we get the intent ID from transaction return values.
+    // Execute the transaction with sponsored fee payment
+    logInfo("Sending transaction to wallet for approval (using sponsored fees)...");
     const tx = await call.send({ from, fee: { paymentMethod } }).wait();
 
     logSuccess(`Withdrawal request executed, tx: ${tx.txHash?.toString()}`);
-
-    // Extract intent ID from transaction return values
-    let intentId = tx.returnValues?.[0];
-
-    if (!intentId) {
-      // Fallback: try to get from debugInfo or other sources
-      logInfo("Return values not directly available, checking debugInfo...");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const debugInfo = (tx as any).debugInfo;
-      if (debugInfo?.returnValues?.[0]) {
-        intentId = debugInfo.returnValues[0];
-      }
-    }
-
-    if (!intentId) {
-      throw new Error("Could not extract intent ID from transaction result");
-    }
-
-    logInfo(`Withdraw intent ID from transaction: ${intentId.toString().slice(0, 16)}...`);
 
     return {
       intentId,

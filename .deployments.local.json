@@ -6,11 +6,11 @@
     "portal": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00"
   },
   "l2": {
-    "aaveWrapper": "0x2684b69e3cd93a646608029dacb57d9001ec6389c6038a64759cff78ac66d626",
-    "bridgedToken": "0x22a359aead26982bc8474b546d56b387dc3ea0fe46001eea1eb1b113b87ecf69"
+    "aaveWrapper": "0x266660c1a20b97345cbae19e5084cdf49286c0a718788664d3c00b107530a57a",
+    "bridgedToken": "0x1eacd01b183c6498549a0ddef9ec7d4eece5e65ef0f834ccf9d5674326376608"
   },
   "config": {
     "l1ChainId": 31337,
-    "deployedAt": "2026-01-20T06:32:57.917Z"
+    "deployedAt": "2026-01-20T21:34:37.260Z"
   }
 }

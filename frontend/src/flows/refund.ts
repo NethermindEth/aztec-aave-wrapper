@@ -23,6 +23,7 @@ import type { AztecAddress } from "../services/l2/wallet.js";
 
 // Store
 import {
+  clearOperation,
   setOperationError,
   setOperationIntentId,
   setOperationStatus,
@@ -372,6 +373,9 @@ export async function executeClaimRefundFlow(
 
     // Fall through to generic refund flow error
     throw new ClaimRefundFlowError(currentStep, "claim_refund", error);
+  } finally {
+    // Always reset operation state to idle when flow completes (success or error)
+    clearOperation();
   }
 }
 

@@ -26,6 +26,7 @@ import type { AztecAddress } from "../services/l2/wallet.js";
 
 // Store
 import {
+  clearOperation,
   setOperationError,
   setOperationStatus,
   setOperationStep,
@@ -436,6 +437,9 @@ export async function executeTokenClaim(
 
     // Fall through to generic claim flow error
     throw new ClaimFlowError(currentStep, "claim", error);
+  } finally {
+    // Always reset operation state to idle when flow completes (success or error)
+    clearOperation();
   }
 }
 

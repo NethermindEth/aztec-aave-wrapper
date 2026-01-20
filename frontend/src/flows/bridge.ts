@@ -31,6 +31,7 @@ import type { AztecAddress } from "../services/l2/wallet.js";
 
 // Store
 import {
+  clearOperation,
   setOperationError,
   setOperationStatus,
   setOperationStep,
@@ -294,6 +295,9 @@ export async function executeBridgeFlow(
 
     // Fall through to generic bridge flow error
     throw new BridgeFlowError(currentStep, "bridge", error);
+  } finally {
+    // Always reset operation state to idle when flow completes (success or error)
+    clearOperation();
   }
 }
 

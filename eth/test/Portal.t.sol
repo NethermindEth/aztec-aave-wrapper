@@ -166,7 +166,7 @@ contract PortalTest is Test {
         portal.executeDeposit(validDepositIntent, l2BlockNumber, leafIndex, validSiblingPath);
 
         // Verify intent was consumed
-        assertTrue(portal.consumedIntents(validDepositIntent.intentId));
+        assertTrue(portal.consumedDepositIntents(validDepositIntent.intentId));
 
         // Verify shares were tracked
         assertEq(portal.intentShares(validDepositIntent.intentId), 1000e18);
@@ -205,7 +205,7 @@ contract PortalTest is Test {
         vm.prank(randomExecutor);
         portal.executeDeposit(validDepositIntent, l2BlockNumber, leafIndex, validSiblingPath);
 
-        assertTrue(portal.consumedIntents(validDepositIntent.intentId));
+        assertTrue(portal.consumedDepositIntents(validDepositIntent.intentId));
     }
 
     function test_executeDeposit_MinDeadline() public {
@@ -217,7 +217,7 @@ contract PortalTest is Test {
         vm.prank(relayer);
         portal.executeDeposit(validDepositIntent, l2BlockNumber, leafIndex, validSiblingPath);
 
-        assertTrue(portal.consumedIntents(validDepositIntent.intentId));
+        assertTrue(portal.consumedDepositIntents(validDepositIntent.intentId));
     }
 
     function test_executeDeposit_MaxDeadline() public {
@@ -229,7 +229,7 @@ contract PortalTest is Test {
         vm.prank(relayer);
         portal.executeDeposit(validDepositIntent, l2BlockNumber, leafIndex, validSiblingPath);
 
-        assertTrue(portal.consumedIntents(validDepositIntent.intentId));
+        assertTrue(portal.consumedDepositIntents(validDepositIntent.intentId));
     }
 
     // ============ Deposit Failure Tests ============
@@ -336,12 +336,12 @@ contract PortalTest is Test {
         // executing withdraw with the same intentId as a consumed deposit
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(6))), // slot 6 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -363,7 +363,7 @@ contract PortalTest is Test {
         );
 
         // Verify intent was consumed
-        assertTrue(portal.consumedIntents(withdrawIntent.intentId));
+        assertTrue(portal.consumedWithdrawIntents(withdrawIntent.intentId));
 
         // Verify shares were cleared
         assertEq(portal.intentShares(withdrawIntent.intentId), 0);
@@ -387,12 +387,12 @@ contract PortalTest is Test {
         // Simulate having shares from a previous deposit
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(6))), // slot 6 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -448,12 +448,12 @@ contract PortalTest is Test {
         // Simulate having shares
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(6))), // slot 6 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -495,12 +495,12 @@ contract PortalTest is Test {
         // Simulate having shares
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(6))), // slot 6 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -527,12 +527,12 @@ contract PortalTest is Test {
         // Simulate having shares
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(4))), // slot 4 = intentShares
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentShares
             bytes32(uint256(1000e18))
         );
         vm.store(
             address(portal),
-            keccak256(abi.encode(withdrawIntent.intentId, uint256(5))), // slot 5 = intentAssets
+            keccak256(abi.encode(withdrawIntent.intentId, uint256(6))), // slot 6 = intentAssets
             bytes32(uint256(uint160(address(token))))
         );
 
@@ -650,8 +650,8 @@ contract PortalTest is Test {
         portal.executeDeposit(intent2, l2BlockNumber + 1, leafIndex, validSiblingPath);
 
         // Verify both intents tracked
-        assertTrue(portal.consumedIntents(validDepositIntent.intentId));
-        assertTrue(portal.consumedIntents(intent2.intentId));
+        assertTrue(portal.consumedDepositIntents(validDepositIntent.intentId));
+        assertTrue(portal.consumedDepositIntents(intent2.intentId));
         assertEq(portal.intentShares(validDepositIntent.intentId), 1000e18);
         assertEq(portal.intentShares(intent2.intentId), 500e18);
     }

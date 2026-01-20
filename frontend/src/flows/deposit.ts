@@ -50,6 +50,7 @@ import {
 import type { AztecAddress } from "../services/l2/wallet.js";
 import { storeSecret } from "../services/secrets.js";
 import {
+  clearOperation,
   setOperationError,
   setOperationIntentId,
   setOperationStatus,
@@ -215,7 +216,7 @@ async function waitForL1ToL2Message(
   publicClient: PublicClient<Transport, Chain>,
   node: AztecNodeClient,
   messageLeaf: Hex,
-  maxWaitMs = 120_000, // 2 minutes
+  maxWaitMs = 300_000, // 5 minutes - increased to allow L2 blocks to advance
   pollIntervalMs = 5000 // 5 seconds between polls
 ): Promise<boolean> {
   console.log("[waitForL1ToL2Message] ENTERED FUNCTION");
@@ -231,7 +232,7 @@ async function waitForL1ToL2Message(
 
   let pollCount = 0;
   let lastBlockMined = Date.now();
-  const minMineInterval = 20000; // Mine L1 every 20s to trigger archiver
+  const minMineInterval = 10000; // Mine L1 every 10s to trigger archiver sync faster
 
   console.log("[waitForL1ToL2Message] Starting poll loop...");
 
@@ -636,14 +637,14 @@ export async function executeDepositFlow(
       address: l1Addresses.portal,
       abi: [
         {
-          name: "consumedIntents",
+          name: "consumedDepositIntents",
           type: "function",
           stateMutability: "view",
           inputs: [{ type: "bytes32" }],
           outputs: [{ type: "bool" }],
         },
       ] as const,
-      functionName: "consumedIntents",
+      functionName: "consumedDepositIntents",
       args: [depositIntent.intentId],
     });
     console.log("Intent already consumed?", alreadyConsumed);
@@ -705,8 +706,17 @@ export async function executeDepositFlow(
     console.log(`  L2 contract address: ${contract.address.toString()}`);
     console.log(`  Portal address: ${l1Addresses.portal}`);
 
+    // CRITICAL: Log whether we will attempt finalize_deposit
+    console.log("=== FINALIZE DECISION ===");
+    console.log(`  messageReady: ${messageReady}`);
     if (!messageReady) {
+      console.log("  ACTION: SKIPPING finalize_deposit - message not consumable yet");
       logSection("L2", "Cannot finalize - L1→L2 message not consumable", "warning");
+    } else {
+      console.log("  ACTION: PROCEEDING with finalize_deposit");
+    }
+
+    if (!messageReady) {
       logInfo("The message may need more time to sync. Try again later.");
     } else {
       // Message is confirmed consumable - send finalize_deposit (ONE signature)
@@ -724,6 +734,9 @@ export async function executeDepositFlow(
           wallet.address
         );
         txHashes.l2Finalize = finalizeResult.txHash;
+        console.log("=== FINALIZE_DEPOSIT SUCCESS ===");
+        console.log(`  txHash: ${finalizeResult.txHash}`);
+        console.log("  Position receipt note should now exist on L2");
         logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
       } catch (error) {
         logSection("L2", "finalize_deposit failed", "warning");
@@ -773,6 +786,9 @@ export async function executeDepositFlow(
 
     // Fall through to generic deposit flow error
     throw new DepositFlowError(currentStep, "deposit", error);
+  } finally {
+    // Always reset operation state to idle when flow completes (success or error)
+    clearOperation();
   }
 }
 
