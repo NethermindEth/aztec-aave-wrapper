@@ -75,6 +75,9 @@ export function ContractDeployment() {
     if (state.contracts.mockLendingPool) {
       entries.push({ name: "Lending Pool (L1)", address: state.contracts.mockLendingPool });
     }
+    if (state.contracts.l2BridgedToken) {
+      entries.push({ name: "BridgedToken (L2)", address: state.contracts.l2BridgedToken });
+    }
     if (state.contracts.l2Wrapper) {
       entries.push({ name: "AaveWrapper (L2)", address: state.contracts.l2Wrapper });
     }
@@ -101,6 +104,7 @@ export function ContractDeployment() {
         tokenPortal: deployments.l1.tokenPortal,
         mockUsdc: deployments.l1.mockUsdc,
         mockLendingPool: deployments.l1.mockLendingPool,
+        l2BridgedToken: deployments.l2.bridgedToken,
         l2Wrapper: deployments.l2.aaveWrapper,
       });
     } catch (err) {

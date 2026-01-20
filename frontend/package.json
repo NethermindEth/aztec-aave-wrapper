@@ -21,18 +21,19 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@tailwindcss/postcss": "4.1.18",
     "autoprefixer": "10.4.23",
     "postcss": "8.5.6",
-    "solid-devtools": "^0.34.4",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.9.3",
-    "vite": "^7.3.1",
-    "vite-plugin-node-polyfills": "0.24.0",
-    "vite-plugin-solid": "^2.11.10",
-    "vite-plugin-static-copy": "3.1.4",
+    "solid-devtools": "0.34.4",
+    "tailwindcss": "4.1.18",
+    "typescript": "5.9.3",
+    "vite": "7.3.1",
+    "vite-plugin-node-polyfills": "0.25.0",
+    "vite-plugin-solid": "2.11.10",
+    "vite-plugin-static-copy": "3.1.5",
     "vite-plugin-top-level-await": "1.6.0",
     "vite-plugin-wasm": "3.5.0",
-    "vitest": "^3.1.0"
+    "vitest": "4.0.17"
   },
   "dependencies": {
     "@azguardwallet/aztec-wallet": "3.0.0-devnet.20251212",
@@ -47,8 +48,8 @@
     "clsx": "2.1.1",
     "hash.js": "1.1.7",
     "sha3": "2.1.4",
-    "solid-js": "^1.9.10",
+    "solid-js": "1.9.10",
     "tailwind-merge": "3.4.0",
-    "viem": "^2.21.0"
+    "viem": "2.44.4"
   }
 }

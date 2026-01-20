@@ -12,12 +12,7 @@
  */
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
-import {
-  bigIntToBytes32,
-  computeDepositConfirmationContent,
-  computeIntentId,
-  computeSalt,
-} from "./crypto.js";
+import { bigIntToBytes32, computeDepositConfirmationContent } from "./crypto.js";
 import type { AaveWrapperContract } from "./deploy.js";
 import { loadAztecModules } from "./modules.js";
 import type { AztecAddress } from "./wallet.js";
@@ -312,20 +307,6 @@ export async function executeRequestDeposit(
   logInfo(`  from: ${from?.toString?.() ?? from}`);
 
   try {
-    // Compute the intent_id locally using the same formula as the Noir contract
-    // This avoids issues with Azguard wallet's simulation/return value extraction
-    logInfo("Computing intent ID locally...");
-    const salt = await computeSalt(from, params.secretHash);
-    const intentId = await computeIntentId({
-      caller: from,
-      asset: params.asset,
-      amount: params.amount,
-      originalDecimals: params.originalDecimals,
-      deadline: params.deadline,
-      salt,
-    });
-    logInfo(`Computed intent ID: ${intentId.toString().slice(0, 16)}...`);
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
@@ -336,6 +317,12 @@ export async function executeRequestDeposit(
       params.deadline,
       params.secretHash
     );
+
+    // First, simulate to get the intent_id from the contract's own computation
+    // This ensures we use the exact same logic as the Noir contract (including fee calculation)
+    logInfo("Simulating request_deposit to get intent_id from contract...");
+    const intentId = await call.simulate({ from });
+    logInfo(`Intent ID from contract: ${intentId.toString().slice(0, 16)}...`);
 
     // Get the sponsored fee payment method (no Fee Juice required)
     const paymentMethod = await getSponsoredFeePaymentMethod();

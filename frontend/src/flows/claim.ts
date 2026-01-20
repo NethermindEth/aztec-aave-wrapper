@@ -21,11 +21,7 @@ import { mineL1Block } from "../services/l1/mining.js";
 
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
-import {
-  claimPrivate,
-  generateRandomness,
-  type BridgedTokenContract,
-} from "../services/l2/bridgedToken.js";
+import { claimPrivate, type BridgedTokenContract } from "../services/l2/bridgedToken.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
 
 // Store
@@ -72,6 +68,10 @@ export interface ClaimL2Context {
 export interface ClaimConfig {
   /** Amount to claim (in token's smallest unit, e.g., 1_000_000 = 1 USDC) */
   amount: bigint;
+  /** Secret that hashes to the secretHash used in L1 deposit */
+  secret: bigint;
+  /** Index of the L1->L2 message in the message tree */
+  messageLeafIndex: bigint;
   /** Message leaf hash from the L1 withdrawal execution event */
   messageLeaf?: Hex;
 }
@@ -267,7 +267,9 @@ async function waitForL1ToL2Message(
 
         if (blocksAdvanced >= requiredBlockAdvance) {
           const elapsed = Math.round((Date.now() - startTime) / 1000);
-          logSuccess(`L1→L2 message should be consumable (${elapsed}s, ${blocksAdvanced} L2 blocks)`);
+          logSuccess(
+            `L1→L2 message should be consumable (${elapsed}s, ${blocksAdvanced} L2 blocks)`
+          );
           return true;
         }
       }
@@ -329,7 +331,7 @@ export async function executeTokenClaim(
   config: ClaimConfig
 ): Promise<ClaimResult> {
   const { node, wallet, bridgedTokenContract } = l2Context;
-  const { amount, messageLeaf } = config;
+  const { amount, secret, messageLeafIndex, messageLeaf } = config;
 
   // Track current step for error reporting
   let currentStep = 0;
@@ -369,16 +371,13 @@ export async function executeTokenClaim(
 
     logInfo("Calling claim_private on BridgedToken...");
 
-    // Generate randomness for the private note
-    const randomness = await generateRandomness();
-
     try {
       const claimResult = await claimPrivate(
         bridgedTokenContract,
         {
-          to: wallet.address,
           amount,
-          randomness,
+          secret,
+          messageLeafIndex,
         },
         wallet.address
       );
@@ -491,3 +490,253 @@ export async function executeTokenClaimWithRetry(
 
 // Re-export getClaimStepCount for consumers of this module
 export { getClaimStepCount } from "../types/operations.js";
+
+// =============================================================================
+// Bridge Claim Flow
+// =============================================================================
+
+import { removeSecret } from "../services/secrets.js";
+import { type PendingBridge } from "../services/pendingBridges.js";
+
+/**
+ * Result of a bridge claim operation
+ */
+export interface BridgeClaimResult {
+  /** Whether the claim was successful */
+  success: boolean;
+  /** L2 transaction hash (if successful) */
+  txHash?: string;
+  /** Error message (if failed) */
+  error?: string;
+}
+
+/**
+ * Result of message readiness check for bridge claim
+ */
+export interface BridgeMessageReadyResult {
+  /** Whether the message is ready to be consumed */
+  ready: boolean;
+  /** Current L2 block number */
+  currentBlock?: number;
+  /** Block at which message will be available */
+  availableAtBlock?: number;
+  /** Actual leaf index in the L2 message tree (from membership witness) */
+  leafIndex?: bigint;
+}
+
+/**
+ * Check if an L1→L2 bridge message is ready to be consumed.
+ *
+ * @param node - Aztec node client
+ * @param messageKey - L1→L2 message key (leaf hash)
+ * @returns Message readiness result
+ */
+export async function checkBridgeMessageReady(
+  node: AztecNodeClient,
+  messageKey: string
+): Promise<BridgeMessageReadyResult> {
+  console.log("[checkBridgeMessageReady] START");
+  console.log("[checkBridgeMessageReady] messageKey:", messageKey);
+
+  try {
+    const { Fr } = await import("@aztec/aztec.js/fields");
+    console.log("[checkBridgeMessageReady] Parsing messageKey to Fr...");
+    const messageLeafFr = Fr.fromString(messageKey);
+    console.log("[checkBridgeMessageReady] messageLeafFr:", messageLeafFr.toString());
+
+    console.log("[checkBridgeMessageReady] Getting current block number...");
+    const currentBlock = await node.getBlockNumber();
+    console.log("[checkBridgeMessageReady] currentBlock:", currentBlock);
+
+    console.log("[checkBridgeMessageReady] Getting L1ToL2 message block...");
+    const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
+    console.log("[checkBridgeMessageReady] messageBlockNumber:", messageBlockNumber);
+
+    if (messageBlockNumber === undefined) {
+      console.log("[checkBridgeMessageReady] Message not found in tree (undefined)");
+      return { ready: false, currentBlock };
+    }
+
+    if (currentBlock < messageBlockNumber) {
+      console.log("[checkBridgeMessageReady] Message not ready yet (currentBlock < messageBlockNumber)");
+      return {
+        ready: false,
+        currentBlock,
+        availableAtBlock: messageBlockNumber,
+      };
+    }
+
+    console.log("[checkBridgeMessageReady] Block check passed, getting membership witness...");
+
+    // Get the membership witness which includes the ACTUAL leaf index
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const nodeAny = node as any;
+
+    if (typeof nodeAny.getL1ToL2MembershipWitness === "function") {
+      try {
+        console.log("[checkBridgeMessageReady] Calling getL1ToL2MembershipWitness...");
+        // Returns [leafIndex, siblingPath] tuple
+        const witness = await nodeAny.getL1ToL2MembershipWitness(currentBlock, messageLeafFr);
+        console.log("[checkBridgeMessageReady] witness:", witness);
+        if (witness && witness.length >= 2) {
+          // witness[0] is the actual leaf index in the L2 message tree!
+          const leafIndex = witness[0];
+          console.log("[checkBridgeMessageReady] Witness found - leafIndex:", leafIndex?.toString?.() ?? leafIndex);
+          console.log("[checkBridgeMessageReady] Message is READY with leafIndex:", leafIndex);
+          return {
+            ready: true,
+            currentBlock,
+            // Store the actual leaf index for use in claim
+            leafIndex: typeof leafIndex === 'bigint' ? leafIndex : BigInt(leafIndex?.toString?.() ?? leafIndex),
+          };
+        }
+        // Witness not ready yet
+        console.log("[checkBridgeMessageReady] No witness - message NOT ready");
+        return {
+          ready: false,
+          currentBlock,
+          availableAtBlock: messageBlockNumber,
+        };
+      } catch (e) {
+        // Witness query failed, but block check passed
+        console.log("[checkBridgeMessageReady] Witness query failed:", e);
+        console.log("[checkBridgeMessageReady] Returning ready=true based on block check (no leafIndex)");
+        return { ready: true, currentBlock };
+      }
+    }
+
+    // No witness API, trust block number
+    return { ready: true, currentBlock };
+  } catch (error) {
+    logError(`Failed to check message readiness: ${error instanceof Error ? error.message : "Unknown"}`);
+    return { ready: false };
+  }
+}
+
+/**
+ * Execute the claim flow for a pending bridge.
+ *
+ * The PendingBridge now contains all necessary data:
+ * - secret: The secret for claiming (from local storage, already retrieved)
+ * - leafIndex: The actual L2 message tree leaf index (from membership witness)
+ *
+ * @param l2Context - L2 node, wallet, and BridgedToken contract
+ * @param pendingBridge - The pending bridge to claim (with secret and leafIndex)
+ * @returns Claim result
+ *
+ * @example
+ * ```ts
+ * const result = await executeBridgeClaim(
+ *   { node, wallet, bridgedTokenContract },
+ *   pendingBridge
+ * );
+ * if (result.success) {
+ *   console.log(`Claimed! TX: ${result.txHash}`);
+ * }
+ * ```
+ */
+export async function executeBridgeClaim(
+  l2Context: ClaimL2Context,
+  pendingBridge: PendingBridge
+): Promise<BridgeClaimResult> {
+  console.log("=".repeat(60));
+  console.log("[executeBridgeClaim] START");
+  console.log("=".repeat(60));
+
+  const { wallet, bridgedTokenContract } = l2Context;
+  const walletAddressStr = wallet.address.toString();
+
+  console.log("[executeBridgeClaim] Input parameters:");
+  console.log("[executeBridgeClaim]   walletAddress:", walletAddressStr);
+  console.log("[executeBridgeClaim]   pendingBridge.messageKey:", pendingBridge.messageKey);
+  console.log("[executeBridgeClaim]   pendingBridge.amount:", pendingBridge.amount);
+  console.log("[executeBridgeClaim]   pendingBridge.status:", pendingBridge.status);
+  console.log("[executeBridgeClaim]   pendingBridge.leafIndex:", pendingBridge.leafIndex?.toString());
+  console.log("[executeBridgeClaim]   pendingBridge.secret (first 30):", pendingBridge.secret?.slice(0, 30) + "...");
+  console.log("[executeBridgeClaim]   pendingBridge.l1BlockNumber:", pendingBridge.l1BlockNumber?.toString());
+  console.log("[executeBridgeClaim]   bridgedTokenContract address:", bridgedTokenContract?.address?.toString());
+  console.log("[executeBridgeClaim] IMPORTANT: If the bridge deposit was made BEFORE l2Bridge was set on TokenPortal,");
+  console.log("[executeBridgeClaim]   the L1 message was sent to the wrong recipient (0x000...000) and cannot be claimed.");
+  console.log("[executeBridgeClaim]   Check .deployments.local.json for deployedAt timestamp vs when bridge was done.");
+
+  logSection("Bridge Claim", `Claiming bridge ${pendingBridge.messageKey.slice(0, 12)}...`);
+
+  try {
+    // Validate we have the required data
+    if (!pendingBridge.secret) {
+      const error = "Secret not found in bridge data - cannot claim without the original secret";
+      return { success: false, error };
+    }
+
+    if (pendingBridge.leafIndex === undefined) {
+      const error = "Leaf index not available - message may not be ready yet";
+      return { success: false, error };
+    }
+
+    if (pendingBridge.status !== "ready") {
+      const error = `Bridge is not ready to claim (status: ${pendingBridge.status})`;
+      return { success: false, error };
+    }
+
+    // Extract claim parameters from PendingBridge
+    const amount = BigInt(pendingBridge.amount);
+    const secret = BigInt(pendingBridge.secret);
+    const messageLeafIndex = pendingBridge.leafIndex;
+
+    // Debug logging summary
+    console.log("[executeBridgeClaim] === CLAIM PARAMETERS SUMMARY ===");
+    console.log("[executeBridgeClaim]   amount:", amount.toString());
+    console.log("[executeBridgeClaim]   secret (full hex):", "0x" + secret.toString(16));
+    console.log("[executeBridgeClaim]   messageLeafIndex:", messageLeafIndex.toString());
+    console.log("[executeBridgeClaim]   messageKey:", pendingBridge.messageKey);
+    console.log("[executeBridgeClaim]   secretHash from L1 event:", pendingBridge.secretHash);
+    console.log("[executeBridgeClaim]   wallet.address:", wallet.address.toString());
+    console.log("[executeBridgeClaim] ================================");
+
+    logInfo("Calling claim_private on BridgedToken...");
+    logInfo(`  amount: ${amount}`);
+    logInfo(`  secret: ${secret.toString(16).slice(0, 16)}...`);
+    logInfo(`  messageLeafIndex: ${messageLeafIndex}`);
+
+    console.log("[executeBridgeClaim] Calling claimPrivate()...");
+    const claimResult = await claimPrivate(
+      bridgedTokenContract,
+      {
+        amount,
+        secret,
+        messageLeafIndex,
+      },
+      wallet.address
+    );
+
+    // Success!
+    console.log("[executeBridgeClaim] claimPrivate() returned successfully!");
+    console.log("[executeBridgeClaim]   claimResult:", claimResult);
+    logSuccess(`Tokens claimed! TX: ${claimResult.txHash}`);
+
+    // Remove the secret after successful claim
+    removeSecret(pendingBridge.messageKey);
+
+    console.log("[executeBridgeClaim] SUCCESS - returning");
+    return {
+      success: true,
+      txHash: claimResult.txHash,
+    };
+  } catch (error) {
+    console.log("[executeBridgeClaim] CAUGHT ERROR!");
+    console.log("[executeBridgeClaim]   error type:", error?.constructor?.name);
+    console.log("[executeBridgeClaim]   error:", error);
+    if (error instanceof Error) {
+      console.log("[executeBridgeClaim]   error.message:", error.message);
+      console.log("[executeBridgeClaim]   error.stack:", error.stack);
+    }
+
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    logError(`Claim failed: ${errorMessage}`);
+
+    return { success: false, error: errorMessage };
+  }
+}
+
+// Note: refreshBridgeStatuses and recoverPendingBridges are now handled by
+// scanPendingBridges in pendingBridges.ts which derives all state from chain data.

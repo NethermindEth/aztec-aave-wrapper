@@ -589,7 +589,9 @@ export async function executeWithdrawFlow(
       logSuccess("Withdrawal secret stored for token claim");
     } catch (storeError) {
       // Log but don't fail the flow - user can still try to claim if they have the secret
-      logError(`Failed to store withdrawal secret: ${storeError instanceof Error ? storeError.message : "Unknown error"}`);
+      logError(
+        `Failed to store withdrawal secret: ${storeError instanceof Error ? storeError.message : "Unknown error"}`
+      );
     }
 
     // =========================================================================

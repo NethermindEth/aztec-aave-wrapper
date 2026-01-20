@@ -64,7 +64,7 @@ export interface WithdrawFlowProps {
  */
 function positionsToOptions(positions: PositionDisplay[]): SelectOption[] {
   return positions
-    .filter((p) => p.status === IntentStatus.Active)
+    .filter((p) => p.status === IntentStatus.Confirmed)
     .map((p) => ({
       value: p.intentId,
       label: `${p.sharesFormatted} (${p.intentId.slice(0, 10)}...)`,
@@ -111,8 +111,8 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
 
   const hasPendingClaims = () => pendingClaims().length > 0;
 
-  const isOperationActive = () => state.operation.type === "withdraw" || state.operation.type === "claim";
-  const isWithdrawActive = () => state.operation.type === "withdraw";
+  const isOperationActive = () =>
+    state.operation.type === "withdraw" || state.operation.type === "claim";
   const isClaimActive = () => state.operation.type === "claim";
   const isProcessing = () => isOperationActive() && state.operation.status === "pending";
 
@@ -155,7 +155,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
 
     // Selected position must exist and be active (deposit finalized)
     const position = selectedPositionData();
-    if (!position || position.status !== IntentStatus.Active) {
+    if (!position || position.status !== IntentStatus.Confirmed) {
       return false;
     }
 
@@ -180,7 +180,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
       return;
     }
 
-    if (position.status !== IntentStatus.Active) {
+    if (position.status !== IntentStatus.Confirmed) {
       setValidationError("Position is not available for withdrawal");
       return;
     }

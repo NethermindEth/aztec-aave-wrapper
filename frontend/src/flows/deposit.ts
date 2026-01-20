@@ -37,10 +37,7 @@ import {
 } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
 import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
-import {
-  balanceOf,
-  type L1AddressesForBalances,
-} from "../services/l1/tokens.js";
+import { balanceOf, type L1AddressesForBalances } from "../services/l1/tokens.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
 import { computeOwnerHash, generateSecretPair } from "../services/l2/crypto.js";
@@ -51,6 +48,7 @@ import {
   type Fr,
 } from "../services/l2/operations.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
+import { storeSecret } from "../services/secrets.js";
 import {
   setOperationError,
   setOperationIntentId,
@@ -457,6 +455,12 @@ export async function executeDepositFlow(
     setOperationIntentId(intentIdStr);
     logSuccess(`Intent ID: ${intentIdStr.slice(0, 16)}...`);
     logSuccess(`L2 tx: ${depositResult.txHash}`);
+
+    // CRITICAL: Store secret immediately after request_deposit succeeds
+    // This ensures we can retry finalize_deposit if it fails later
+    const l2AddressHex = wallet.address.toString();
+    await storeSecret(intentIdStr, secret.toString(), l2AddressHex);
+    logInfo("Secret stored for recovery");
 
     // =========================================================================
     // Step 3: Wait for L2→L1 message to be available

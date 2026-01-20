@@ -76,29 +76,29 @@ describe("calculateNetAmount", () => {
 
 describe("validateMinDeposit", () => {
   it("validates amount above minimum", () => {
-    // 200 USDC = 200_000_000 base units (min is 100 USDC)
-    const result = validateMinDeposit(200_000_000n, 6);
+    // 2 USDC = 2_000_000 base units (min is 1 USDC = 1_000_000)
+    const result = validateMinDeposit(2_000_000n, 6);
     expect(result.isValid).toBe(true);
     expect(result.error).toBeUndefined();
   });
 
   it("validates amount equal to minimum", () => {
-    // Exactly 100 USDC
-    const result = validateMinDeposit(100_000_000n, 6);
+    // Exactly 1 USDC = 1_000_000 base units
+    const result = validateMinDeposit(1_000_000n, 6);
     expect(result.isValid).toBe(true);
   });
 
   it("rejects amount below minimum", () => {
-    // 50 USDC (below 100 USDC minimum)
-    const result = validateMinDeposit(50_000_000n, 6);
+    // 0.5 USDC = 500_000 base units (below 1 USDC minimum)
+    const result = validateMinDeposit(500_000n, 6);
     expect(result.isValid).toBe(false);
-    expect(result.error).toBe("Minimum deposit is 100 tokens");
+    expect(result.error).toBe("Minimum deposit is 1 tokens");
   });
 
   it("rejects zero amount", () => {
     const result = validateMinDeposit(0n, 6);
     expect(result.isValid).toBe(false);
-    expect(result.error).toBe("Minimum deposit is 100 tokens");
+    expect(result.error).toBe("Minimum deposit is 1 tokens");
   });
 
   it("rejects negative amount", () => {
@@ -108,18 +108,18 @@ describe("validateMinDeposit", () => {
   });
 
   it("works with different decimal configurations", () => {
-    // 18 decimals (like ETH)
-    const result18 = validateMinDeposit(100n * 10n ** 18n, 18);
+    // 18 decimals (like ETH) - minimum is 1 token = 10^18 base units
+    const result18 = validateMinDeposit(1n * 10n ** 18n, 18);
     expect(result18.isValid).toBe(true);
 
-    // Below minimum with 18 decimals
-    const result18Below = validateMinDeposit(50n * 10n ** 18n, 18);
+    // Below minimum with 18 decimals (0.5 tokens)
+    const result18Below = validateMinDeposit(5n * 10n ** 17n, 18);
     expect(result18Below.isValid).toBe(false);
   });
 
   it("uses default 6 decimals when not specified", () => {
-    // 100 USDC with default 6 decimals
-    const result = validateMinDeposit(100_000_000n);
+    // 1 USDC = 1_000_000 base units with default 6 decimals
+    const result = validateMinDeposit(1_000_000n);
     expect(result.isValid).toBe(true);
   });
 });
@@ -151,9 +151,7 @@ describe("calculateGrossFromNet", () => {
   });
 
   it("throws error for negative amount", () => {
-    expect(() => calculateGrossFromNet(-1n)).toThrow(
-      "Amount cannot be negative"
-    );
+    expect(() => calculateGrossFromNet(-1n)).toThrow("Amount cannot be negative");
   });
 });
 
@@ -255,9 +253,7 @@ describe("parseTokenAmount", () => {
 
   it("throws error for invalid format", () => {
     expect(() => parseTokenAmount("abc", 6)).toThrow("Invalid amount format");
-    expect(() => parseTokenAmount("100.5.5", 6)).toThrow(
-      "Invalid amount format"
-    );
+    expect(() => parseTokenAmount("100.5.5", 6)).toThrow("Invalid amount format");
     expect(() => parseTokenAmount("$100", 6)).toThrow("Invalid amount format");
   });
 
@@ -291,12 +287,7 @@ describe("edge cases", () => {
   });
 
   it("maintains mathematical consistency between fee functions", () => {
-    const testAmounts = [
-      1_000_000n,
-      100_000_000n,
-      1_000_000_000n,
-      999_999_999n,
-    ];
+    const testAmounts = [1_000_000n, 100_000_000n, 1_000_000_000n, 999_999_999n];
 
     for (const amount of testAmounts) {
       const fee = calculateFee(amount);

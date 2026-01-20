@@ -6,6 +6,7 @@
  * Only the owner can decrypt and view their own positions.
  */
 
+import type { PublicClient, Transport, Chain } from "viem";
 import type { AzguardWallet } from "../wallet/aztec.js";
 import type { AaveWrapperContract } from "./contract.js";
 
@@ -89,15 +90,18 @@ export async function queryL2Positions(
   _wallet: AzguardWallet,
   ownerAddress: string
 ): Promise<L2PositionsResult> {
+  console.log("[queryL2Positions] Starting query for owner:", ownerAddress);
   try {
     // Import AztecAddress for type conversion
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
     const owner = AztecAddress.fromString(ownerAddress);
+    console.log("[queryL2Positions] Calling get_positions on contract...");
 
     // Call the get_positions utility function
     // Utility functions are simulated (not sent as transactions)
     // Note: Pass empty options object to avoid "authWitnesses" error in SDK
     const result = await (contract.methods as any).get_positions(owner).simulate({});
+    console.log("[queryL2Positions] Raw result:", result);
 
     // Parse the BoundedVec result into Position array
     // BoundedVec has { storage: Note[], len: number } structure
@@ -141,6 +145,7 @@ export async function queryL2Positions(
       })
     );
 
+    console.log("[queryL2Positions] Successfully queried", enrichedPositions.length, "positions");
     return {
       positions: enrichedPositions,
       success: true,
@@ -148,7 +153,7 @@ export async function queryL2Positions(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error querying positions";
-    console.warn("Failed to query L2 positions:", errorMessage);
+    console.error("[queryL2Positions] Error:", errorMessage, error);
     return {
       positions: [],
       success: false,
@@ -248,12 +253,101 @@ export async function queryIntentNetAmount(
 
     // Read from public storage using storageRead
     // intent_net_amounts is a Map<Field, PublicMutable<u128>>
-    const result = await (contract.methods as any).get_intent_net_amount(intentIdField).simulate({});
+    const result = await (contract.methods as any)
+      .get_intent_net_amount(intentIdField)
+      .simulate({});
     return BigInt(result);
   } catch (error) {
     // If no getter exists, net amount is not available
     console.warn("Failed to query intent net amount:", error);
     return 0n;
+  }
+}
+
+// =============================================================================
+// Pending Deposit Query (for stuck deposits recovery)
+// =============================================================================
+
+/**
+ * Pending deposit info from public L2 storage.
+ * This data exists even if finalize_deposit failed.
+ */
+export interface PendingDepositInfo {
+  intentId: string;
+  status: number;
+  deadline: bigint;
+  netAmount: bigint;
+  owner: string;
+  isConsumed: boolean;
+  canCancel: boolean;
+  timeUntilCancellable: number; // seconds, negative if already cancellable
+}
+
+/**
+ * Query all public data for a pending deposit intent.
+ * Use this to recover stuck deposits where finalize_deposit failed.
+ *
+ * @param contract - AaveWrapper contract instance
+ * @param intentId - Intent ID to query
+ * @param currentTimestamp - Current L1 timestamp for cancel eligibility check
+ * @returns Pending deposit info or null if not found
+ *
+ * @example
+ * ```ts
+ * const info = await queryPendingDeposit(contract, "0x123...", currentL1Time);
+ * if (info && info.canCancel) {
+ *   console.log(`Can cancel! Net amount: ${info.netAmount}`);
+ * }
+ * ```
+ */
+export async function queryPendingDeposit(
+  contract: AaveWrapperContract,
+  intentId: string,
+  currentTimestamp: bigint
+): Promise<PendingDepositInfo | null> {
+  try {
+    const [status, deadline, netAmount, isConsumed] = await Promise.all([
+      queryIntentStatus(contract, intentId),
+      queryIntentDeadline(contract, intentId),
+      queryIntentNetAmount(contract, intentId),
+      isIntentConsumed(contract, intentId),
+    ]);
+
+    // Also query owner
+    let owner = "";
+    try {
+      const { Fr } = await import("@aztec/aztec.js/fields");
+      const intentIdField = Fr.fromString(intentId);
+      const ownerResult = await (contract.methods as any)
+        .get_intent_owner(intentIdField)
+        .simulate({});
+      owner = ownerResult?.toString?.() ?? "";
+    } catch {
+      // Owner query may fail
+    }
+
+    // Check if this looks like a valid pending deposit
+    // Status 1 = PENDING_DEPOSIT
+    if (status === 0 && deadline === 0n && netAmount === 0n) {
+      return null; // Intent not found
+    }
+
+    const timeUntilCancellable = Number(deadline - currentTimestamp);
+    const canCancel = status === L2PositionStatus.PendingDeposit && !isConsumed && timeUntilCancellable < 0;
+
+    return {
+      intentId,
+      status,
+      deadline,
+      netAmount,
+      owner,
+      isConsumed,
+      canCancel,
+      timeUntilCancellable,
+    };
+  } catch (error) {
+    console.error("Failed to query pending deposit:", error);
+    return null;
   }
 }
 
@@ -363,4 +457,159 @@ function fieldToBigInt(value: unknown): bigint {
   }
 
   return 0n;
+}
+
+// =============================================================================
+// Intent Scanner - Find user's pending deposits from L1 events
+// =============================================================================
+
+/**
+ * ABI for DepositExecuted event from AztecAavePortalL1
+ */
+const DEPOSIT_EXECUTED_ABI = [
+  {
+    type: "event",
+    name: "DepositExecuted",
+    inputs: [
+      { name: "intentId", type: "bytes32", indexed: true },
+      { name: "asset", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "shares", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
+
+/**
+ * Found intent from scanning
+ */
+export interface FoundIntent {
+  intentId: string;
+  asset: string;
+  amount: bigint;
+  shares: bigint;
+  blockNumber: bigint;
+}
+
+/**
+ * Result of scanning for user intents
+ */
+export interface ScanIntentsResult {
+  /** Intents found that belong to the user */
+  intents: FoundIntent[];
+  /** Total events scanned */
+  totalScanned: number;
+  /** Whether scan was successful */
+  success: boolean;
+  /** Error message if scan failed */
+  error?: string;
+}
+
+/**
+ * Scan L1 events to find deposit intents that belong to a specific user.
+ *
+ * This function:
+ * 1. Queries DepositExecuted events from the L1 portal contract
+ * 2. For each intent, queries L2 to check if the owner matches the user
+ * 3. Returns intents that belong to the user
+ *
+ * @param publicClient - L1 public client
+ * @param portalAddress - L1 portal contract address
+ * @param contract - L2 AaveWrapper contract
+ * @param userL2Address - User's L2 address to match against
+ * @param fromBlock - Block to start scanning from (default: last 10000 blocks)
+ * @returns Found intents belonging to the user
+ *
+ * @example
+ * ```ts
+ * const result = await scanUserIntentsFromL1(
+ *   publicClient,
+ *   portalAddress,
+ *   contract,
+ *   userL2Address
+ * );
+ * console.log('Found intents:', result.intents);
+ * ```
+ */
+export async function scanUserIntentsFromL1(
+  publicClient: PublicClient<Transport, Chain>,
+  portalAddress: `0x${string}`,
+  contract: AaveWrapperContract,
+  userL2Address: string,
+  fromBlock?: bigint
+): Promise<ScanIntentsResult> {
+  console.log("[scanUserIntentsFromL1] Starting scan for user:", userL2Address);
+  console.log("[scanUserIntentsFromL1] Portal address:", portalAddress);
+
+  try {
+    // Get current block number
+    const currentBlock = await publicClient.getBlockNumber();
+    const startBlock = fromBlock ?? (currentBlock > 10000n ? currentBlock - 10000n : 0n);
+
+    console.log(`[scanUserIntentsFromL1] Scanning blocks ${startBlock} to ${currentBlock}`);
+
+    // Query DepositExecuted events
+    const logs = await publicClient.getLogs({
+      address: portalAddress,
+      event: DEPOSIT_EXECUTED_ABI[0],
+      fromBlock: startBlock,
+      toBlock: currentBlock,
+    });
+
+    console.log(`[scanUserIntentsFromL1] Found ${logs.length} DepositExecuted events`);
+
+    const foundIntents: FoundIntent[] = [];
+
+    // Check each intent's owner on L2
+    for (const log of logs) {
+      const intentId = log.args.intentId;
+      if (!intentId) continue;
+
+      console.log(`[scanUserIntentsFromL1] Checking intent: ${intentId}`);
+
+      try {
+        // Query the owner from L2
+        const { Fr } = await import("@aztec/aztec.js/fields");
+        const intentIdField = Fr.fromString(intentId);
+
+        const ownerResult = await (contract.methods as any)
+          .get_intent_owner(intentIdField)
+          .simulate({});
+
+        const ownerStr = ownerResult?.toString?.() ?? "";
+        console.log(`[scanUserIntentsFromL1] Intent ${intentId.slice(0, 10)}... owner: ${ownerStr.slice(0, 20)}...`);
+
+        // Check if owner matches user
+        if (ownerStr.toLowerCase() === userL2Address.toLowerCase()) {
+          console.log(`[scanUserIntentsFromL1] MATCH! Intent belongs to user`);
+          foundIntents.push({
+            intentId,
+            asset: log.args.asset ?? "",
+            amount: log.args.amount ?? 0n,
+            shares: log.args.shares ?? 0n,
+            blockNumber: log.blockNumber,
+          });
+        }
+      } catch (error) {
+        // Intent might not exist on L2 or query failed
+        console.warn(`[scanUserIntentsFromL1] Failed to query owner for ${intentId}:`, error);
+      }
+    }
+
+    console.log(`[scanUserIntentsFromL1] Found ${foundIntents.length} intents belonging to user`);
+
+    return {
+      intents: foundIntents,
+      totalScanned: logs.length,
+      success: true,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error scanning intents";
+    console.error("[scanUserIntentsFromL1] Error:", errorMessage);
+    return {
+      intents: [],
+      totalScanned: 0,
+      success: false,
+      error: errorMessage,
+    };
+  }
 }

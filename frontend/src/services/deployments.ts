@@ -18,6 +18,7 @@ interface DeploymentsFile {
     portal: string;
   };
   l2: {
+    bridgedToken: string;
     aaveWrapper: string;
   };
   config: {
@@ -37,6 +38,7 @@ export interface DeploymentAddresses {
     mockLendingPool: Address;
   };
   l2: {
+    bridgedToken: AztecAddress;
     aaveWrapper: AztecAddress;
   };
   config: {
@@ -70,6 +72,7 @@ export async function fetchDeploymentAddresses(): Promise<DeploymentAddresses> {
       mockLendingPool: data.l1.mockLendingPool as Address,
     },
     l2: {
+      bridgedToken: data.l2.bridgedToken as AztecAddress,
       aaveWrapper: data.l2.aaveWrapper as AztecAddress,
     },
     config: {

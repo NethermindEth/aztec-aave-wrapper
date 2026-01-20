@@ -29,12 +29,12 @@ export type BridgedTokenContract = import("@generated/BridgedToken").BridgedToke
  * Parameters for claiming bridged tokens on L2
  */
 export interface ClaimPrivateParams {
-  /** Recipient's L2 address */
-  to: AztecAddress;
-  /** Amount to claim (in token's smallest unit) */
+  /** Amount to claim (in token's smallest unit, must match L1 deposit) */
   amount: bigint;
-  /** Random value for note uniqueness (Fr) */
-  randomness: unknown;
+  /** Secret that hashes to the secretHash used in L1 deposit */
+  secret: bigint;
+  /** Index of the L1->L2 message in the message tree */
+  messageLeafIndex: bigint;
 }
 
 /**
@@ -95,22 +95,28 @@ export async function loadBridgedTokenWithAzguard(
   contractAddressString: string
 ): Promise<BridgedTokenLoadResult> {
   logInfo(`Loading BridgedToken contract at ${contractAddressString.slice(0, 16)}...`);
+  console.log("[loadBridgedTokenWithAzguard] START");
 
   try {
     // Dynamically import the generated contract and AztecAddress
+    console.log("[loadBridgedTokenWithAzguard] Importing BridgedTokenContract...");
     const { BridgedTokenContract, BridgedTokenContractArtifact } = await import(
       "@generated/BridgedToken"
     );
+    console.log("[loadBridgedTokenWithAzguard] Importing AztecAddress...");
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
 
     // Parse the contract address string
+    console.log("[loadBridgedTokenWithAzguard] Parsing address...");
     const contractAddress = AztecAddress.fromString(contractAddressString);
 
     // Register the contract artifact with the wallet
     logInfo("Registering BridgedToken contract artifact with wallet...");
+    console.log("[loadBridgedTokenWithAzguard] Calling getContractMetadata...");
 
     // Fetch the actual contract instance from the network via the wallet
     const contractMetadata = await wallet.getContractMetadata(contractAddress);
+    console.log("[loadBridgedTokenWithAzguard] Got contractMetadata:", !!contractMetadata);
 
     if (!contractMetadata.contractInstance) {
       throw new Error(
@@ -119,18 +125,34 @@ export async function loadBridgedTokenWithAzguard(
     }
 
     // Register with wallet: instance first, then artifact
-    await wallet.registerContract(
-      contractMetadata.contractInstance,
-      BridgedTokenContractArtifact as Parameters<typeof wallet.registerContract>[1]
-    );
+    // Use a timeout to prevent hanging if the wallet is slow
+    console.log("[loadBridgedTokenWithAzguard] Calling registerContract...");
+    try {
+      const registerPromise = wallet.registerContract(
+        contractMetadata.contractInstance,
+        BridgedTokenContractArtifact as Parameters<typeof wallet.registerContract>[1]
+      );
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("registerContract timed out after 5s")), 5000)
+      );
+      await Promise.race([registerPromise, timeoutPromise]);
+      console.log("[loadBridgedTokenWithAzguard] registerContract done");
+    } catch (regError) {
+      // If registration fails/times out, try to continue anyway
+      // The contract might already be registered from a previous operation
+      console.warn("[loadBridgedTokenWithAzguard] registerContract failed/timed out:", regError);
+      console.log("[loadBridgedTokenWithAzguard] Continuing without registration...");
+    }
 
     // Load the contract with Azguard wallet
+    console.log("[loadBridgedTokenWithAzguard] Creating contract instance...");
     const contract = BridgedTokenContract.at(
       contractAddress,
       wallet as unknown as Parameters<typeof BridgedTokenContract.at>[1]
     );
 
     logSuccess(`BridgedToken contract loaded at ${contractAddress.toString()}`);
+    console.log("[loadBridgedTokenWithAzguard] SUCCESS");
 
     return {
       contract,
@@ -148,30 +170,26 @@ export async function loadBridgedTokenWithAzguard(
 // =============================================================================
 
 /**
- * Claim bridged tokens on L2 via mint_private.
+ * Claim bridged tokens on L2 by consuming the L1->L2 message.
  *
- * This function is used to claim tokens that have been bridged from L1.
- * It requires the caller to be the authorized minter on the BridgedToken contract.
+ * This function is called by users who bridged tokens from L1 via TokenPortal.
+ * It consumes the L1->L2 message (proving the secret) and mints tokens to the caller.
  *
- * Note: In production, claim_private is typically called by a relayer or the
- * protocol after verifying the L1→L2 message. The secret/secretHash mechanism
- * ensures only the intended recipient can initiate the claim.
+ * The secret must hash (via poseidon2) to the secretHash that was used in the
+ * L1 depositToAztecPrivate call. Only the secret holder can claim the tokens.
  *
  * @param contract - BridgedToken contract instance
- * @param params - Claim parameters
- * @param from - Sender address (must be authorized minter)
+ * @param params - Claim parameters including amount, secret, and message index
+ * @param from - Sender address (will receive the tokens)
  * @returns Transaction hash
  *
  * @example
  * ```ts
- * const { Fr } = await import("@aztec/aztec.js/fields");
- * const randomness = Fr.random();
- *
  * const { txHash } = await claimPrivate(contract, {
- *   to: recipientAddress,
- *   amount: 1_000_000n, // 1 USDC
- *   randomness,
- * }, minterAddress);
+ *   amount: 1_000_000n, // 1 USDC (must match L1 deposit)
+ *   secret: secretFromL1Deposit, // Secret used in L1 deposit
+ *   messageLeafIndex: messageIndex, // From L1 deposit event
+ * }, userAddress);
  * ```
  */
 export async function claimPrivate(
@@ -179,15 +197,93 @@ export async function claimPrivate(
   params: ClaimPrivateParams,
   from: AztecAddress
 ): Promise<ClaimResult> {
-  logInfo("Claiming bridged tokens via mint_private...");
-  logInfo(`  to: ${params.to?.toString?.() ?? params.to}`);
+  logInfo("Claiming bridged tokens via claim_private...");
   logInfo(`  amount: ${params.amount}`);
+  logInfo(`  messageLeafIndex: ${params.messageLeafIndex}`);
+
+  // Detailed debug logging
+  console.log("[claimPrivate DEBUG] Parameters:");
+  console.log("[claimPrivate DEBUG]   amount:", params.amount?.toString());
+  console.log("[claimPrivate DEBUG]   secret (type):", typeof params.secret);
+  console.log("[claimPrivate DEBUG]   secret (hex):", "0x" + params.secret?.toString(16));
+  console.log("[claimPrivate DEBUG]   messageLeafIndex:", params.messageLeafIndex?.toString());
+  console.log("[claimPrivate DEBUG]   from:", from?.toString());
+  console.log("[claimPrivate DEBUG]   contract address (BridgedToken):", contract?.address?.toString());
+
+  // Verify secret hash computation using the same function as bridge.ts
+  try {
+    const { computeSecretHashFromValue } = await import("./crypto.js");
+    const computedHash = await computeSecretHashFromValue(params.secret);
+    console.log("[claimPrivate DEBUG] Computed secretHash from poseidon2Hash([secret]):", computedHash.toString());
+    console.log("[claimPrivate DEBUG] Expected: Should match what was sent to L1 in DepositToAztecPrivate event");
+  } catch (e) {
+    console.log("[claimPrivate DEBUG] Could not compute secretHash for verification:", e);
+  }
+
+  // Query the portal_address stored in BridgedToken
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const methods = contract.methods as any;
+    if (typeof methods.portal_address === "function") {
+      const portalAddress = await methods.portal_address().simulate();
+      console.log("[claimPrivate DEBUG] BridgedToken.portal_address():", portalAddress?.toString());
+      console.log("[claimPrivate DEBUG] IMPORTANT: This must match the L1 TokenPortal address that sent the deposit!");
+    } else {
+      console.log("[claimPrivate DEBUG] portal_address() method not found on contract");
+    }
+  } catch (e) {
+    console.log("[claimPrivate DEBUG] Could not query portal_address:", e);
+  }
+
+  // Compute what the content hash should be (to match L1)
+  try {
+    const { computeSecretHashFromValue } = await import("./crypto.js");
+    const secretHash = await computeSecretHashFromValue(params.secret);
+
+    // Replicate L2's content hash computation:
+    // sha256_to_field(amount as 32 bytes || secretHash as 32 bytes)
+    console.log("[claimPrivate DEBUG] Computing expected content hash...");
+    console.log("[claimPrivate DEBUG]   amount for content:", params.amount?.toString());
+    console.log("[claimPrivate DEBUG]   secretHash for content:", secretHash.toString());
+
+    // Compute the exact bytes that L1 and L2 would use
+    // L1: abi.encodePacked(uint256 amount, bytes32 secretHash) = 64 bytes
+    const amountHex = params.amount.toString(16).padStart(64, '0');
+    const secretHashHex = secretHash.toString().slice(2).padStart(64, '0'); // remove 0x prefix
+    const combinedHex = amountHex + secretHashHex;
+    console.log("[claimPrivate DEBUG]   amount as 32 bytes (hex):", "0x" + amountHex);
+    console.log("[claimPrivate DEBUG]   secretHash as 32 bytes (hex):", "0x" + secretHashHex);
+    console.log("[claimPrivate DEBUG]   combined 64 bytes (hex):", "0x" + combinedHex);
+
+    // Compute sha256 of the combined bytes
+    const combinedBytes = new Uint8Array(64);
+    for (let i = 0; i < 64; i++) {
+      combinedBytes[i] = parseInt(combinedHex.slice(i * 2, i * 2 + 2), 16);
+    }
+    const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBytes);
+    const hashArray = new Uint8Array(hashBuffer);
+    const sha256Hex = Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    console.log("[claimPrivate DEBUG]   sha256(combined):", "0x" + sha256Hex);
+
+    // sha256ToField truncates to 31 bytes and prepends 0x00
+    const sha256ToFieldHex = "00" + sha256Hex.slice(0, 62);
+    console.log("[claimPrivate DEBUG]   sha256ToField (L1):", "0x" + sha256ToFieldHex);
+    console.log("[claimPrivate DEBUG]   (This is the expected content hash)");
+  } catch (e) {
+    console.log("[claimPrivate DEBUG] Could not compute content hash preview:", e);
+  }
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
-    const call = methods.mint_private(params.to, params.amount, params.randomness);
+    console.log("[claimPrivate DEBUG] Calling claim_private with:");
+    console.log("[claimPrivate DEBUG]   - amount:", params.amount);
+    console.log("[claimPrivate DEBUG]   - secret:", params.secret);
+    console.log("[claimPrivate DEBUG]   - messageLeafIndex:", params.messageLeafIndex);
+
+    // Call claim_private which consumes the L1->L2 message and mints tokens
+    const call = methods.claim_private(params.amount, params.secret, params.messageLeafIndex);
 
     // Get the sponsored fee payment method
     const paymentMethod = await getSponsoredFeePaymentMethod();
@@ -229,21 +325,37 @@ export async function getBalance(
   owner: AztecAddress
 ): Promise<bigint> {
   logInfo(`Getting private balance for ${owner?.toString?.().slice(0, 16)}...`);
+  console.log("[getBalance] Starting balance query for:", owner?.toString?.());
+  console.log("[getBalance] Contract address:", contract?.address?.toString?.());
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
+    console.log("[getBalance] Calling balance_of_private...");
+
     // balance_of_private is an unconstrained (view) function
-    const balance = await methods.balance_of_private(owner).simulate();
+    // Try calling without options first, then with empty options if that fails
+    let balance;
+    try {
+      balance = await methods.balance_of_private(owner).simulate();
+    } catch (simError) {
+      console.log("[getBalance] simulate() failed, trying with empty options:", simError);
+      // Try with explicit empty options
+      balance = await methods.balance_of_private(owner).simulate({});
+    }
+
+    console.log("[getBalance] Raw balance result:", balance);
 
     // Convert to bigint (result may be Fr or number)
     const balanceBigInt = BigInt(balance?.toString?.() ?? balance ?? 0);
 
+    console.log("[getBalance] Converted balance:", balanceBigInt.toString());
     logInfo(`Balance: ${balanceBigInt}`);
 
     return balanceBigInt;
   } catch (error) {
+    console.error("[getBalance] FAILED with error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     logError(`Failed to get balance: ${errorMessage}`);
     // Return 0 on error (common for empty/new accounts)

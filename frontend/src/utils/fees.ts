@@ -2,6 +2,10 @@
  * Fee calculation utilities for the Aztec Aave Wrapper protocol.
  *
  * All calculations use bigint arithmetic to avoid precision loss and rounding errors.
+ *
+ * @deprecated For new code, prefer using calculateFeeFromConfig() and related functions
+ * from services/contractConfig.ts which query values directly from contracts.
+ * These functions use hardcoded fallback values.
  */
 
 import { FEE_CONFIG } from "../config/constants.js";
@@ -13,6 +17,8 @@ import { FEE_CONFIG } from "../config/constants.js";
  *
  * @param amount - The gross amount (in smallest token units, e.g., wei or USDC base units)
  * @returns The fee amount as bigint
+ *
+ * @deprecated Use calculateFeeFromConfig() from services/contractConfig.ts instead
  */
 export function calculateFee(amount: bigint): bigint {
   if (amount < 0n) {
@@ -28,6 +34,8 @@ export function calculateFee(amount: bigint): bigint {
  *
  * @param amount - The gross amount (in smallest token units)
  * @returns The net amount after fee deduction as bigint
+ *
+ * @deprecated Use calculateNetAmountFromConfig() from services/contractConfig.ts instead
  */
 export function calculateNetAmount(amount: bigint): bigint {
   if (amount < 0n) {
@@ -38,11 +46,19 @@ export function calculateNetAmount(amount: bigint): bigint {
 }
 
 /**
+ * Minimum deposit amount in base units (1 USDC = 1_000_000 with 6 decimals).
+ * This matches the L2 contract's FeeConfig::MIN_DEPOSIT_AMOUNT.
+ */
+const MIN_DEPOSIT_BASE_UNITS = 1_000_000n;
+
+/**
  * Validate that an amount meets the minimum deposit requirement.
  *
  * @param amount - The deposit amount (in smallest token units)
  * @param decimals - The token's decimal places (default: 6 for USDC)
  * @returns Object with isValid flag and optional error message
+ *
+ * @deprecated Use validateMinDepositFromConfig() from services/contractConfig.ts instead
  */
 export function validateMinDeposit(
   amount: bigint,
@@ -52,13 +68,16 @@ export function validateMinDeposit(
     return { isValid: false, error: "Amount cannot be negative" };
   }
 
-  // MIN_DEPOSIT is in token units (e.g., 100 USDC), convert to base units
-  const minAmountBaseUnits = BigInt(FEE_CONFIG.MIN_DEPOSIT) * 10n ** BigInt(decimals);
+  // Use the fixed minimum in base units (1 USDC = 1_000_000)
+  // Scale if decimals differ from 6
+  const scaleFactor = 10n ** BigInt(decimals - 6);
+  const minAmountBaseUnits = MIN_DEPOSIT_BASE_UNITS * scaleFactor;
 
   if (amount < minAmountBaseUnits) {
+    const minInTokens = Number(minAmountBaseUnits) / Number(10n ** BigInt(decimals));
     return {
       isValid: false,
-      error: `Minimum deposit is ${FEE_CONFIG.MIN_DEPOSIT} tokens`,
+      error: `Minimum deposit is ${minInTokens} tokens`,
     };
   }
 

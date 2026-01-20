@@ -7,6 +7,7 @@
 
 import type { Address, AztecAddress, IntentStatus } from "@aztec-aave-wrapper/shared";
 import type { OperationStatus, OperationType } from "./operations.js";
+import type { ContractConfig } from "../services/contractConfig.js";
 
 // =============================================================================
 // Bigint Serialization Utilities
@@ -173,6 +174,8 @@ export interface L1Addresses {
  * All deployed contract addresses
  */
 export interface ContractsState extends L1Addresses {
+  /** L2 bridged token contract address (USDC on Aztec) */
+  l2BridgedToken: AztecAddress | null;
   /** L2 wrapper contract address */
   l2Wrapper: AztecAddress | null;
 }
@@ -227,6 +230,9 @@ export interface AppState {
 
   /** User positions */
   positions: PositionDisplay[];
+
+  /** Contract configuration (fee config, deadline constraints) */
+  contractConfig: ContractConfig | null;
 }
 
 // =============================================================================
@@ -261,6 +267,7 @@ export function createInitialAppState(): AppState {
       tokenPortal: null,
       mockUsdc: null,
       mockLendingPool: null,
+      l2BridgedToken: null,
       l2Wrapper: null,
     },
     operation: {
@@ -273,5 +280,6 @@ export function createInitialAppState(): AppState {
       logs: [],
     },
     positions: [],
+    contractConfig: null,
   };
 }

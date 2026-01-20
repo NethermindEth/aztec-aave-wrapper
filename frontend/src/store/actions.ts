@@ -17,6 +17,7 @@ import type {
   PositionDisplay,
   WalletState,
 } from "../types/state.js";
+import type { ContractConfig } from "../services/contractConfig.js";
 import type { TxLogOptions } from "./logger.js";
 import { setState } from "./state.js";
 
@@ -161,6 +162,9 @@ export function setContracts(contracts: Partial<ContractsState>): void {
   }
   if (contracts.mockLendingPool !== undefined) {
     setState("contracts", "mockLendingPool", contracts.mockLendingPool);
+  }
+  if (contracts.l2BridgedToken !== undefined) {
+    setState("contracts", "l2BridgedToken", contracts.l2BridgedToken);
   }
   if (contracts.l2Wrapper !== undefined) {
     setState("contracts", "l2Wrapper", contracts.l2Wrapper);
@@ -315,6 +319,17 @@ export function removePosition(intentId: string): void {
 }
 
 // =============================================================================
+// Contract Config Actions
+// =============================================================================
+
+/**
+ * Set contract configuration (fee config, deadline constraints)
+ */
+export function setContractConfig(config: ContractConfig | null): void {
+  setState("contractConfig", config);
+}
+
+// =============================================================================
 // Batch/Reset Actions
 // =============================================================================
 
@@ -355,4 +370,5 @@ export function resetState(): void {
     logs: [],
   });
   setState("positions", []);
+  setState("contractConfig", null);
 }

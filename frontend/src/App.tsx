@@ -9,11 +9,13 @@ import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import type { Component } from "solid-js";
 import { createSignal } from "solid-js";
 import type { Address, Chain, PublicClient, Transport } from "viem";
+import { ClaimPendingBridges } from "./components/ClaimPendingBridges";
 import { ContractDeployment } from "./components/ContractDeployment";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { type LogEntry, LogLevel, LogViewer } from "./components/LogViewer";
 import { OperationTabs } from "./components/OperationTabs";
 import { PositionsList } from "./components/PositionsList";
+import { RecoverDeposit } from "./components/RecoverDeposit";
 import { TopBar } from "./components/TopBar";
 import {
   type DepositL1Addresses,
@@ -25,29 +27,21 @@ import {
   type WithdrawL1Addresses,
   type WithdrawL2Context,
 } from "./flows/withdraw";
-import {
-  type CancelL2Context,
-  executeCancelDeposit,
-} from "./flows/cancel";
-import {
-  executeClaimRefundFlow,
-  type RefundL2Context,
-} from "./flows/refund";
-import {
-  type BridgeL1Addresses,
-  type BridgeL2Context,
-  executeBridgeFlow,
-} from "./flows/bridge";
+import { type CancelL2Context, executeCancelDeposit } from "./flows/cancel";
+import { executeClaimRefundFlow, type RefundL2Context } from "./flows/refund";
+import { type BridgeL1Addresses, executeBridgeFlow } from "./flows/bridge";
+import { executeBridgeClaim, type ClaimL2Context } from "./flows/claim";
+import { scanPendingBridges, type PendingBridge } from "./services/pendingBridges";
 import { getPositionStatusLabel, usePositions } from "./hooks/usePositions.js";
 import { createL1PublicClient, createL1WalletClient, DevnetAccounts } from "./services/l1/client";
 import { getAztecOutbox } from "./services/l1/portal";
 import { balanceOf } from "./services/l1/tokens";
 import { createL2NodeClient } from "./services/l2/client";
 import { loadContractWithAzguard } from "./services/l2/contract";
-import { loadBridgedTokenWithAzguard } from "./services/l2/bridgedToken";
+import { loadBridgedTokenWithAzguard, type BridgedTokenContract } from "./services/l2/bridgedToken";
 import { connectAztecWallet } from "./services/wallet/aztec";
 import { connectEthereumWallet } from "./services/wallet/ethereum";
-import { setATokenBalance, setEthBalance, setL2UsdcBalance, setUsdcBalance } from "./store";
+import { setATokenBalance, setEthBalance, setL2UsdcBalance, setUsdcBalance, setWallet } from "./store";
 import { useApp } from "./store/hooks";
 import { formatUSDC, toBigIntString } from "./types/state.js";
 
@@ -71,6 +65,12 @@ const App: Component = () => {
   const [isWithdrawing, setIsWithdrawing] = createSignal(false);
   const [isCancelling, setIsCancelling] = createSignal(false);
   const [isClaimingRefund, setIsClaimingRefund] = createSignal(false);
+
+  // Bridge claim state (derived from chain)
+  const [pendingBridges, setPendingBridges] = createSignal<PendingBridge[]>([]);
+  const [isLoadingBridges, setIsLoadingBridges] = createSignal(false);
+  const [claimingBridgeKey, setClaimingBridgeKey] = createSignal<string | null>(null);
+  const [bridgeError, setBridgeError] = createSignal<string | null>(null);
 
   /**
    * Add a log entry
@@ -110,6 +110,7 @@ const App: Component = () => {
     }
 
     const l2WrapperAddress = state.contracts.l2Wrapper;
+    const l2BridgedTokenAddress = state.contracts.l2BridgedToken;
 
     addLog("Refreshing positions from L2...");
 
@@ -118,10 +119,40 @@ const App: Component = () => {
       const { wallet, address: walletAddress } = await connectAztecWallet();
 
       // Load contract
+      console.log("[handleRefreshPositions] Loading AaveWrapper contract...");
       const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+      console.log("[handleRefreshPositions] AaveWrapper loaded, calling refreshFromL2...");
 
       // Refresh positions from L2
       await refreshFromL2(contract, wallet, walletAddress);
+      console.log("[handleRefreshPositions] refreshFromL2 completed");
+
+      // Also refresh L2 USDC balance if BridgedToken address is available
+      console.log("[handleRefreshPositions] l2BridgedTokenAddress:", l2BridgedTokenAddress);
+      if (l2BridgedTokenAddress) {
+        try {
+          console.log("[handleRefreshPositions] Loading BridgedToken contract...");
+          const { contract: bridgedTokenContract } = await loadBridgedTokenWithAzguard(
+            wallet,
+            l2BridgedTokenAddress
+          );
+          console.log("[handleRefreshPositions] BridgedToken loaded, getting balance...");
+          const { getBalance } = await import("./services/l2/bridgedToken");
+          const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+          console.log("[handleRefreshPositions] Calling getBalance for:", walletAddress);
+          const l2Balance = await getBalance(
+            bridgedTokenContract,
+            AztecAddress.fromString(walletAddress)
+          );
+          console.log("[handleRefreshPositions] Got balance:", l2Balance.toString());
+          setL2UsdcBalance(l2Balance.toString());
+          addLog(`L2 USDC balance: ${formatUSDC(l2Balance)}`);
+        } catch (balanceError) {
+          console.error("[handleRefreshPositions] Balance error:", balanceError);
+        }
+      } else {
+        console.log("[handleRefreshPositions] No l2BridgedTokenAddress - skipping balance refresh");
+      }
 
       addLog("Positions refreshed from L2", LogLevel.SUCCESS);
     } catch (error) {
@@ -202,76 +233,34 @@ const App: Component = () => {
         mockUsdc,
       };
 
-      // Initialize L2 context
-      addLog("Connecting to Aztec L2...");
-      const node = await createL2NodeClient();
-
+      // Get L2 wallet address for storing secret and pending bridge
       addLog("Connecting to Aztec wallet...");
-      const { wallet, address: walletAddress } = await connectAztecWallet();
+      const { address: walletAddress } = await connectAztecWallet();
 
-      // Load BridgedToken contract for L2 claiming
-      // Note: In MVP, we use the AaveWrapper address as a placeholder since
-      // BridgedToken address isn't in deployments. The bridge flow handles
-      // the L2 claim step gracefully if it fails.
-      addLog("Loading BridgedToken contract...");
+      // Update global state so ClaimPendingBridges can load pending bridges
+      setWallet({ l2Address: walletAddress as `0x${string}` });
+
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const l2WalletAddress = AztecAddress.fromString(walletAddress);
 
-      // For now, we need to get the BridgedToken address. In devnet, it should be
-      // deployed and linked to the AaveWrapper. We'll try to load it from the wallet.
-      // If not available, the bridge will still work but L2 claim may fail.
-      let bridgedTokenContract;
-      try {
-        // Try to load BridgedToken - in production this would come from deployments
-        // For MVP, we'll skip the L2 claim if BridgedToken isn't available
-        const wrapperContract = await loadContractWithAzguard(wallet, state.contracts.l2Wrapper!);
-        // Try to get bridged_token address from wrapper contract
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const methods = wrapperContract.contract.methods as any;
-        const bridgedTokenAddress = await methods.get_bridged_token().simulate();
-        const { contract } = await loadBridgedTokenWithAzguard(wallet, bridgedTokenAddress.toString());
-        bridgedTokenContract = contract;
-        addLog("BridgedToken contract loaded");
-      } catch {
-        addLog("BridgedToken contract not available - L2 claim will be skipped", LogLevel.WARNING);
-        // Create a minimal placeholder - the bridge flow will handle this gracefully
-        bridgedTokenContract = null;
-      }
-
-      // Build L2 context
-      const l2Context: BridgeL2Context = {
-        node,
-        wallet: { address: AztecAddress.fromString(walletAddress) },
-        bridgedTokenContract: bridgedTokenContract as BridgeL2Context["bridgedTokenContract"],
-      };
-
-      // Execute the bridge flow
+      // Execute the bridge flow (L1 only - no L2 claim)
       addLog("Executing bridge flow...");
-      const result = await executeBridgeFlow(l1Clients, l1Addresses, l2Context, {
+      const result = await executeBridgeFlow(l1Clients, l1Addresses, l2WalletAddress, {
         amount,
       });
 
-      addLog(`Bridge complete! Message key: ${result.messageKey.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(
+        `Bridge L1 deposit complete! Message key: ${result.messageKey.slice(0, 16)}...`,
+        LogLevel.SUCCESS
+      );
       addLog(`Amount bridged: ${formatAmount(result.amount)}`, LogLevel.SUCCESS);
-      if (result.claimed) {
-        addLog("L2 tokens claimed successfully", LogLevel.SUCCESS);
-      } else {
-        addLog("L2 tokens can be claimed later", LogLevel.WARNING);
-      }
+      addLog(
+        "Tokens will be available to claim on L2 once the message syncs. Check 'Pending Bridge Claims' below.",
+        LogLevel.WARNING
+      );
 
       // Refresh L1 balances after bridge
       await refreshBalances(publicClient, ethereumConnection.address, mockUsdc);
-
-      // Update L2 USDC balance if claim was successful
-      if (result.claimed && bridgedTokenContract) {
-        try {
-          const { getBalance } = await import("./services/l2/bridgedToken");
-          const l2Balance = await getBalance(bridgedTokenContract, AztecAddress.fromString(walletAddress));
-          setL2UsdcBalance(l2Balance.toString());
-        } catch {
-          // Non-critical - L2 balance refresh is optional
-          console.warn("Failed to refresh L2 USDC balance");
-        }
-      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       addLog(`Bridge failed: ${message}`, LogLevel.ERROR);
@@ -376,7 +365,7 @@ const App: Component = () => {
         assetId: "0x01", // USDC asset ID
         shares: toBigIntString(result.shares),
         sharesFormatted: formatUSDC(result.shares),
-        status: IntentStatus.Active,
+        status: IntentStatus.Confirmed,
       });
       addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
       addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
@@ -409,7 +398,7 @@ const App: Component = () => {
     }
 
     // Validate position is in withdrawable state
-    if (position.status !== IntentStatus.Active) {
+    if (position.status !== IntentStatus.Confirmed) {
       addLog(
         `Position is not in Active status (current: ${getPositionStatusLabel(position.status)}). Cannot withdraw.`,
         LogLevel.ERROR
@@ -507,7 +496,7 @@ const App: Component = () => {
       const message = error instanceof Error ? error.message : "Unknown error";
       addLog(`Withdrawal failed: ${message}`, LogLevel.ERROR);
       // Revert position status on failure
-      updatePositionStatus(intentId, IntentStatus.Active);
+      updatePositionStatus(intentId, IntentStatus.Confirmed);
     } finally {
       setIsWithdrawing(false);
     }
@@ -656,14 +645,155 @@ const App: Component = () => {
       });
 
       // Update position status back to Active
-      updatePositionStatus(intentId, IntentStatus.Active);
-      addLog(`Refund claimed! Original nonce: ${result.originalNonce.slice(0, 16)}...`, LogLevel.SUCCESS);
+      updatePositionStatus(intentId, IntentStatus.Confirmed);
+      addLog(
+        `Refund claimed! Original nonce: ${result.originalNonce.slice(0, 16)}...`,
+        LogLevel.SUCCESS
+      );
       addLog(`Position restored with ${formatAmount(result.shares)} shares`, LogLevel.SUCCESS);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       addLog(`Claim refund failed: ${message}`, LogLevel.ERROR);
     } finally {
       setIsClaimingRefund(false);
+    }
+  };
+
+  /**
+   * Handle claiming a pending bridge on L2.
+   */
+  const handleClaimBridge = async (bridge: PendingBridge) => {
+    console.log("╔════════════════════════════════════════════════════════════╗");
+    console.log("║ handleClaimBridge START                                    ║");
+    console.log("╚════════════════════════════════════════════════════════════╝");
+    console.log("[handleClaimBridge] Input bridge:", {
+      messageKey: bridge.messageKey,
+      amount: bridge.amount,
+      status: bridge.status,
+      leafIndex: bridge.leafIndex?.toString(),
+      secret: bridge.secret?.slice(0, 20) + "...",
+    });
+
+    // Set claiming state
+    setClaimingBridgeKey(bridge.messageKey);
+    setBridgeError(null);
+
+    // Validate contracts are loaded
+    if (!state.contracts.l2BridgedToken) {
+      console.log("[handleClaimBridge] ERROR: BridgedToken contract not loaded");
+      addLog("BridgedToken contract not loaded. Please wait for deployment.", LogLevel.ERROR);
+      setClaimingBridgeKey(null);
+      return;
+    }
+
+    const l2BridgedTokenAddress = state.contracts.l2BridgedToken;
+    addLog(`Claiming bridge: ${bridge.messageKey.slice(0, 16)}...`);
+    addLog(`Amount: ${formatAmount(BigInt(bridge.amount))} USDC`);
+
+    try {
+      // Initialize L2 context
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectAztecWallet();
+
+      addLog("Loading BridgedToken contract...");
+      const { contract: bridgedTokenContract } = await loadBridgedTokenWithAzguard(
+        wallet,
+        l2BridgedTokenAddress
+      );
+
+      // Build L2 context
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const l2Context: ClaimL2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        bridgedTokenContract,
+      };
+
+      // Execute claim
+      addLog("Executing claim...");
+      const result = await executeBridgeClaim(l2Context, bridge);
+      console.log("[handleClaimBridge] executeBridgeClaim returned:", result);
+
+      if (result.success) {
+        console.log("[handleClaimBridge] SUCCESS!");
+        addLog(`Bridge claimed successfully! TX: ${result.txHash}`, LogLevel.SUCCESS);
+
+        // Refresh L2 USDC balance
+        try {
+          const { getBalance } = await import("./services/l2/bridgedToken");
+          const l2Balance = await getBalance(
+            bridgedTokenContract,
+            AztecAddress.fromString(walletAddress)
+          );
+          setL2UsdcBalance(l2Balance.toString());
+        } catch {
+          console.warn("Failed to refresh L2 USDC balance");
+        }
+
+        // Refresh pending bridges (claimed bridge should disappear)
+        await handleRefreshBridges();
+      } else {
+        console.log("[handleClaimBridge] FAILED:", result.error);
+        addLog(`Claim failed: ${result.error}`, LogLevel.ERROR);
+        setBridgeError(result.error || "Claim failed");
+      }
+    } catch (error) {
+      console.log("[handleClaimBridge] CAUGHT EXCEPTION!");
+      console.log("[handleClaimBridge]   error:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Claim failed: ${message}`, LogLevel.ERROR);
+      setBridgeError(message);
+    } finally {
+      setClaimingBridgeKey(null);
+    }
+  };
+
+  /**
+   * Scan for pending bridges from chain state.
+   *
+   * This derives all bridge state from:
+   * 1. L1 TokenPortal DepositToAztecPrivate events
+   * 2. L2 node message readiness
+   * 3. Locally stored secrets (for matching)
+   */
+  const handleRefreshBridges = async () => {
+    addLog("Scanning for pending bridges...");
+    setIsLoadingBridges(true);
+    setBridgeError(null);
+
+    try {
+      const { address: walletAddress } = await connectAztecWallet();
+      const node = await createL2NodeClient();
+      const publicClient = await createL1PublicClient();
+
+      if (!state.contracts.tokenPortal) {
+        throw new Error("Deployment addresses not loaded");
+      }
+
+      // Scan L1 events and match with stored secrets + check L2 readiness
+      const result = await scanPendingBridges(
+        publicClient,
+        state.contracts.tokenPortal as `0x${string}`,
+        walletAddress,
+        node
+      );
+
+      setPendingBridges(result.bridges);
+
+      const readyCount = result.bridges.filter((b) => b.status === "ready").length;
+      addLog(
+        `Found ${result.bridges.length} pending bridge(s), ${readyCount} ready to claim`,
+        LogLevel.SUCCESS
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      addLog(`Failed to scan bridges: ${message}`, LogLevel.ERROR);
+      setBridgeError(message);
+    } finally {
+      setIsLoadingBridges(false);
     }
   };
 
@@ -700,6 +830,19 @@ const App: Component = () => {
             />
           </ErrorBoundary>
 
+          {/* Pending Bridge Claims */}
+          <ErrorBoundary>
+            <ClaimPendingBridges
+              bridges={pendingBridges()}
+              isLoading={isLoadingBridges()}
+              claimingKey={claimingBridgeKey()}
+              error={bridgeError()}
+              walletConnected={!!state.contracts.tokenPortal}
+              onClaim={handleClaimBridge}
+              onRefresh={handleRefreshBridges}
+            />
+          </ErrorBoundary>
+
           {/* Positions */}
           <ErrorBoundary>
             <PositionsList
@@ -709,6 +852,11 @@ const App: Component = () => {
               onRefresh={handleRefreshPositions}
               isRefreshing={isRefreshing()}
             />
+          </ErrorBoundary>
+
+          {/* Recover Stuck Deposits */}
+          <ErrorBoundary>
+            <RecoverDeposit />
           </ErrorBoundary>
 
           {/* Logs */}

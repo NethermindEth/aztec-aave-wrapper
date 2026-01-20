@@ -37,11 +37,11 @@ function getStatusVariant(status: IntentStatus): BadgeVariant {
   switch (status) {
     case IntentStatus.PendingDeposit:
       return "secondary";
-    case IntentStatus.Active:
+    case IntentStatus.Confirmed:
       return "default";
     case IntentStatus.PendingWithdraw:
       return "outline";
-    case IntentStatus.Consumed:
+    case IntentStatus.Withdrawn:
       return "destructive";
     default:
       return "destructive";
@@ -55,12 +55,12 @@ function getStatusLabel(status: IntentStatus): string {
   switch (status) {
     case IntentStatus.PendingDeposit:
       return "Pending Deposit";
-    case IntentStatus.Active:
+    case IntentStatus.Confirmed:
       return "Active";
     case IntentStatus.PendingWithdraw:
       return "Pending Withdraw";
-    case IntentStatus.Consumed:
-      return "Consumed";
+    case IntentStatus.Withdrawn:
+      return "Withdrawn";
     default:
       return "Unknown";
   }
@@ -123,11 +123,7 @@ export function PositionCard(props: PositionCardProps) {
 
   const handleCancel = () => {
     if (props.onCancel && canCancel()) {
-      props.onCancel(
-        props.position.intentId,
-        props.position.deadline,
-        props.position.netAmount
-      );
+      props.onCancel(props.position.intentId, props.position.deadline, props.position.netAmount);
     }
   };
 
@@ -166,7 +162,7 @@ export function PositionCard(props: PositionCardProps) {
       </CardHeader>
       <CardContent>
         <div class="text-2xl font-bold">{formatShares(props.position.shares)} aUSDC</div>
-        <Show when={props.position.status === IntentStatus.Active}>
+        <Show when={props.position.status === IntentStatus.Confirmed}>
           <Button
             variant="outline"
             size="sm"
@@ -177,22 +173,12 @@ export function PositionCard(props: PositionCardProps) {
           </Button>
         </Show>
         <Show when={canCancel()}>
-          <Button
-            variant="destructive"
-            size="sm"
-            class="mt-2"
-            onClick={handleCancel}
-          >
+          <Button variant="destructive" size="sm" class="mt-2" onClick={handleCancel}>
             Cancel Deposit
           </Button>
         </Show>
         <Show when={canClaimRefund()}>
-          <Button
-            variant="secondary"
-            size="sm"
-            class="mt-2"
-            onClick={handleClaimRefund}
-          >
+          <Button variant="secondary" size="sm" class="mt-2" onClick={handleClaimRefund}>
             Claim Refund
           </Button>
         </Show>

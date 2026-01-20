@@ -9,14 +9,21 @@
 /**
  * Fee configuration for the Aztec Aave Wrapper protocol.
  * Used for calculating and displaying protocol fees on deposits/withdrawals.
+ *
+ * @deprecated Use loadContractConfig() from services/contractConfig.ts instead.
+ * These values are fallbacks for when contract queries fail.
+ * The authoritative values are defined in the L2 AaveWrapper contract.
  */
 export const FEE_CONFIG = {
   /** Fee in basis points (0.1% = 10 basis points) */
   BASIS_POINTS: 10,
   /** Denominator for basis point calculations (10000 = 100%) */
   DENOMINATOR: 10000,
-  /** Minimum deposit amount in token units (before decimals) */
-  MIN_DEPOSIT: 100,
+  /**
+   * Minimum deposit amount in token units (1 USDC).
+   * The contract defines this in base units (1_000_000).
+   */
+  MIN_DEPOSIT: 1,
 } as const;
 
 // =============================================================================
@@ -26,6 +33,10 @@ export const FEE_CONFIG = {
 /**
  * Deadline constraints matching L1 portal requirements:
  * - L1 portal enforces: MIN=5 minutes, MAX=24 hours
+ *
+ * @deprecated Use loadContractConfig() from services/contractConfig.ts instead.
+ * These values are fallbacks for when contract queries fail.
+ * The authoritative values are defined in the L1 AztecAavePortalL1 contract.
  */
 export const DEADLINE_CONSTRAINTS = {
   /** 5 minutes - matches L1 portal minimum */

@@ -4,10 +4,11 @@
  * Bridge flow interface for transferring USDC from L1 (Ethereum) to L2 (Aztec).
  * This is a prerequisite step before users can deposit to Aave with privacy.
  *
- * BRIDGE FLOW (3 steps):
+ * BRIDGE FLOW (2 steps - L1 only):
  * 1. Approve TokenPortal to spend USDC on L1
  * 2. Deposit to TokenPortal (creates L1→L2 message)
- * 3. Claim tokens on L2 via BridgedToken
+ *
+ * After bridge completes, user must claim tokens on L2 via ClaimPendingBridges.
  */
 
 import { createSignal, Match, Show, Switch } from "solid-js";
@@ -21,7 +22,8 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 /**
- * Bridge flow step configuration with labels, descriptions, and time estimates
+ * Bridge flow step configuration with labels, descriptions, and time estimates.
+ * Only L1 steps - L2 claim is handled separately via ClaimPendingBridges.
  */
 const BRIDGE_STEPS: StepConfig[] = [
   {
@@ -33,11 +35,6 @@ const BRIDGE_STEPS: StepConfig[] = [
     label: "Deposit to TokenPortal",
     description: "Locking USDC and creating L1→L2 message",
     estimatedSeconds: 30,
-  },
-  {
-    label: "Claim on L2",
-    description: "Claiming bridged tokens on Aztec L2",
-    estimatedSeconds: 60,
   },
 ];
 
@@ -109,7 +106,7 @@ function formatAmount(raw: bigint): string {
 /**
  * BridgeFlow renders a bridge interface with:
  * - Amount input with validation
- * - Step indicator during active bridge (3 steps)
+ * - Step indicator during active bridge (2 steps - L1 only)
  * - Error display
  * - Action button
  *

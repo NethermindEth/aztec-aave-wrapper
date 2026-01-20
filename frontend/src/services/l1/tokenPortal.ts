@@ -342,3 +342,89 @@ export async function getPortalBalance(
     return 0n;
   }
 }
+
+// =============================================================================
+// Event Scanning
+// =============================================================================
+
+/**
+ * Parsed DepositToAztecPrivate event
+ */
+export interface DepositToAztecPrivateEvent {
+  /** Amount deposited */
+  amount: bigint;
+  /** Secret hash used for claiming */
+  secretHash: Hex;
+  /** Message key (L1→L2 message leaf) */
+  messageKey: Hex;
+  /** Message index */
+  messageIndex: bigint;
+  /** Block number of the event */
+  blockNumber: bigint;
+  /** Transaction hash */
+  txHash: Hex;
+}
+
+/**
+ * Scan TokenPortal for DepositToAztecPrivate events.
+ *
+ * This function retrieves historical deposit events that can be used
+ * to recover pending bridges when localStorage is cleared.
+ *
+ * @param publicClient - Viem public client
+ * @param tokenPortalAddress - TokenPortal contract address
+ * @param fromBlock - Starting block to scan from (default: 0)
+ * @param toBlock - Ending block (default: 'latest')
+ * @returns Array of deposit events
+ */
+export async function getDepositToAztecPrivateEvents(
+  publicClient: PublicClient<Transport, Chain>,
+  tokenPortalAddress: Address,
+  fromBlock: bigint = 0n,
+  toBlock: bigint | "latest" = "latest"
+): Promise<DepositToAztecPrivateEvent[]> {
+  logInfo(`Scanning TokenPortal events from block ${fromBlock}...`);
+
+  try {
+    const logs = await publicClient.getLogs({
+      address: tokenPortalAddress,
+      event: {
+        type: "event",
+        name: "DepositToAztecPrivate",
+        inputs: [
+          { name: "amount", type: "uint256", indexed: false },
+          { name: "secretHash", type: "bytes32", indexed: false },
+          { name: "messageKey", type: "bytes32", indexed: false },
+          { name: "messageIndex", type: "uint256", indexed: false },
+        ],
+      },
+      fromBlock,
+      toBlock,
+    });
+
+    const events: DepositToAztecPrivateEvent[] = logs.map((log) => {
+      // Parse event data
+      const data = log.data;
+      // Data: amount (32) + secretHash (32) + messageKey (32) + messageIndex (32) = 128 bytes
+      const amount = BigInt(`0x${data.slice(2, 66)}`);
+      const secretHash = `0x${data.slice(66, 130)}` as Hex;
+      const messageKey = `0x${data.slice(130, 194)}` as Hex;
+      const messageIndex = BigInt(`0x${data.slice(194, 258)}`);
+
+      return {
+        amount,
+        secretHash,
+        messageKey,
+        messageIndex,
+        blockNumber: log.blockNumber,
+        txHash: log.transactionHash,
+      };
+    });
+
+    logSuccess(`Found ${events.length} DepositToAztecPrivate events`);
+    return events;
+  } catch (error) {
+    logInfo(`Failed to scan events: ${error instanceof Error ? error.message : "Unknown"}`);
+    return [];
+  }
+}

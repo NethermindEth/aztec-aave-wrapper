@@ -154,7 +154,7 @@ function mapL2StatusToIntentStatus(l2Status: number): IntentStatus {
     case L2PositionStatus.PendingDeposit:
       return IntentStatus.PendingDeposit;
     case L2PositionStatus.Active:
-      return IntentStatus.Active;
+      return IntentStatus.Confirmed;
     case L2PositionStatus.PendingWithdraw:
       return IntentStatus.PendingWithdraw;
     default:
@@ -233,7 +233,7 @@ export function usePositions(): UsePositionsResult {
 
   // Filter positions that are ready for withdrawal
   const withdrawablePositions = createMemo<Position[]>(() =>
-    positions().filter((p) => p.status === IntentStatus.Active)
+    positions().filter((p) => p.status === IntentStatus.Confirmed)
   );
 
   // Calculate total value across all positions
@@ -256,13 +256,17 @@ export function usePositions(): UsePositionsResult {
     wallet: AzguardWallet,
     ownerAddress: string
   ): Promise<void> {
+    console.log("[refreshFromL2] Starting refresh for owner:", ownerAddress);
     setIsRefreshing(true);
     setRefreshError(null);
 
     try {
+      console.log("[refreshFromL2] Calling queryL2Positions...");
       const result = await queryL2Positions(contract, wallet, ownerAddress);
+      console.log("[refreshFromL2] Query result:", result);
 
       if (!result.success) {
+        console.error("[refreshFromL2] Query failed:", result.error);
         setRefreshError(result.error ?? "Failed to query positions from L2");
         return;
       }
@@ -279,6 +283,7 @@ export function usePositions(): UsePositionsResult {
       }));
 
       // Replace all positions with L2 data (L2 is source of truth)
+      console.log("[refreshFromL2] Setting", l2Positions.length, "positions in state");
       setPositions(l2Positions);
 
       // Clean up secrets for positions that no longer exist
@@ -289,11 +294,12 @@ export function usePositions(): UsePositionsResult {
           removeSecret(key);
         }
       }
+      console.log("[refreshFromL2] Refresh complete");
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error refreshing positions";
       setRefreshError(errorMessage);
-      console.error("Failed to refresh positions from L2:", error);
+      console.error("[refreshFromL2] Error:", errorMessage, error);
     } finally {
       setIsRefreshing(false);
     }
@@ -431,10 +437,10 @@ export function usePositions(): UsePositionsResult {
 // =============================================================================
 
 /**
- * Check if a position can be withdrawn (Active status)
+ * Check if a position can be withdrawn (Confirmed status)
  */
 export function canWithdraw(position: Position): boolean {
-  return position.status === IntentStatus.Active;
+  return position.status === IntentStatus.Confirmed;
 }
 
 /**
@@ -444,12 +450,12 @@ export function getPositionStatusLabel(status: IntentStatus): string {
   switch (status) {
     case IntentStatus.PendingDeposit:
       return "Pending Deposit";
-    case IntentStatus.Active:
+    case IntentStatus.Confirmed:
       return "Active";
     case IntentStatus.PendingWithdraw:
       return "Pending Withdrawal";
-    case IntentStatus.Consumed:
-      return "Consumed";
+    case IntentStatus.Withdrawn:
+      return "Withdrawn";
     default:
       return "Unknown";
   }

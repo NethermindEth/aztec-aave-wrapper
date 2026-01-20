@@ -127,10 +127,7 @@ export class DeadlineNotExpiredError extends Error {
  */
 export class NetAmountMismatchError extends Error {
   constructor(expected: bigint, provided: bigint) {
-    super(
-      `Net amount mismatch during cancel. ` +
-        `Expected: ${expected}, Provided: ${provided}`
-    );
+    super(`Net amount mismatch during cancel. ` + `Expected: ${expected}, Provided: ${provided}`);
     this.name = "NetAmountMismatchError";
   }
 }
