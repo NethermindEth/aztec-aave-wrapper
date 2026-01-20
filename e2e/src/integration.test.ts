@@ -219,10 +219,18 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
     if (!aztecAvailable || !pxeAvailable || !adminWallet) return;
 
     // 1. Deploy BridgedToken contract first
+    // Constructor: (admin, name, symbol, decimals)
+    // Name and symbol are stored as Field elements (short string encoding)
+    const tokenName = Fr.fromString("0x555344432e65"); // "USDC.e" encoded as hex
+    const tokenSymbol = Fr.fromString("0x555344432e65"); // "USDC.e" encoded as hex
+    const tokenDecimals = 6; // USDC has 6 decimals
+
     const deployedBridgedToken = await BridgedTokenContract.deploy(
       adminWallet,
-      adminAddress,  // initial admin
-      portalAddress  // portal address
+      adminAddress, // initial admin
+      tokenName, // name as Field
+      tokenSymbol, // symbol as Field
+      tokenDecimals // decimals
     )
       .send({ from: adminAddress })
       .deployed();
