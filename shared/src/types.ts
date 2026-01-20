@@ -41,6 +41,8 @@ export enum IntentStatus {
   PendingWithdraw = 4,
   /** Deposit cancelled after deadline passed */
   Cancelled = 5,
+  /** Withdrawal completed, position fully redeemed */
+  Withdrawn = 6,
 }
 
 /**
@@ -105,10 +107,14 @@ export interface ContractAddresses {
   l2: {
     /** Aztec Aave Wrapper contract address */
     aaveWrapper: AztecAddress;
+    /** Bridged Token contract address (L2 representation of USDC) */
+    bridgedToken: AztecAddress;
   };
   l1: {
     /** Portal contract address on Ethereum */
     portal: Address;
+    /** Token Portal contract address (for L1<->L2 token bridging) */
+    tokenPortal: Address;
     /** Mock USDC token address (for local development) */
     mockUsdc: Address;
     /** Mock Aave lending pool address (for local development) */
