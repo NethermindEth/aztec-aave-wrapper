@@ -352,10 +352,9 @@ contract PortalTest is Test {
         // Track deposit in mock pool
         aavePool.setDeposits(address(portal), 1000e18);
 
-        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(withdrawIntent);
-        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
-
         bytes32 secretHash = keccak256("secret");
+        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(withdrawIntent, address(token), secretHash);
+        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
 
         vm.prank(relayer);
         portal.executeWithdraw(
@@ -400,9 +399,9 @@ contract PortalTest is Test {
         token.mint(address(aavePool), 1000e18);
         aavePool.setDeposits(address(portal), 1000e18);
 
-        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(withdrawIntent);
-        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
         bytes32 secretHash = keccak256("secret");
+        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(withdrawIntent, address(token), secretHash);
+        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
 
         vm.expectEmit(true, true, false, true);
         emit AztecAavePortalL1.WithdrawExecuted(withdrawIntent.intentId, address(token), 1000e18);
@@ -421,9 +420,9 @@ contract PortalTest is Test {
     // ============ Withdraw Failure Tests ============
 
     function test_executeWithdraw_RevertIf_NoSharesForIntent() public {
-        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(validWithdrawIntent);
-        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
         bytes32 secretHash = keccak256("secret");
+        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(validWithdrawIntent, address(token), secretHash);
+        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -461,9 +460,9 @@ contract PortalTest is Test {
         token.mint(address(aavePool), 1000e18);
         aavePool.setDeposits(address(portal), 1000e18);
 
-        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(withdrawIntent);
-        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
         bytes32 secretHash = keccak256("secret");
+        bytes32 withdrawMessageHash = IntentLib.hashWithdrawIntent(withdrawIntent, address(token), secretHash);
+        aztecOutbox.setMessageValid(withdrawMessageHash, l2BlockNumber, true);
 
         // First withdrawal succeeds
         vm.prank(relayer);

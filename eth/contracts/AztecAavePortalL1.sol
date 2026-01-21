@@ -313,7 +313,7 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         address asset = intentAssets[intent.intentId];
 
         // Step 5: Compute message content (intent hash) for outbox consumption
-        bytes32 intentHash = IntentLib.hashWithdrawIntent(intent);
+        bytes32 intentHash = IntentLib.hashWithdrawIntent(intent, asset, secretHash);
 
         // Step 6: Construct L2ToL1Msg and consume from Aztec outbox
         DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({

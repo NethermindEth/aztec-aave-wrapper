@@ -257,7 +257,9 @@ export async function executeBridgeFlow(
     // Mark operation as successful
     setOperationStatus("success");
     logSuccess("Bridge L1 deposit complete!");
-    logInfo("Tokens will be available to claim on L2 once the message syncs (typically 30-90 seconds).");
+    logInfo(
+      "Tokens will be available to claim on L2 once the message syncs (typically 30-90 seconds)."
+    );
 
     return {
       secret,

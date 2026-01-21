@@ -76,7 +76,8 @@ interface L1Addresses {
   mockUsdc: Address;
   mockAToken: Address;
   mockLendingPool: Address;
-  mockAztecOutbox: Address;
+  /** Real Aztec outbox address from sandbox (required for L2→L1 messaging) */
+  aztecOutbox: Address;
   /** Real Aztec inbox address from sandbox (required for L1→L2 messaging) */
   aztecInbox: Address;
   mockTokenPortal: Address;
@@ -223,14 +224,15 @@ async function deployL1Contracts(
   publicClient: any,
   deployerWallet: any,
   l2ContractAddress: Hex,
-  aztecInboxAddress: Address
+  aztecInboxAddress: Address,
+  aztecOutboxAddress: Address
 ): Promise<L1Addresses> {
   log("L1", "Deploying L1 contracts...");
   log("L1", "Using real Aztec inbox", { address: aztecInboxAddress });
+  log("L1", "Using real Aztec outbox", { address: aztecOutboxAddress });
 
-  // Load artifacts (no MockAztecInbox - we use real inbox from sandbox)
+  // Load artifacts - using real inbox and outbox from sandbox
   const mockERC20Artifact = loadArtifact("MockERC20.sol", "MockERC20");
-  const mockOutboxArtifact = loadArtifact("Portal.t.sol", "MockAztecOutbox");
   const mockTokenPortalArtifact = loadArtifact("Portal.t.sol", "MockTokenPortal");
   const mockLendingPoolArtifact = loadArtifact("Portal.t.sol", "MockAaveLendingPool");
   const portalArtifact = loadArtifact("AztecAavePortalL1.sol", "AztecAavePortalL1");
@@ -261,21 +263,8 @@ async function deployL1Contracts(
   const mockAToken = aTokenReceipt.contractAddress!;
   log("L1", "MockERC20 (aUSDC) deployed", { address: mockAToken });
 
-  // Deploy MockAztecOutbox
-  log("L1", "Deploying MockAztecOutbox...");
-  const outboxHash = await deployerWallet.deployContract({
-    account: ACCOUNTS.deployer,
-    chain: foundry,
-    abi: mockOutboxArtifact.abi,
-    bytecode: mockOutboxArtifact.bytecode,
-    args: [],
-  });
-  const outboxReceipt = await publicClient.waitForTransactionReceipt({ hash: outboxHash });
-  const mockAztecOutbox = outboxReceipt.contractAddress!;
-  log("L1", "MockAztecOutbox deployed", { address: mockAztecOutbox });
-
-  // Note: Using REAL Aztec inbox from sandbox (aztecInboxAddress parameter)
-  // MockAztecInbox does NOT work - messages sent to mock are not consumable on L2
+  // Note: Using REAL Aztec inbox and outbox from sandbox
+  // Mock versions do NOT work - messages are not consumable on L2
 
   // Deploy MockTokenPortal
   log("L1", "Deploying MockTokenPortal...");
@@ -312,7 +301,7 @@ async function deployL1Contracts(
     abi: portalArtifact.abi,
     bytecode: portalArtifact.bytecode,
     args: [
-      mockAztecOutbox,
+      aztecOutboxAddress,  // REAL Aztec outbox - required for L2→L1 messaging
       aztecInboxAddress,  // REAL Aztec inbox - required for L1→L2 messaging
       mockTokenPortal,
       mockLendingPool,
@@ -329,7 +318,7 @@ async function deployL1Contracts(
     mockUsdc,
     mockAToken,
     mockLendingPool,
-    mockAztecOutbox,
+    aztecOutbox: aztecOutboxAddress,
     aztecInbox: aztecInboxAddress,
     mockTokenPortal,
   };
@@ -617,7 +606,6 @@ async function executeDepositFlow(
 
   // Load artifacts for ABI
   const mockERC20Artifact = loadArtifact("MockERC20.sol", "MockERC20");
-  const mockOutboxArtifact = loadArtifact("Portal.t.sol", "MockAztecOutbox");
   const portalArtifact = loadArtifact("AztecAavePortalL1.sol", "AztecAavePortalL1");
 
   const userL1Address = ACCOUNTS.user.address;
@@ -713,18 +701,44 @@ async function executeDepositFlow(
     secretHash: secretHashHex,
   };
 
-  // Compute message hash and set it as valid in mock outbox
+  // Compute the L2→L1 message hash (matches what L2 contract sends)
   const messageHash = computeDepositIntentHash(depositIntent);
-  log("L1", "Setting message as valid in mock outbox", { messageHash });
+  log("L1", "Computed deposit intent hash for L2→L1 message", { messageHash });
 
-  const l2BlockNumber = 100n;
-  await l1.deployerWallet.writeContract({
-    chain: foundry,
-    address: l1Addresses.mockAztecOutbox,
-    abi: mockOutboxArtifact.abi,
-    functionName: "setMessageValid",
-    args: [messageHash, l2BlockNumber, true],
-  });
+  // Fetch L2→L1 message proof from the real outbox
+  // Note: In production, this would wait for the L2 block to be proven
+  // For testing with sandbox, we need to wait for the message to be available
+  log("L1", "Waiting for L2→L1 message proof...");
+  const { computeL2ToL1MembershipWitness } = await import("@aztec/stdlib/messaging");
+
+  let l2BlockNumber: bigint | undefined;
+  let leafIndex: bigint | undefined;
+  let siblingPath: string[] = [];
+
+  // Try to get the message proof from recent blocks
+  const currentL2Block = await l2.node.getBlockNumber();
+  for (let blockNum = currentL2Block; blockNum >= Math.max(1, currentL2Block - 10); blockNum--) {
+    try {
+      const witness = await computeL2ToL1MembershipWitness(l2.node, blockNum, aztec.Fr.fromString(messageHash));
+      if (witness) {
+        l2BlockNumber = BigInt(blockNum);
+        leafIndex = witness.leafIndex;
+        siblingPath = witness.siblingPath.toBufferArray().map((buf: Buffer) => `0x${buf.toString("hex")}`);
+        log("L1", "Found L2→L1 message proof", { l2BlockNumber: blockNum, leafIndex: leafIndex.toString() });
+        break;
+      }
+    } catch {
+      // Message not found in this block, continue searching
+    }
+  }
+
+  // If no proof found, use placeholder values (will fail at real outbox but demonstrates flow)
+  if (!l2BlockNumber) {
+    log("L1", "Warning: No L2→L1 message proof found (using placeholders for demo)");
+    l2BlockNumber = BigInt(currentL2Block);
+    leafIndex = 0n;
+    siblingPath = [];
+  }
 
   // Execute deposit
   log("Privacy", "Relayer executing L1 deposit (not user)", {
@@ -735,12 +749,13 @@ async function executeDepositFlow(
 
   try {
     log("L1", `Executing deposit for ${formatBalance(CONFIG.depositAmount)} USDC...`);
+    log("L1", "Using L2→L1 proof", { l2BlockNumber: l2BlockNumber?.toString(), leafIndex: leafIndex?.toString(), pathLength: siblingPath.length });
     const executeDepositTx = await l1.relayerWallet.writeContract({
       chain: foundry,
       address: l1Addresses.portal,
       abi: portalArtifact.abi,
       functionName: "executeDeposit",
-      args: [depositIntent, l2BlockNumber, 0n, []],
+      args: [depositIntent, l2BlockNumber!, leafIndex!, siblingPath],
     });
     await l1.publicClient.waitForTransactionReceipt({ hash: executeDepositTx });
     log("L1", "executeDeposit succeeded", { txHash: executeDepositTx });
@@ -951,11 +966,13 @@ async function main() {
     const { wallet, address } = await setupL2Wallet(aztec, node);
 
     // Fetch real Aztec L1 contract addresses from the sandbox
-    // IMPORTANT: We must use the real inbox for L1→L2 messages to work
-    log("L1", "Fetching real Aztec inbox address from sandbox...");
+    // IMPORTANT: We must use the real inbox and outbox for cross-chain messaging to work
+    log("L1", "Fetching real Aztec L1 addresses from sandbox...");
     const nodeInfo = await node.getNodeInfo();
     const realInboxAddress = nodeInfo.l1ContractAddresses.inboxAddress.toString() as Address;
+    const realOutboxAddress = nodeInfo.l1ContractAddresses.outboxAddress.toString() as Address;
     log("L1", "Got real Aztec inbox", { address: realInboxAddress });
+    log("L1", "Got real Aztec outbox", { address: realOutboxAddress });
 
     // Deploy L1 contracts first with placeholder L2 address
     // This allows us to get the portal address for L2 deployment
@@ -964,9 +981,10 @@ async function main() {
       l1.publicClient,
       l1.deployerWallet,
       placeholderL2,
-      realInboxAddress
+      realInboxAddress,
+      realOutboxAddress
     );
-    log("Deploy", "L1 contracts deployed", { portal: l1Addresses.portal, realInbox: realInboxAddress });
+    log("Deploy", "L1 contracts deployed", { portal: l1Addresses.portal, realInbox: realInboxAddress, realOutbox: realOutboxAddress });
 
     // Deploy L2 contract with actual portal address
     const l2Contract = await deployL2Contract(wallet, address, l1Addresses.portal);

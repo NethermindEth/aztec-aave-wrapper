@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
+import {Hash} from "../libraries/Hash.sol";
+
 /// @title Intent Type Definitions
 /// @notice Shared message payload structures for cross-chain communication
 /// @dev These structs must match the Noir definitions in aztec/src/types/intent.nr
@@ -51,19 +53,21 @@ struct WithdrawIntent {
 library IntentLib {
     /// @notice Compute the hash of a DepositIntent for message verification
     /// @dev Must match L2 encoding exactly for cross-chain message consumption
+    ///      Uses sha256ToField to match Noir's sha256_to_field
     /// @param intent The deposit intent to hash
     /// @return Hash of the intent suitable for Merkle proof verification
     function hashDepositIntent(
         DepositIntent memory intent
     ) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(
+        // Encode all fields as 32-byte values (256 bytes total) to match Noir encoding
+        return Hash.sha256ToField(
+            abi.encodePacked(
                 intent.intentId,
                 intent.ownerHash,
-                intent.asset,
-                intent.amount,
-                intent.originalDecimals,
-                intent.deadline,
+                bytes32(uint256(uint160(intent.asset))),
+                bytes32(uint256(intent.amount)),
+                bytes32(uint256(intent.originalDecimals)),
+                bytes32(uint256(intent.deadline)),
                 intent.salt,
                 intent.secretHash
             )
@@ -71,13 +75,27 @@ library IntentLib {
     }
 
     /// @notice Compute the hash of a WithdrawIntent for message verification
+    /// @dev Uses sha256ToField to match Noir's sha256_to_field
     /// @param intent The withdrawal intent to hash
+    /// @param asset The asset address being withdrawn
+    /// @param secretHash Hash of secret for L1→L2 message consumption
     /// @return Hash of the intent suitable for Merkle proof verification
     function hashWithdrawIntent(
-        WithdrawIntent memory intent
+        WithdrawIntent memory intent,
+        address asset,
+        bytes32 secretHash
     ) internal pure returns (bytes32) {
-        return
-            keccak256(abi.encode(intent.intentId, intent.ownerHash, intent.amount, intent.deadline));
+        // Encode all fields as 32-byte values (192 bytes total) to match Noir encoding
+        return Hash.sha256ToField(
+            abi.encodePacked(
+                intent.intentId,
+                intent.ownerHash,
+                bytes32(uint256(intent.amount)),
+                bytes32(uint256(intent.deadline)),
+                bytes32(uint256(uint160(asset))),
+                secretHash
+            )
+        );
     }
 
     /// @notice Encode DepositIntent for Wormhole payload

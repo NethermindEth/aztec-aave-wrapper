@@ -156,6 +156,8 @@ export interface DepositRequestResult {
   intentId: Fr;
   /** Transaction hash */
   txHash: string;
+  /** Block number where the transaction was included */
+  blockNumber: number;
 }
 
 /**
@@ -174,6 +176,8 @@ export interface WithdrawRequestResult {
   intentId: Fr;
   /** Transaction hash */
   txHash: string;
+  /** Block number where the transaction was included */
+  blockNumber: number;
 }
 
 /**
@@ -336,6 +340,7 @@ export async function executeRequestDeposit(
     return {
       intentId,
       txHash: tx.txHash?.toString() ?? "",
+      blockNumber: tx.blockNumber ?? 0,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -553,6 +558,7 @@ export async function executeRequestWithdraw(
     return {
       intentId,
       txHash: tx.txHash?.toString() ?? "",
+      blockNumber: tx.blockNumber ?? 0,
     };
   } catch (error) {
     logError(

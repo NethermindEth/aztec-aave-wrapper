@@ -117,7 +117,10 @@ export async function queryL2Positions(
       for (let i = 0; i < validCount; i++) {
         const note = boundedVec.storage[i];
         if (note) {
-          console.log(`[queryL2Positions] Raw note ${i}:`, JSON.stringify(note, (_, v) => typeof v === 'bigint' ? v.toString() : v));
+          console.log(
+            `[queryL2Positions] Raw note ${i}:`,
+            JSON.stringify(note, (_, v) => (typeof v === "bigint" ? v.toString() : v))
+          );
           const parsed = parsePositionNote(note);
           console.log(`[queryL2Positions] Parsed position ${i}:`, {
             intentId: parsed.intentId,
@@ -340,7 +343,8 @@ export async function queryPendingDeposit(
     }
 
     const timeUntilCancellable = Number(deadline - currentTimestamp);
-    const canCancel = status === L2PositionStatus.PendingDeposit && !isConsumed && timeUntilCancellable < 0;
+    const canCancel =
+      status === L2PositionStatus.PendingDeposit && !isConsumed && timeUntilCancellable < 0;
 
     return {
       intentId,
@@ -583,7 +587,9 @@ export async function scanUserIntentsFromL1(
           .simulate({});
 
         const ownerStr = ownerResult?.toString?.() ?? "";
-        console.log(`[scanUserIntentsFromL1] Intent ${intentId.slice(0, 10)}... owner: ${ownerStr.slice(0, 20)}...`);
+        console.log(
+          `[scanUserIntentsFromL1] Intent ${intentId.slice(0, 10)}... owner: ${ownerStr.slice(0, 20)}...`
+        );
 
         // Check if owner matches user
         if (ownerStr.toLowerCase() === userL2Address.toLowerCase()) {

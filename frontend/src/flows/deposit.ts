@@ -30,18 +30,21 @@ import {
 } from "viem";
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
-import {
-  computeDepositIntentHash,
-  type DepositIntent,
-  generateSalt,
-} from "../services/l1/intent.js";
+import { computeDepositIntentHash, type DepositIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
 import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
 import { balanceOf, type L1AddressesForBalances } from "../services/l1/tokens.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
-import { computeOwnerHash, generateSecretPair } from "../services/l2/crypto.js";
+import { bigIntToBytes32, computeOwnerHash, generateSecretPair, sha256ToField } from "../services/l2/crypto.js";
 import type { AaveWrapperContract } from "../services/l2/deploy.js";
+import {
+  computeLeafId,
+  getOutboxVersion,
+  hasMessageBeenConsumed,
+  waitForL2ToL1MessageProof,
+  type L2ToL1MessageProofResult,
+} from "../services/l2/messageProof.js";
 import {
   executeFinalizeDeposit,
   executeRequestDeposit,
@@ -81,8 +84,8 @@ export { NetworkError, TimeoutError, UserRejectedError } from "../types/errors.j
  * L1 contract addresses required for deposit flow
  */
 export interface DepositL1Addresses extends L1AddressesForBalances {
-  /** Mock Aztec outbox for message verification */
-  mockAztecOutbox: Address;
+  /** Real Aztec outbox for L2→L1 message verification */
+  aztecOutbox: Address;
 }
 
 /**
@@ -103,8 +106,6 @@ export interface DepositL2Context {
  * Configuration for deposit operation
  */
 export interface DepositConfig {
-  /** Asset identifier on target chain */
-  assetId: bigint;
   /** Amount to deposit (in token's smallest unit) */
   amount: bigint;
   /** Token decimals */
@@ -149,62 +150,8 @@ export class DepositFlowError extends Error {
 }
 
 // =============================================================================
-// Mock Outbox ABI (for devnet)
-// =============================================================================
-
-const MOCK_OUTBOX_ABI = [
-  {
-    type: "function",
-    name: "setMessageValid",
-    inputs: [
-      { name: "messageHash", type: "bytes32" },
-      { name: "l2BlockNumber", type: "uint256" },
-      { name: "valid", type: "bool" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-] as const;
-
-// =============================================================================
 // Helper Functions
 // =============================================================================
-
-/**
- * Wait for L2→L1 message to be processable on L1.
- * In devnet with mocks, we poll until the node confirms availability.
- *
- * @param node - Aztec node client
- * @param maxAttempts - Maximum polling attempts
- * @param intervalMs - Polling interval in milliseconds
- * @returns True if message is available
- */
-async function waitForL2ToL1Message(
-  node: AztecNodeClient,
-  maxAttempts = 30,
-  intervalMs = 2000
-): Promise<boolean> {
-  for (let i = 0; i < maxAttempts; i++) {
-    logSection("L2→L1", `Waiting for message availability... (${i + 1}/${maxAttempts})`);
-
-    // In devnet with mocks, message is available after block advancement
-    // For real L2→L1 messaging, we would query the Aztec outbox
-    try {
-      const nodeInfo = await node.getNodeInfo();
-      if (nodeInfo) {
-        logSuccess("L2→L1 message availability confirmed");
-        return true;
-      }
-    } catch {
-      // Node may be temporarily unavailable
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-
-  logError("Timeout waiting for L2→L1 message");
-  return false;
-}
 
 /**
  * Wait for L1→L2 message to be consumable by polling for membership witness.
@@ -333,29 +280,6 @@ async function waitForL1ToL2Message(
   return false;
 }
 
-/**
- * Set a message as valid in the mock outbox (devnet only).
- */
-async function setMockOutboxMessageValid(
-  publicClient: PublicClient<Transport, Chain>,
-  walletClient: WalletClient<Transport, Chain, Account>,
-  mockOutboxAddress: Address,
-  messageHash: Hex,
-  l2BlockNumber: bigint
-): Promise<void> {
-  logSection("L1", "Setting message as valid in mock outbox");
-
-  const txHash = await walletClient.writeContract({
-    address: mockOutboxAddress,
-    abi: MOCK_OUTBOX_ABI,
-    functionName: "setMessageValid",
-    args: [messageHash, l2BlockNumber, true],
-  });
-
-  await publicClient.waitForTransactionReceipt({ hash: txHash });
-  logSuccess("Mock outbox message set as valid");
-}
-
 // =============================================================================
 // Main Deposit Flow
 // =============================================================================
@@ -406,6 +330,14 @@ export async function executeDepositFlow(
   // Initialize operation tracking
   startOperation("deposit", totalSteps);
 
+  // Debug: Log loaded addresses at flow start to catch stale config issues
+  console.log("=== DEPOSIT FLOW: LOADED ADDRESSES ===");
+  console.log("  mockUsdc:", l1Addresses.mockUsdc);
+  console.log("  portal:", l1Addresses.portal);
+  console.log("  aztecOutbox:", l1Addresses.aztecOutbox);
+  console.log("  L2 contract:", contract.address.toString());
+  console.log("=======================================");
+
   try {
     // =========================================================================
     // Step 1: Generate secret and prepare parameters
@@ -437,10 +369,14 @@ export async function executeDepositFlow(
     logStep(2, totalSteps, "Call request_deposit on L2");
     setOperationStep(2);
 
+    // Use the L1 token address as the asset parameter (converted to bigint/Field)
+    // This must match what the L2 content hash computation expects
+    const assetAsField = BigInt(l1Addresses.mockUsdc);
+
     const depositResult = await executeRequestDeposit(
       contract,
       {
-        asset: config.assetId,
+        asset: assetAsField,
         amount: config.amount,
         originalDecimals: config.originalDecimals,
         deadline,
@@ -464,19 +400,16 @@ export async function executeDepositFlow(
     logInfo("Secret stored for recovery");
 
     // =========================================================================
-    // Step 3: Wait for L2→L1 message to be available
+    // Step 3: Prepare L1 execution (message proof will be fetched in step 4)
     // =========================================================================
     currentStep = 3;
-    logStep(3, totalSteps, "Wait for L2→L1 message");
+    logStep(3, totalSteps, "Prepare L1 execution");
     setOperationStep(3);
 
-    const messageAvailable = await waitForL2ToL1Message(node);
-    if (!messageAvailable) {
-      throw new Error("Timeout waiting for L2→L1 message availability");
-    }
+    logInfo("L2 request complete, preparing L1 execution...");
 
     // =========================================================================
-    // Step 4: Execute deposit on L1 (fund portal + execute)
+    // Step 4: Execute deposit on L1 (wait for proof + execute)
     // =========================================================================
     currentStep = 4;
     logStep(4, totalSteps, "Execute deposit on L1");
@@ -499,25 +432,46 @@ export async function executeDepositFlow(
     // and the L1 portal claims from TokenPortal during executeDeposit.
     // This preserves privacy - no direct link between user's L1 wallet and the deposit.
 
-    // Create deposit intent for L1
-    const salt = generateSalt();
+    // Import Aztec modules for computing L2→L1 message hash
+    const { Fr } = await import("@aztec/aztec.js/fields");
+    const { computeL2ToL1MessageHash } = await import("@aztec/stdlib/hash");
+    const { EthAddress } = await import("@aztec/foundation/eth-address");
+    const { AztecAddress } = await import("@aztec/stdlib/aztec-address");
+    const { poseidon2Hash } = await import("@aztec/foundation/crypto/poseidon");
+
+    // Compute values exactly as the L2 contract does:
+    // 1. salt = poseidon2_hash([caller.to_field(), secret_hash])
+    // 2. fee = amount * 10 / 10000 (0.1% fee)
+    // 3. net_amount = amount - fee
+    const callerField = wallet.address.toBigInt();
+    const l2Salt = await poseidon2Hash([new Fr(callerField), secretHash]);
+    const fee = (config.amount * 10n) / 10000n;
+    const netAmount = config.amount - fee;
+
+    console.log("=== L2 Contract Values (must match) ===");
+    console.log("  caller:", `0x${callerField.toString(16)}`);
+    console.log("  secretHash:", secretHash.toString());
+    console.log("  computed salt:", l2Salt.toString());
+    console.log("  fee:", fee.toString());
+    console.log("  net_amount:", netAmount.toString());
+
+    // Create deposit intent for L1 with the correct computed values
     const intentIdHex = pad(toHex(BigInt(intentIdStr)), { size: 32 }) as Hex;
     const ownerHashHex = pad(toHex(ownerHash), { size: 32 }) as Hex;
-    // Convert Fr secretHash to hex for L1 - ensures L1→L2 message uses same hash
     const secretHashHex = pad(toHex(secretHash.toBigInt()), { size: 32 }) as Hex;
+    const saltHex = pad(toHex(l2Salt.toBigInt()), { size: 32 }) as Hex;
 
     const depositIntent: DepositIntent = {
       intentId: intentIdHex,
       ownerHash: ownerHashHex,
       asset: l1Addresses.mockUsdc,
-      amount: config.amount,
+      amount: netAmount, // Use NET amount (after fee deduction)
       originalDecimals: config.originalDecimals,
       deadline,
-      salt,
+      salt: saltHex,
       secretHash: secretHashHex,
     };
 
-    // Compute message hash and set it as valid in mock outbox
     console.log("=== DEBUG: Deposit Intent Values ===");
     console.log("intentId:", depositIntent.intentId);
     console.log("ownerHash:", depositIntent.ownerHash);
@@ -527,109 +481,97 @@ export async function executeDepositFlow(
     console.log("deadline:", depositIntent.deadline.toString());
     console.log("salt:", depositIntent.salt);
 
-    const messageHash = computeDepositIntentHash(depositIntent);
+    // Get L2 block number from the request_deposit transaction
+    const l2TxBlockNumber = depositResult.blockNumber ?? (await node.getBlockNumber());
+    logInfo(`L2 transaction in block ${l2TxBlockNumber}, waiting for message proof...`);
+
+    // Get rollup version from outbox
+    const rollupVersion = await getOutboxVersion(publicClient, l1Addresses.aztecOutbox);
+    const chainId = BigInt(await publicClient.getChainId());
+    logInfo(`Rollup version: ${rollupVersion}, Chain ID: ${chainId}`);
+
+    // Compute the content hash matching the L2 contract's compute_deposit_message_content
+    // This must match exactly what the Noir contract sends via message_portal:
+    // sha256_to_field([intent_id, owner_hash, asset, net_amount, original_decimals, deadline, salt, secret_hash])
+    // Each field is encoded as 32 bytes (big-endian), total 256 bytes
+    // IMPORTANT: intent.asset is the L1 token address as a Field (BigInt), NOT an asset ID!
+    const contentFields = [
+      BigInt(intentIdStr),      // intent.intent_id
+      ownerHash,                // intent.owner_hash
+      BigInt(l1Addresses.mockUsdc), // intent.asset (L1 token address as Field)
+      netAmount,                // intent.amount (NET amount after fee!)
+      BigInt(config.originalDecimals), // intent.original_decimals
+      deadline,                 // intent.deadline
+      l2Salt.toBigInt(),        // intent.salt (computed same as L2)
+      secretHash.toBigInt(),    // secret_hash
+    ];
+    console.log("Content fields for L2→L1 message:", contentFields.map(f => `0x${f.toString(16)}`));
+
+    // Pack fields into bytes (each field as 32-byte big-endian) and compute sha256
+    const packedData = new Uint8Array(contentFields.length * 32);
+    for (let i = 0; i < contentFields.length; i++) {
+      packedData.set(bigIntToBytes32(contentFields[i]), i * 32);
+    }
+    console.log("=== SHA256 DEBUG ===");
+    console.log("Packed data length:", packedData.length, "bytes (expected 256)");
+    console.log("Packed data (hex):", "0x" + Array.from(packedData).map(b => b.toString(16).padStart(2, "0")).join(""));
+
+    // Compute sha256 and convert to field (truncate to 31 bytes/248 bits to fit in BN254 field)
+    const contentHash = await sha256ToField(packedData);
+    console.log("SHA256 to Field (truncated to 31 bytes):", contentHash.toString());
+
     console.log("=== DEBUG: Deposit Flow ===");
-    console.log("Message hash:", messageHash);
-    console.log("Outbox address (frontend):", l1Addresses.mockAztecOutbox);
+    console.log("Content hash:", contentHash.toString());
+    console.log("Outbox address:", l1Addresses.aztecOutbox);
     console.log("Portal address:", l1Addresses.portal);
 
-    // Debug: verify portal's outbox matches what we're using
-    const portalOutbox = await publicClient.readContract({
-      address: l1Addresses.portal,
-      abi: [
-        {
-          name: "aztecOutbox",
-          type: "function",
-          stateMutability: "view",
-          inputs: [],
-          outputs: [{ type: "address" }],
-        },
-      ] as const,
-      functionName: "aztecOutbox",
+    // Compute the full L2→L1 message hash
+    const l2ToL1Message = await computeL2ToL1MessageHash({
+      l2Sender: AztecAddress.fromString(contract.address.toString()),
+      l1Recipient: EthAddress.fromString(l1Addresses.portal),
+      content: contentHash,
+      rollupVersion: new Fr(rollupVersion),
+      chainId: new Fr(chainId),
     });
-    console.log("Outbox address (portal):", portalOutbox);
-    console.log(
-      "Addresses match:",
-      l1Addresses.mockAztecOutbox.toLowerCase() === portalOutbox.toLowerCase()
+
+    console.log("L2→L1 message hash:", l2ToL1Message.toString());
+
+    // Wait for the L2→L1 message proof from the real outbox
+    logSection("L2→L1", "Waiting for message to be proven on L1...");
+    const proofResult: L2ToL1MessageProofResult = await waitForL2ToL1MessageProof(
+      node,
+      l2ToL1Message,
+      l2TxBlockNumber,
+      180_000, // 3 minutes max wait
+      5000 // 5 second polling
     );
 
-    // Debug: verify portal's L2 contract address matches what we're using
-    const portalL2Address = await publicClient.readContract({
-      address: l1Addresses.portal,
-      abi: [
-        {
-          name: "l2ContractAddress",
-          type: "function",
-          stateMutability: "view",
-          inputs: [],
-          outputs: [{ type: "bytes32" }],
-        },
-      ] as const,
-      functionName: "l2ContractAddress",
-    });
-    const ourL2Address = contract.address.toString();
-    console.log("L2 address (portal):", portalL2Address);
-    console.log("L2 address (our contract):", ourL2Address);
-    console.log(
-      "L2 addresses match:",
-      portalL2Address.toLowerCase() === ourL2Address.toLowerCase()
-    );
+    if (!proofResult.success) {
+      throw new Error(`Failed to get L2→L1 message proof: ${proofResult.error}`);
+    }
 
-    // Debug: check portal's inbox address
-    const portalInbox = await publicClient.readContract({
-      address: l1Addresses.portal,
-      abi: [
-        {
-          name: "aztecInbox",
-          type: "function",
-          stateMutability: "view",
-          inputs: [],
-          outputs: [{ type: "address" }],
-        },
-      ] as const,
-      functionName: "aztecInbox",
-    });
-    console.log("Portal inbox address:", portalInbox);
+    logSuccess(`Message proof obtained: block=${proofResult.l2BlockNumber}, leafIndex=${proofResult.leafIndex}`);
 
-    const l2BlockNumber = 100n; // Mock L2 block number for devnet
-    await setMockOutboxMessageValid(
+    // Check if message was already consumed
+    const leafId = computeLeafId(proofResult.leafIndex!, proofResult.siblingPath!.length);
+    const alreadyConsumedInOutbox = await hasMessageBeenConsumed(
       publicClient,
-      relayerWallet,
-      l1Addresses.mockAztecOutbox,
-      messageHash,
-      l2BlockNumber
+      l1Addresses.aztecOutbox,
+      proofResult.l2BlockNumber!,
+      leafId
     );
 
-    // Verify the message was set correctly
-    const isValid = await publicClient.readContract({
-      address: l1Addresses.mockAztecOutbox,
-      abi: [
-        {
-          name: "validMessages",
-          type: "function",
-          stateMutability: "view",
-          inputs: [{ type: "bytes32" }, { type: "uint256" }],
-          outputs: [{ type: "bool" }],
-        },
-      ] as const,
-      functionName: "validMessages",
-      args: [messageHash, l2BlockNumber],
-    });
-    console.log("Message set in outbox?", isValid);
-    console.log("Block number used:", l2BlockNumber.toString());
+    if (alreadyConsumedInOutbox) {
+      logInfo("Message already consumed in outbox, skipping L1 execution");
+    }
 
     // Execute deposit via relayer
     logSection("Privacy", "Relayer executing L1 deposit (not user)");
 
-    // Generate unique leaf index from intent ID to avoid collision in mock outbox
-    // The mock outbox tracks consumed messages by (blockNumber, leafIndex)
-    // Using a hash-derived index ensures each deposit gets a unique slot
-    const leafIndex = BigInt(depositIntent.intentId.slice(0, 18)) % 1000000n;
-
     const proof: MerkleProof = {
-      l2BlockNumber,
-      leafIndex,
-      siblingPath: [],
+      l2BlockNumber: proofResult.l2BlockNumber!,
+      leafIndex: proofResult.leafIndex!,
+      siblingPath: proofResult.siblingPath! as `0x${string}`[],
     };
 
     // Check if intent was already consumed (from a previous failed attempt)
@@ -693,8 +635,7 @@ export async function executeDepositFlow(
     setOperationStep(6);
 
     // Use actual shares from L1 (fetched above) - must match message content hash
-    // Convert asset address to Field for L2 (matches L1's bytes32(uint256(uint160(asset))))
-    const assetAsField = BigInt(l1Addresses.mockUsdc);
+    // assetAsField was already computed earlier (L1 token address as BigInt)
 
     console.log("=== DEBUG: Values for finalize_deposit ===");
     console.log(`  intentId: ${intentId.toString()}`);

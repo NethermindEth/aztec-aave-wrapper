@@ -201,7 +201,9 @@ export function RecoverDeposit() {
       const tx = await call.send({ from: aztecAddress, fee: { paymentMethod } }).wait();
 
       const txHash = tx.txHash?.toString() ?? "";
-      setCancelSuccess(`Deposit cancelled! TX: ${txHash}. Refunded: ${formatUSDC(info.netAmount)} USDC`);
+      setCancelSuccess(
+        `Deposit cancelled! TX: ${txHash}. Refunded: ${formatUSDC(info.netAmount)} USDC`
+      );
       setDepositInfo(null);
       setIntentId("");
     } catch (error) {
@@ -220,7 +222,9 @@ export function RecoverDeposit() {
     if (!info) return;
 
     if (!secretExists()) {
-      setCompleteError("No secret found for this deposit. The secret was not stored during the original deposit flow. Unfortunately, this deposit cannot be completed. Wait for the deadline to pass, then cancel to recover your tokens.");
+      setCompleteError(
+        "No secret found for this deposit. The secret was not stored during the original deposit flow. Unfortunately, this deposit cannot be completed. Wait for the deadline to pass, then cancel to recover your tokens."
+      );
       return;
     }
 
@@ -285,7 +289,9 @@ export function RecoverDeposit() {
         AztecAddress.fromString(walletAddress)
       );
 
-      setCompleteSuccess(`Deposit completed! TX: ${result.txHash}. You now have ${formatUSDC(shares)} shares.`);
+      setCompleteSuccess(
+        `Deposit completed! TX: ${result.txHash}. You now have ${formatUSDC(shares)} shares.`
+      );
       setDepositInfo(null);
       setIntentId("");
     } catch (error) {
@@ -330,7 +336,9 @@ export function RecoverDeposit() {
       if (result.success) {
         setFoundIntents(result.intents);
         if (result.intents.length === 0) {
-          setScanError(`Scanned ${result.totalScanned} events but found no deposits belonging to your account.`);
+          setScanError(
+            `Scanned ${result.totalScanned} events but found no deposits belonging to your account.`
+          );
         }
       } else {
         setScanError(result.error ?? "Scan failed");
@@ -362,9 +370,7 @@ export function RecoverDeposit() {
       >
         <div>
           <h2 class="text-lg font-medium text-zinc-100">Recover Stuck Deposit</h2>
-          <p class="text-sm text-zinc-500">
-            Query and cancel failed deposits to recover tokens
-          </p>
+          <p class="text-sm text-zinc-500">Query and cancel failed deposits to recover tokens</p>
         </div>
         <ChevronIcon expanded={isExpanded()} />
       </button>
@@ -428,170 +434,174 @@ export function RecoverDeposit() {
             <div class="flex-1 border-t border-zinc-700"></div>
           </div>
 
-        <div>
-          <label class="block text-sm text-zinc-400 mb-1">Intent ID</label>
-          <div class="flex gap-2">
-            <input
-              type="text"
-              value={intentId()}
-              onInput={(e) => setIntentId(e.currentTarget.value)}
-              placeholder="0x..."
-              class="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-            />
-            <button
-              onClick={handleQuery}
-              disabled={isQuerying() || !intentId().trim()}
-              class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-100 text-sm font-medium rounded transition-colors"
-            >
-              {isQuerying() ? "Querying..." : "Query"}
-            </button>
+          <div>
+            <label class="block text-sm text-zinc-400 mb-1">Intent ID</label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                value={intentId()}
+                onInput={(e) => setIntentId(e.currentTarget.value)}
+                placeholder="0x..."
+                class="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
+              />
+              <button
+                onClick={handleQuery}
+                disabled={isQuerying() || !intentId().trim()}
+                class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-100 text-sm font-medium rounded transition-colors"
+              >
+                {isQuerying() ? "Querying..." : "Query"}
+              </button>
+            </div>
+            <p class="text-xs text-zinc-600 mt-1">
+              Find your intent ID in the browser console from when you executed the deposit
+            </p>
           </div>
-          <p class="text-xs text-zinc-600 mt-1">
-            Find your intent ID in the browser console from when you executed the deposit
-          </p>
-        </div>
 
-        {/* Query Error */}
-        <Show when={queryError()}>
-          <div class="p-3 bg-red-900/20 border border-red-800 rounded text-sm text-red-400">
-            {queryError()}
-          </div>
-        </Show>
+          {/* Query Error */}
+          <Show when={queryError()}>
+            <div class="p-3 bg-red-900/20 border border-red-800 rounded text-sm text-red-400">
+              {queryError()}
+            </div>
+          </Show>
 
-        {/* Cancel Success */}
-        <Show when={cancelSuccess()}>
-          <div class="p-3 bg-green-900/20 border border-green-800 rounded text-sm text-green-400">
-            {cancelSuccess()}
-          </div>
-        </Show>
+          {/* Cancel Success */}
+          <Show when={cancelSuccess()}>
+            <div class="p-3 bg-green-900/20 border border-green-800 rounded text-sm text-green-400">
+              {cancelSuccess()}
+            </div>
+          </Show>
 
-        {/* Deposit Info */}
-        <Show when={depositInfo()}>
-          {(info) => (
-            <div class="bg-zinc-800 rounded p-4 space-y-3">
-              <h3 class="text-sm font-medium text-zinc-200">Pending Deposit Found</h3>
+          {/* Deposit Info */}
+          <Show when={depositInfo()}>
+            {(info) => (
+              <div class="bg-zinc-800 rounded p-4 space-y-3">
+                <h3 class="text-sm font-medium text-zinc-200">Pending Deposit Found</h3>
 
-              <div class="grid grid-cols-2 gap-2 text-sm">
-                <div class="text-zinc-500">Status:</div>
-                <div class="text-zinc-200">
-                  <span
-                    class={
-                      info().status === L2PositionStatus.PendingDeposit
-                        ? "text-yellow-400"
-                        : info().status === L2PositionStatus.Active
-                          ? "text-green-400"
-                          : "text-zinc-400"
-                    }
-                  >
-                    {getStatusLabel(info().status)}
-                  </span>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                  <div class="text-zinc-500">Status:</div>
+                  <div class="text-zinc-200">
+                    <span
+                      class={
+                        info().status === L2PositionStatus.PendingDeposit
+                          ? "text-yellow-400"
+                          : info().status === L2PositionStatus.Active
+                            ? "text-green-400"
+                            : "text-zinc-400"
+                      }
+                    >
+                      {getStatusLabel(info().status)}
+                    </span>
+                  </div>
+
+                  <div class="text-zinc-500">Net Amount:</div>
+                  <div class="text-zinc-200">{formatUSDC(info().netAmount)} USDC</div>
+
+                  <div class="text-zinc-500">Deadline:</div>
+                  <div class="text-zinc-200">{formatTimestamp(info().deadline)}</div>
+
+                  <div class="text-zinc-500">Already Consumed:</div>
+                  <div class={info().isConsumed ? "text-red-400" : "text-green-400"}>
+                    {info().isConsumed ? "Yes" : "No"}
+                  </div>
+
+                  <div class="text-zinc-500">Can Cancel:</div>
+                  <div class={info().canCancel ? "text-green-400" : "text-yellow-400"}>
+                    {info().canCancel ? "Yes" : "No"}
+                  </div>
+
+                  <Show when={!info().canCancel && info().timeUntilCancellable > 0}>
+                    <div class="text-zinc-500">Time Until Cancellable:</div>
+                    <div class="text-yellow-400">
+                      {Math.ceil(info().timeUntilCancellable / 60)} minutes
+                    </div>
+                  </Show>
+
+                  <div class="text-zinc-500">Secret Stored:</div>
+                  <div class={secretExists() ? "text-green-400" : "text-red-400"}>
+                    {secretExists() ? "Yes" : "No"}
+                  </div>
                 </div>
 
-                <div class="text-zinc-500">Net Amount:</div>
-                <div class="text-zinc-200">{formatUSDC(info().netAmount)} USDC</div>
-
-                <div class="text-zinc-500">Deadline:</div>
-                <div class="text-zinc-200">{formatTimestamp(info().deadline)}</div>
-
-                <div class="text-zinc-500">Already Consumed:</div>
-                <div class={info().isConsumed ? "text-red-400" : "text-green-400"}>
-                  {info().isConsumed ? "Yes" : "No"}
-                </div>
-
-                <div class="text-zinc-500">Can Cancel:</div>
-                <div class={info().canCancel ? "text-green-400" : "text-yellow-400"}>
-                  {info().canCancel ? "Yes" : "No"}
-                </div>
-
-                <Show when={!info().canCancel && info().timeUntilCancellable > 0}>
-                  <div class="text-zinc-500">Time Until Cancellable:</div>
-                  <div class="text-yellow-400">
-                    {Math.ceil(info().timeUntilCancellable / 60)} minutes
+                {/* Complete Deposit Button - show if not consumed and secret exists */}
+                <Show when={!info().isConsumed && secretExists()}>
+                  <div class="pt-2">
+                    <button
+                      onClick={handleCompleteDeposit}
+                      disabled={isCompleting()}
+                      class="w-full px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
+                    >
+                      {isCompleting() ? "Completing..." : "Complete Deposit (Create Position)"}
+                    </button>
                   </div>
                 </Show>
 
-                <div class="text-zinc-500">Secret Stored:</div>
-                <div class={secretExists() ? "text-green-400" : "text-red-400"}>
-                  {secretExists() ? "Yes" : "No"}
-                </div>
+                {/* Complete Success */}
+                <Show when={completeSuccess()}>
+                  <div class="p-2 bg-green-900/20 border border-green-800 rounded text-xs text-green-400">
+                    {completeSuccess()}
+                  </div>
+                </Show>
+
+                {/* Complete Error */}
+                <Show when={completeError()}>
+                  <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
+                    {completeError()}
+                  </div>
+                </Show>
+
+                {/* No Secret Warning */}
+                <Show when={!info().isConsumed && !secretExists()}>
+                  <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
+                    <strong>Secret not found.</strong> The secret was not stored during the original
+                    deposit. This deposit cannot be completed normally. Your options:
+                    <ul class="list-disc ml-4 mt-1">
+                      <li>Wait for the deadline to pass, then cancel to recover your tokens</li>
+                      <li>
+                        If you saved the secret elsewhere, you can complete manually via console
+                      </li>
+                    </ul>
+                  </div>
+                </Show>
+
+                {/* Cancel Button */}
+                <Show when={info().canCancel}>
+                  <div class="pt-2">
+                    <button
+                      onClick={handleCancel}
+                      disabled={isCancelling()}
+                      class="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
+                    >
+                      {isCancelling()
+                        ? "Cancelling..."
+                        : `Cancel & Recover ${formatUSDC(info().netAmount)} USDC`}
+                    </button>
+                  </div>
+                </Show>
+
+                {/* Not Cancellable Warning */}
+                <Show when={!info().canCancel && !info().isConsumed}>
+                  <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
+                    You cannot cancel yet. Wait until the deadline passes.
+                  </div>
+                </Show>
+
+                {/* Already Consumed Warning */}
+                <Show when={info().isConsumed}>
+                  <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
+                    This intent has already been consumed. If you have a position, refresh from L2.
+                    If not, the deposit may have failed on L1.
+                  </div>
+                </Show>
+
+                {/* Cancel Error */}
+                <Show when={cancelError()}>
+                  <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
+                    {cancelError()}
+                  </div>
+                </Show>
               </div>
-
-              {/* Complete Deposit Button - show if not consumed and secret exists */}
-              <Show when={!info().isConsumed && secretExists()}>
-                <div class="pt-2">
-                  <button
-                    onClick={handleCompleteDeposit}
-                    disabled={isCompleting()}
-                    class="w-full px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
-                  >
-                    {isCompleting() ? "Completing..." : "Complete Deposit (Create Position)"}
-                  </button>
-                </div>
-              </Show>
-
-              {/* Complete Success */}
-              <Show when={completeSuccess()}>
-                <div class="p-2 bg-green-900/20 border border-green-800 rounded text-xs text-green-400">
-                  {completeSuccess()}
-                </div>
-              </Show>
-
-              {/* Complete Error */}
-              <Show when={completeError()}>
-                <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
-                  {completeError()}
-                </div>
-              </Show>
-
-              {/* No Secret Warning */}
-              <Show when={!info().isConsumed && !secretExists()}>
-                <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
-                  <strong>Secret not found.</strong> The secret was not stored during the original deposit.
-                  This deposit cannot be completed normally. Your options:
-                  <ul class="list-disc ml-4 mt-1">
-                    <li>Wait for the deadline to pass, then cancel to recover your tokens</li>
-                    <li>If you saved the secret elsewhere, you can complete manually via console</li>
-                  </ul>
-                </div>
-              </Show>
-
-              {/* Cancel Button */}
-              <Show when={info().canCancel}>
-                <div class="pt-2">
-                  <button
-                    onClick={handleCancel}
-                    disabled={isCancelling()}
-                    class="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
-                  >
-                    {isCancelling() ? "Cancelling..." : `Cancel & Recover ${formatUSDC(info().netAmount)} USDC`}
-                  </button>
-                </div>
-              </Show>
-
-              {/* Not Cancellable Warning */}
-              <Show when={!info().canCancel && !info().isConsumed}>
-                <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
-                  You cannot cancel yet. Wait until the deadline passes.
-                </div>
-              </Show>
-
-              {/* Already Consumed Warning */}
-              <Show when={info().isConsumed}>
-                <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
-                  This intent has already been consumed. If you have a position, refresh from L2.
-                  If not, the deposit may have failed on L1.
-                </div>
-              </Show>
-
-              {/* Cancel Error */}
-              <Show when={cancelError()}>
-                <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
-                  {cancelError()}
-                </div>
-              </Show>
-            </div>
-          )}
-        </Show>
+            )}
+          </Show>
         </div>
       </Show>
     </section>

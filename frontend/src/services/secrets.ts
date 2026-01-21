@@ -369,7 +369,10 @@ export async function getAllSecrets(l2AddressHex: string): Promise<SecretEntry[]
   const storedSecrets = loadStoredSecrets();
   console.log("[getAllSecrets] Raw stored secrets count:", storedSecrets.length);
   if (storedSecrets.length > 0) {
-    console.log("[getAllSecrets] Stored intentIds:", storedSecrets.map(s => s.intentId));
+    console.log(
+      "[getAllSecrets] Stored intentIds:",
+      storedSecrets.map((s) => s.intentId)
+    );
   }
   const decryptedSecrets: SecretEntry[] = [];
 
@@ -387,7 +390,12 @@ export async function getAllSecrets(l2AddressHex: string): Promise<SecretEntry[]
         });
       } catch (err) {
         // Skip secrets that fail to decrypt (wrong key / different user)
-        console.log("[getAllSecrets] Failed to decrypt secret for intentId:", stored.intentId, "error:", err);
+        console.log(
+          "[getAllSecrets] Failed to decrypt secret for intentId:",
+          stored.intentId,
+          "error:",
+          err
+        );
         continue;
       }
     }

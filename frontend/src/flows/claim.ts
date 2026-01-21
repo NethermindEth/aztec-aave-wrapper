@@ -562,7 +562,9 @@ export async function checkBridgeMessageReady(
     }
 
     if (currentBlock < messageBlockNumber) {
-      console.log("[checkBridgeMessageReady] Message not ready yet (currentBlock < messageBlockNumber)");
+      console.log(
+        "[checkBridgeMessageReady] Message not ready yet (currentBlock < messageBlockNumber)"
+      );
       return {
         ready: false,
         currentBlock,
@@ -585,13 +587,19 @@ export async function checkBridgeMessageReady(
         if (witness && witness.length >= 2) {
           // witness[0] is the actual leaf index in the L2 message tree!
           const leafIndex = witness[0];
-          console.log("[checkBridgeMessageReady] Witness found - leafIndex:", leafIndex?.toString?.() ?? leafIndex);
+          console.log(
+            "[checkBridgeMessageReady] Witness found - leafIndex:",
+            leafIndex?.toString?.() ?? leafIndex
+          );
           console.log("[checkBridgeMessageReady] Message is READY with leafIndex:", leafIndex);
           return {
             ready: true,
             currentBlock,
             // Store the actual leaf index for use in claim
-            leafIndex: typeof leafIndex === 'bigint' ? leafIndex : BigInt(leafIndex?.toString?.() ?? leafIndex),
+            leafIndex:
+              typeof leafIndex === "bigint"
+                ? leafIndex
+                : BigInt(leafIndex?.toString?.() ?? leafIndex),
           };
         }
         // Witness not ready yet
@@ -604,7 +612,9 @@ export async function checkBridgeMessageReady(
       } catch (e) {
         // Witness query failed, but block check passed
         console.log("[checkBridgeMessageReady] Witness query failed:", e);
-        console.log("[checkBridgeMessageReady] Returning ready=true based on block check (no leafIndex)");
+        console.log(
+          "[checkBridgeMessageReady] Returning ready=true based on block check (no leafIndex)"
+        );
         return { ready: true, currentBlock };
       }
     }
@@ -612,7 +622,9 @@ export async function checkBridgeMessageReady(
     // No witness API, trust block number
     return { ready: true, currentBlock };
   } catch (error) {
-    logError(`Failed to check message readiness: ${error instanceof Error ? error.message : "Unknown"}`);
+    logError(
+      `Failed to check message readiness: ${error instanceof Error ? error.message : "Unknown"}`
+    );
     return { ready: false };
   }
 }
@@ -655,13 +667,31 @@ export async function executeBridgeClaim(
   console.log("[executeBridgeClaim]   pendingBridge.messageKey:", pendingBridge.messageKey);
   console.log("[executeBridgeClaim]   pendingBridge.amount:", pendingBridge.amount);
   console.log("[executeBridgeClaim]   pendingBridge.status:", pendingBridge.status);
-  console.log("[executeBridgeClaim]   pendingBridge.leafIndex:", pendingBridge.leafIndex?.toString());
-  console.log("[executeBridgeClaim]   pendingBridge.secret (first 30):", pendingBridge.secret?.slice(0, 30) + "...");
-  console.log("[executeBridgeClaim]   pendingBridge.l1BlockNumber:", pendingBridge.l1BlockNumber?.toString());
-  console.log("[executeBridgeClaim]   bridgedTokenContract address:", bridgedTokenContract?.address?.toString());
-  console.log("[executeBridgeClaim] IMPORTANT: If the bridge deposit was made BEFORE l2Bridge was set on TokenPortal,");
-  console.log("[executeBridgeClaim]   the L1 message was sent to the wrong recipient (0x000...000) and cannot be claimed.");
-  console.log("[executeBridgeClaim]   Check .deployments.local.json for deployedAt timestamp vs when bridge was done.");
+  console.log(
+    "[executeBridgeClaim]   pendingBridge.leafIndex:",
+    pendingBridge.leafIndex?.toString()
+  );
+  console.log(
+    "[executeBridgeClaim]   pendingBridge.secret (first 30):",
+    pendingBridge.secret?.slice(0, 30) + "..."
+  );
+  console.log(
+    "[executeBridgeClaim]   pendingBridge.l1BlockNumber:",
+    pendingBridge.l1BlockNumber?.toString()
+  );
+  console.log(
+    "[executeBridgeClaim]   bridgedTokenContract address:",
+    bridgedTokenContract?.address?.toString()
+  );
+  console.log(
+    "[executeBridgeClaim] IMPORTANT: If the bridge deposit was made BEFORE l2Bridge was set on TokenPortal,"
+  );
+  console.log(
+    "[executeBridgeClaim]   the L1 message was sent to the wrong recipient (0x000...000) and cannot be claimed."
+  );
+  console.log(
+    "[executeBridgeClaim]   Check .deployments.local.json for deployedAt timestamp vs when bridge was done."
+  );
 
   logSection("Bridge Claim", `Claiming bridge ${pendingBridge.messageKey.slice(0, 12)}...`);
 

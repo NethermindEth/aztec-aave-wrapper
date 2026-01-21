@@ -31,14 +31,21 @@ import {
 
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
-import { computeWithdrawIntentHash, type WithdrawIntent } from "../services/l1/intent.js";
+import type { WithdrawIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
 import { executeWithdraw, type MerkleProof } from "../services/l1/portal.js";
 
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
-import { computeOwnerHash, generateSecretPair } from "../services/l2/crypto.js";
+import { bigIntToBytes32, computeOwnerHash, generateSecretPair, sha256ToField } from "../services/l2/crypto.js";
 import type { AaveWrapperContract } from "../services/l2/deploy.js";
+import {
+  computeLeafId,
+  getOutboxVersion,
+  hasMessageBeenConsumed,
+  waitForL2ToL1MessageProof,
+  type L2ToL1MessageProofResult,
+} from "../services/l2/messageProof.js";
 import {
   executeFinalizeWithdraw,
   executeRequestWithdraw,
@@ -81,8 +88,10 @@ export { NetworkError, TimeoutError, UserRejectedError } from "../types/errors.j
 export interface WithdrawL1Addresses {
   /** AztecAavePortalL1 contract */
   portal: Address;
-  /** Mock Aztec outbox for message verification */
-  mockAztecOutbox: Address;
+  /** Real Aztec outbox for L2→L1 message verification */
+  aztecOutbox: Address;
+  /** Mock USDC token address (L1 asset address) */
+  mockUsdc: Address;
 }
 
 /**
@@ -180,62 +189,8 @@ export class PartialWithdrawError extends Error {
 }
 
 // =============================================================================
-// Mock Outbox ABI (for devnet)
-// =============================================================================
-
-const MOCK_OUTBOX_ABI = [
-  {
-    type: "function",
-    name: "setMessageValid",
-    inputs: [
-      { name: "messageHash", type: "bytes32" },
-      { name: "l2BlockNumber", type: "uint256" },
-      { name: "valid", type: "bool" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-] as const;
-
-// =============================================================================
 // Helper Functions
 // =============================================================================
-
-/**
- * Wait for L2→L1 message to be processable on L1.
- * In devnet with mocks, we poll until the node confirms availability.
- *
- * @param node - Aztec node client
- * @param maxAttempts - Maximum polling attempts
- * @param intervalMs - Polling interval in milliseconds
- * @returns True if message is available
- */
-async function waitForL2ToL1Message(
-  node: AztecNodeClient,
-  maxAttempts = 30,
-  intervalMs = 2000
-): Promise<boolean> {
-  for (let i = 0; i < maxAttempts; i++) {
-    logSection("L2→L1", `Waiting for message availability... (${i + 1}/${maxAttempts})`);
-
-    // In devnet with mocks, message is available after block advancement
-    // For real L2→L1 messaging, we would query the Aztec outbox
-    try {
-      const nodeInfo = await node.getNodeInfo();
-      if (nodeInfo) {
-        logSuccess("L2→L1 message availability confirmed");
-        return true;
-      }
-    } catch {
-      // Node may be temporarily unavailable
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
-  }
-
-  logError("Timeout waiting for L2→L1 message");
-  return false;
-}
 
 /**
  * Wait for L1→L2 message to be available on L2.
@@ -348,29 +303,6 @@ async function waitForL1ToL2Message(
 }
 
 /**
- * Set a message as valid in the mock outbox (devnet only).
- */
-async function setMockOutboxMessageValid(
-  publicClient: PublicClient<Transport, Chain>,
-  walletClient: WalletClient<Transport, Chain, Account>,
-  mockOutboxAddress: Address,
-  messageHash: Hex,
-  l2BlockNumber: bigint
-): Promise<void> {
-  logSection("L1", "Setting message as valid in mock outbox");
-
-  const txHash = await walletClient.writeContract({
-    address: mockOutboxAddress,
-    abi: MOCK_OUTBOX_ABI,
-    functionName: "setMessageValid",
-    args: [messageHash, l2BlockNumber, true],
-  });
-
-  await publicClient.waitForTransactionReceipt({ hash: txHash });
-  logSuccess("Mock outbox message set as valid");
-}
-
-/**
  * Validate that withdrawal amount matches position (full withdrawal only).
  *
  * @param requestedAmount - Amount being requested for withdrawal
@@ -477,6 +409,40 @@ export async function executeWithdrawFlow(
 
     logSection("Privacy", `Owner hash computed: ${ownerHash.toString(16).slice(0, 16)}...`);
 
+    // Check if withdrawal was already executed on L1 (from a previous attempt)
+    // This prevents wasting the L2 request_withdraw call if L1 already processed it
+    const depositIntentIdHex = pad(toHex(position.depositIntentId.toBigInt()), { size: 32 }) as Hex;
+    const alreadyConsumed = await publicClient.readContract({
+      address: l1Addresses.portal,
+      abi: [
+        {
+          name: "consumedWithdrawIntents",
+          type: "function",
+          stateMutability: "view",
+          inputs: [{ type: "bytes32" }],
+          outputs: [{ type: "bool" }],
+        },
+      ] as const,
+      functionName: "consumedWithdrawIntents",
+      args: [depositIntentIdHex],
+    });
+    console.log("Withdraw intent already consumed on L1?", alreadyConsumed);
+
+    if (alreadyConsumed) {
+      logInfo("Withdrawal already executed on L1, cleaning up stale position...");
+      // The L1 withdrawal succeeded in a previous session but L2 state is stale
+      // Remove the position from local state
+      removePosition(position.depositIntentId.toString());
+      logSuccess("Position removed - withdrawal was already completed on L1");
+      return {
+        intentId: position.depositIntentId.toString(),
+        secret,
+        secretHash,
+        amount: withdrawAmount,
+        txHashes: {},
+      };
+    }
+
     // =========================================================================
     // Step 2: Call request_withdraw on L2
     // =========================================================================
@@ -496,8 +462,9 @@ export async function executeWithdrawFlow(
     console.log(`  secretHash: ${secretHash.toString()}`);
 
     let intentId: Fr;
+    let l2RequestBlockNumber: number | undefined;
     try {
-      const withdrawResult = await executeRequestWithdraw(
+      const withdrawResultLocal = await executeRequestWithdraw(
         contract,
         {
           nonce: position.depositIntentId,
@@ -508,16 +475,17 @@ export async function executeWithdrawFlow(
         wallet.address
       );
 
-      intentId = withdrawResult.intentId;
-      txHashes.l2Request = withdrawResult.txHash;
+      intentId = withdrawResultLocal.intentId;
+      txHashes.l2Request = withdrawResultLocal.txHash;
+      l2RequestBlockNumber = withdrawResultLocal.blockNumber;
 
       const intentIdStr = intentId.toString();
       setOperationIntentId(intentIdStr);
       console.log("=== REQUEST_WITHDRAW SUCCESS ===");
       console.log(`  intentId: ${intentIdStr}`);
-      console.log(`  txHash: ${withdrawResult.txHash}`);
+      console.log(`  txHash: ${withdrawResultLocal.txHash}`);
       logSuccess(`Withdraw Intent ID: ${intentIdStr.slice(0, 16)}...`);
-      logSuccess(`L2 tx: ${withdrawResult.txHash}`);
+      logSuccess(`L2 tx: ${withdrawResultLocal.txHash}`);
     } catch (error) {
       // Check if this is a position-not-found error
       const errorMsg = error instanceof Error ? error.message : String(error);
@@ -534,21 +502,17 @@ export async function executeWithdrawFlow(
     const intentIdStr = intentId.toString();
 
     // =========================================================================
-    // Step 3: Wait for L2→L1 message to be available
+    // Step 3: Prepare L1 execution (message proof will be fetched in step 4)
     // =========================================================================
     currentStep = 3;
-    logStep(3, totalSteps, "Wait for L2→L1 message");
+    logStep(3, totalSteps, "Prepare L1 execution");
     setOperationStep(3);
 
-    console.log("=== STEP 3: WAIT FOR L2→L1 MESSAGE ===");
-    const messageAvailable = await waitForL2ToL1Message(node);
-    console.log(`  messageAvailable: ${messageAvailable}`);
-    if (!messageAvailable) {
-      throw new Error("Timeout waiting for L2→L1 message availability");
-    }
+    console.log("=== STEP 3: PREPARE L1 EXECUTION ===");
+    logInfo("L2 request complete, preparing L1 execution...");
 
     // =========================================================================
-    // Step 4: Execute withdraw on L1
+    // Step 4: Execute withdraw on L1 (wait for proof + execute)
     // =========================================================================
     currentStep = 4;
     logStep(4, totalSteps, "Execute withdraw on L1");
@@ -574,30 +538,99 @@ export async function executeWithdrawFlow(
     console.log(`  amount: ${withdrawAmount}`);
     console.log(`  deadline: ${deadline}`);
     console.log(`  secretHash: ${secretHashHex}`);
+    console.log(`  Outbox address: ${l1Addresses.aztecOutbox}`);
 
-    // Compute message hash and set it as valid in mock outbox
-    const messageHash = computeWithdrawIntentHash(withdrawIntent);
-    console.log(`  messageHash: ${messageHash}`);
+    // Get L2 block number from the request_withdraw transaction
+    const l2TxBlockNumber = l2RequestBlockNumber ?? (await node.getBlockNumber());
+    logInfo(`L2 transaction in block ${l2TxBlockNumber}, waiting for message proof...`);
 
-    const l2BlockNumber = 100n; // Mock L2 block number for devnet
-    await setMockOutboxMessageValid(
-      publicClient,
-      relayerWallet,
-      l1Addresses.mockAztecOutbox,
-      messageHash,
-      l2BlockNumber
+    // Compute the L2→L1 message Fr for proof lookup
+    const { Fr } = await import("@aztec/aztec.js/fields");
+    const { computeL2ToL1MessageHash } = await import("@aztec/stdlib/hash");
+    const { EthAddress } = await import("@aztec/foundation/eth-address");
+    const { AztecAddress } = await import("@aztec/stdlib/aztec-address");
+
+    // Get rollup version from outbox
+    const rollupVersion = await getOutboxVersion(publicClient, l1Addresses.aztecOutbox);
+    const chainId = BigInt(await publicClient.getChainId());
+    logInfo(`Rollup version: ${rollupVersion}, Chain ID: ${chainId}`);
+
+    // Compute the content hash matching the L2 contract's compute_withdraw_message_content:
+    // sha256_to_field([intent.intent_id, intent.owner_hash, intent.amount, intent.deadline, asset_id, secret_hash])
+    // Each field is encoded as 32 bytes (big-endian), total 192 bytes
+    // asset_id is the L1 token address as Field (matches receipt.asset_id stored during deposit)
+    const assetId = BigInt(l1Addresses.mockUsdc);
+    const contentFields = [
+      BigInt(intentIdStr),      // intent.intent_id
+      ownerHash,                // intent.owner_hash
+      withdrawAmount,           // intent.amount
+      deadline,                 // intent.deadline
+      assetId,                  // receipt.asset_id (L1 token address as Field)
+      secretHash.toBigInt(),    // secret_hash
+    ];
+
+    console.log("Content fields for L2→L1 message:", contentFields.map(f => `0x${f.toString(16)}`));
+
+    // Pack fields into bytes (each field as 32-byte big-endian) and compute sha256
+    const packedData = new Uint8Array(contentFields.length * 32);
+    for (let i = 0; i < contentFields.length; i++) {
+      packedData.set(bigIntToBytes32(contentFields[i]), i * 32);
+    }
+    console.log("=== SHA256 DEBUG ===");
+    console.log("Packed data length:", packedData.length, "bytes (expected 192)");
+    console.log("Packed data (hex):", "0x" + Array.from(packedData).map(b => b.toString(16).padStart(2, "0")).join(""));
+
+    // Compute sha256 and convert to field (truncate to 31 bytes/248 bits to fit in BN254 field)
+    const contentHash = await sha256ToField(packedData);
+    console.log("SHA256 to Field (truncated to 31 bytes):", contentHash.toString());
+
+    // Compute the full L2→L1 message hash
+    const l2ToL1Message = await computeL2ToL1MessageHash({
+      l2Sender: AztecAddress.fromString(contract.address.toString()),
+      l1Recipient: EthAddress.fromString(l1Addresses.portal),
+      content: contentHash,
+      rollupVersion: new Fr(rollupVersion),
+      chainId: new Fr(chainId),
+    });
+
+    console.log("L2→L1 message hash:", l2ToL1Message.toString());
+
+    // Wait for the L2→L1 message proof from the real outbox
+    logSection("L2→L1", "Waiting for message to be proven on L1...");
+    const proofResult: L2ToL1MessageProofResult = await waitForL2ToL1MessageProof(
+      node,
+      l2ToL1Message,
+      l2TxBlockNumber,
+      180_000, // 3 minutes max wait
+      5000 // 5 second polling
     );
+
+    if (!proofResult.success) {
+      throw new Error(`Failed to get L2→L1 message proof: ${proofResult.error}`);
+    }
+
+    logSuccess(`Message proof obtained: block=${proofResult.l2BlockNumber}, leafIndex=${proofResult.leafIndex}`);
+
+    // Check if message was already consumed
+    const leafId = computeLeafId(proofResult.leafIndex!, proofResult.siblingPath!.length);
+    const alreadyConsumedInOutbox = await hasMessageBeenConsumed(
+      publicClient,
+      l1Addresses.aztecOutbox,
+      proofResult.l2BlockNumber!,
+      leafId
+    );
+
+    if (alreadyConsumedInOutbox) {
+      logInfo("Message already consumed in outbox, skipping L1 execution");
+    }
 
     // Execute withdraw via relayer
     logSection("Privacy", "Relayer executing L1 withdraw (not user)");
 
-    // Generate unique leaf index from intent ID to avoid collision in mock outbox
-    const leafIndex = BigInt(withdrawIntent.intentId.slice(0, 18)) % 1000000n;
-
     const proof: MerkleProof = {
-      l2BlockNumber,
-      leafIndex,
-      siblingPath: [],
+      l2BlockNumber: proofResult.l2BlockNumber!,
+      leafIndex: proofResult.leafIndex!,
+      siblingPath: proofResult.siblingPath! as `0x${string}`[],
     };
 
     console.log("Executing withdraw on L1...");

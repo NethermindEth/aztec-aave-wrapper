@@ -51,6 +51,10 @@ interface DeploymentAddresses {
     mockLendingPool: string;
     tokenPortal: string;
     portal: string;
+    /** Real Aztec outbox address from sandbox for L2→L1 message consumption */
+    aztecOutbox: string;
+    /** Real Aztec inbox address from sandbox for L1→L2 messages */
+    aztecInbox: string;
   };
   l2: {
     bridgedToken: string;
@@ -440,9 +444,12 @@ async function main() {
       mockLendingPool: "",
       tokenPortal: "",
       portal: "",
+      aztecOutbox: "",
+      aztecInbox: "",
     },
     l2: {
       aaveWrapper: "",
+      bridgedToken: "",
     },
     config: {
       l1ChainId: L1_CHAIN_ID,
@@ -495,21 +502,14 @@ async function main() {
   // Fetch real addresses from Aztec sandbox
   const sandboxAddresses = fetchSandboxL1Addresses();
 
-  // Deploy MockAztecOutbox for L2→L1 messages
-  // We use a mock because the real outbox requires waiting for L2 block proving,
-  // which adds latency to the dev workflow. The mock allows instant message validation.
-  console.log("\n  Deploying mock contracts for L2→L1 messaging...");
-  const aztecOutbox = deployWithForge(
-    "test/Portal.t.sol:MockAztecOutbox",
-    [],
-    L1_RPC,
-    "eth"
-  );
-
-  // Use the REAL Aztec inbox for L1→L2 messages
-  // This ensures messages sent from L1 are actually consumable on L2
-  console.log("\n  Using real Aztec inbox for L1→L2 messaging...");
+  // Use the REAL Aztec outbox and inbox from the sandbox
+  // This enables proper L2→L1 message proving and consumption
+  console.log("\n  Using real Aztec messaging contracts...");
+  const aztecOutbox = sandboxAddresses.outboxAddress;
   const aztecInbox = sandboxAddresses.inboxAddress;
+  addresses.l1.aztecOutbox = aztecOutbox;
+  addresses.l1.aztecInbox = aztecInbox;
+  console.log(`    ✓ Outbox: ${aztecOutbox}`);
   console.log(`    ✓ Inbox: ${aztecInbox}`);
 
   // Deploy TokenPortal for L1<->L2 token bridging

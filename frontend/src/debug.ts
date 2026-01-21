@@ -95,9 +95,7 @@ export async function queryIntent(intentId: string): Promise<PendingDepositInfo 
 
       if (info.canCancel) {
         console.log("\nYou can cancel this deposit to get your tokens back!");
-        console.log(
-          `Run: await aztecDebug.cancelDeposit("${intentId}", ${info.netAmount}n)`
-        );
+        console.log(`Run: await aztecDebug.cancelDeposit("${intentId}", ${info.netAmount}n)`);
       }
     } else {
       console.log("Intent not found or has no data in public storage.");
@@ -231,7 +229,11 @@ export async function completeDeposit(intentId: string, secretHex: string): Prom
 
     // Get shares from L1 portal
     const { getIntentShares } = await import("./services/l1/portal");
-    const shares = await getIntentShares(publicClient, portalAddress as `0x${string}`, intentId as `0x${string}`);
+    const shares = await getIntentShares(
+      publicClient,
+      portalAddress as `0x${string}`,
+      intentId as `0x${string}`
+    );
 
     if (shares === 0n) {
       console.error("No shares recorded on L1 for this intent");

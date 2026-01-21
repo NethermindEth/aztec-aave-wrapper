@@ -274,7 +274,9 @@ export function usePositions(): UsePositionsResult {
       // Convert L2 positions to PositionDisplay format
       const l2Positions: PositionDisplay[] = result.positions.map((p) => {
         const mappedStatus = mapL2StatusToIntentStatus(p.status);
-        console.log(`[refreshFromL2] Position ${p.intentId.slice(0,16)}... L2 status: ${p.status} -> IntentStatus: ${mappedStatus}`);
+        console.log(
+          `[refreshFromL2] Position ${p.intentId.slice(0, 16)}... L2 status: ${p.status} -> IntentStatus: ${mappedStatus}`
+        );
         return {
           intentId: p.intentId,
           assetId: p.assetId,

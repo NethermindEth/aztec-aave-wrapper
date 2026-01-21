@@ -41,7 +41,13 @@ import { loadContractWithAzguard } from "./services/l2/contract";
 import { loadBridgedTokenWithAzguard, type BridgedTokenContract } from "./services/l2/bridgedToken";
 import { connectAztecWallet } from "./services/wallet/aztec";
 import { connectEthereumWallet } from "./services/wallet/ethereum";
-import { setATokenBalance, setEthBalance, setL2UsdcBalance, setUsdcBalance, setWallet } from "./store";
+import {
+  setATokenBalance,
+  setEthBalance,
+  setL2UsdcBalance,
+  setUsdcBalance,
+  setWallet,
+} from "./store";
 import { useApp } from "./store/hooks";
 import { formatUSDC, toBigIntString } from "./types/state.js";
 
@@ -315,9 +321,9 @@ const App: Component = () => {
         relayerWallet,
       };
 
-      // Get mockAztecOutbox from portal contract
+      // Get aztecOutbox from portal contract
       addLog("Fetching portal configuration...");
-      const mockAztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
+      const aztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
 
       // Build L1 addresses
       // Note: In MVP, mockAToken uses the same address as mockUsdc since mock lending
@@ -328,7 +334,7 @@ const App: Component = () => {
         mockUsdc,
         mockAToken: mockUsdc,
         mockLendingPool,
-        mockAztecOutbox,
+        aztecOutbox,
       };
 
       // Initialize L2 context
@@ -352,7 +358,6 @@ const App: Component = () => {
       // Execute the deposit flow
       addLog("Executing deposit flow...");
       const result = await executeDepositFlow(l1Clients, l1Addresses, l2Context, {
-        assetId: 1n, // USDC asset ID
         amount,
         originalDecimals: 6,
         deadlineOffset: deadline,
@@ -421,6 +426,7 @@ const App: Component = () => {
 
     // Extract validated contract addresses for type narrowing
     const portal = state.contracts.portal;
+    const mockUsdc = state.contracts.mockUsdc;
     const l2WrapperAddress = state.contracts.l2Wrapper;
 
     setIsWithdrawing(true);
@@ -449,16 +455,17 @@ const App: Component = () => {
         relayerWallet,
       };
 
-      // Get mockAztecOutbox from portal contract
+      // Get aztecOutbox from portal contract
       console.log("[handleWithdraw] Fetching portal configuration...");
       addLog("Fetching portal configuration...");
-      const mockAztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
-      console.log("[handleWithdraw] mockAztecOutbox:", mockAztecOutbox);
+      const aztecOutbox = await getAztecOutbox(l1Clients.publicClient, portal);
+      console.log("[handleWithdraw] aztecOutbox:", aztecOutbox);
 
-      // Build L1 addresses for withdraw (simpler than deposit)
+      // Build L1 addresses for withdraw
       const l1Addresses: WithdrawL1Addresses = {
         portal,
-        mockAztecOutbox,
+        aztecOutbox,
+        mockUsdc,
       };
 
       // Initialize L2 context

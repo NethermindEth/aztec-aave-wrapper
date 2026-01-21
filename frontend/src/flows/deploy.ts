@@ -76,14 +76,20 @@ export async function fetchAztecL1Addresses(node?: AztecNodeClient): Promise<Azt
       "Failed to fetch Aztec inbox address from node. " + "Make sure the Aztec sandbox is running."
     );
   }
+  if (!l1Addresses?.outboxAddress) {
+    throw new Error(
+      "Failed to fetch Aztec outbox address from node. " + "Make sure the Aztec sandbox is running."
+    );
+  }
 
   const aztecL1Addresses: AztecL1Addresses = {
     inboxAddress: l1Addresses.inboxAddress.toString() as Address,
-    outboxAddress: l1Addresses.outboxAddress?.toString() as Address | undefined,
+    outboxAddress: l1Addresses.outboxAddress.toString() as Address,
     registryAddress: l1Addresses.registryAddress?.toString() as Address | undefined,
   };
 
   logSuccess(`Real Aztec inbox: ${aztecL1Addresses.inboxAddress}`);
+  logSuccess(`Real Aztec outbox: ${aztecL1Addresses.outboxAddress}`);
 
   return aztecL1Addresses;
 }
@@ -336,6 +342,7 @@ export async function deployAllContracts(
     logInfo(`L1 MockAToken: ${l1Addresses.mockAToken}`);
     logInfo(`L1 MockLendingPool: ${l1Addresses.mockLendingPool}`);
     logInfo(`L1 Aztec Inbox (real): ${l1Addresses.aztecInbox}`);
+    logInfo(`L1 Aztec Outbox (real): ${l1Addresses.aztecOutbox}`);
 
     logSuccess("Deployment complete!");
 

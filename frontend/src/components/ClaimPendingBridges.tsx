@@ -127,7 +127,9 @@ export function ClaimPendingBridges(props: ClaimPendingBridgesProps) {
           <Show when={!props.isLoading && !hasBridges()}>
             <div class="text-center text-muted-foreground py-4">
               <p>No pending bridges found.</p>
-              <p class="text-xs mt-1">Click "Scan L1" to check for bridged tokens that need claiming.</p>
+              <p class="text-xs mt-1">
+                Click "Scan L1" to check for bridged tokens that need claiming.
+              </p>
             </div>
           </Show>
 
@@ -167,13 +169,15 @@ export function ClaimPendingBridges(props: ClaimPendingBridgesProps) {
                       <Button
                         size="sm"
                         onClick={() => handleClaim(bridge)}
-                        disabled={props.claimingKey === bridge.messageKey || bridge.status !== "ready"}
+                        disabled={
+                          props.claimingKey === bridge.messageKey || bridge.status !== "ready"
+                        }
                       >
                         {props.claimingKey === bridge.messageKey
                           ? "Claiming..."
                           : bridge.status === "ready"
-                          ? "Claim"
-                          : "Not Ready"}
+                            ? "Claim"
+                            : "Not Ready"}
                       </Button>
                     </div>
                   </div>

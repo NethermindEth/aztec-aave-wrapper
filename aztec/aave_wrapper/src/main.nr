@@ -65,18 +65,59 @@ pub fn compute_intent_id(
 /// * `Field` - The message content hash
 pub fn compute_deposit_message_content(intent: DepositIntent, secret_hash: Field) -> Field {
     // Hash intent fields plus secret_hash for the L2 to L1 message
-    // The secret_hash binds the confirmation to whoever knows the secret (the user)
-    // The owner_hash preserves privacy while allowing L1 verification
-    poseidon2_hash([
-        intent.intent_id,
-        intent.owner_hash,
-        intent.asset,
-        intent.amount as Field,
-        intent.original_decimals as Field,
-        intent.deadline as Field,
-        intent.salt,
-        secret_hash,
-    ])
+    // Uses sha256_to_field to match Solidity's Hash.sha256ToField(abi.encodePacked(...))
+    // Each field is encoded as 32 bytes (big-endian), total 256 bytes
+    let mut data: [u8; 256] = [0; 256];
+
+    // Pack intent_id (bytes 0-31)
+    let intent_id_bytes: [u8; 32] = intent.intent_id.to_be_bytes();
+    for i in 0..32 {
+        data[i] = intent_id_bytes[i];
+    }
+
+    // Pack owner_hash (bytes 32-63)
+    let owner_hash_bytes: [u8; 32] = intent.owner_hash.to_be_bytes();
+    for i in 0..32 {
+        data[32 + i] = owner_hash_bytes[i];
+    }
+
+    // Pack asset (bytes 64-95) - address as bytes32
+    let asset_bytes: [u8; 32] = intent.asset.to_be_bytes();
+    for i in 0..32 {
+        data[64 + i] = asset_bytes[i];
+    }
+
+    // Pack amount (bytes 96-127) - uint128 as bytes32
+    let amount_bytes: [u8; 32] = (intent.amount as Field).to_be_bytes();
+    for i in 0..32 {
+        data[96 + i] = amount_bytes[i];
+    }
+
+    // Pack original_decimals (bytes 128-159) - uint8 as bytes32
+    let decimals_bytes: [u8; 32] = (intent.original_decimals as Field).to_be_bytes();
+    for i in 0..32 {
+        data[128 + i] = decimals_bytes[i];
+    }
+
+    // Pack deadline (bytes 160-191) - uint64 as bytes32
+    let deadline_bytes: [u8; 32] = (intent.deadline as Field).to_be_bytes();
+    for i in 0..32 {
+        data[160 + i] = deadline_bytes[i];
+    }
+
+    // Pack salt (bytes 192-223)
+    let salt_bytes: [u8; 32] = intent.salt.to_be_bytes();
+    for i in 0..32 {
+        data[192 + i] = salt_bytes[i];
+    }
+
+    // Pack secret_hash (bytes 224-255)
+    let secret_hash_bytes: [u8; 32] = secret_hash.to_be_bytes();
+    for i in 0..32 {
+        data[224 + i] = secret_hash_bytes[i];
+    }
+
+    sha256_to_field(data)
 }
 
 /// Computes the message content hash for L1 to L2 deposit confirmation messages.
@@ -198,15 +239,47 @@ pub fn compute_withdraw_message_content(
     secret_hash: Field,
 ) -> Field {
     // Hash intent fields plus secret_hash for the L2 to L1 message
-    // The owner_hash preserves privacy while allowing L1 verification
-    poseidon2_hash([
-        intent.intent_id,
-        intent.owner_hash,
-        intent.amount as Field,
-        intent.deadline as Field,
-        asset_id,
-        secret_hash,
-    ])
+    // Uses sha256_to_field to match Solidity's Hash.sha256ToField(abi.encodePacked(...))
+    // Each field is encoded as 32 bytes (big-endian), total 192 bytes
+    let mut data: [u8; 192] = [0; 192];
+
+    // Pack intent_id (bytes 0-31)
+    let intent_id_bytes: [u8; 32] = intent.intent_id.to_be_bytes();
+    for i in 0..32 {
+        data[i] = intent_id_bytes[i];
+    }
+
+    // Pack owner_hash (bytes 32-63)
+    let owner_hash_bytes: [u8; 32] = intent.owner_hash.to_be_bytes();
+    for i in 0..32 {
+        data[32 + i] = owner_hash_bytes[i];
+    }
+
+    // Pack amount (bytes 64-95) - uint128 as bytes32
+    let amount_bytes: [u8; 32] = (intent.amount as Field).to_be_bytes();
+    for i in 0..32 {
+        data[64 + i] = amount_bytes[i];
+    }
+
+    // Pack deadline (bytes 96-127) - uint64 as bytes32
+    let deadline_bytes: [u8; 32] = (intent.deadline as Field).to_be_bytes();
+    for i in 0..32 {
+        data[96 + i] = deadline_bytes[i];
+    }
+
+    // Pack asset_id (bytes 128-159) - address as bytes32
+    let asset_bytes: [u8; 32] = asset_id.to_be_bytes();
+    for i in 0..32 {
+        data[128 + i] = asset_bytes[i];
+    }
+
+    // Pack secret_hash (bytes 160-191)
+    let secret_hash_bytes: [u8; 32] = secret_hash.to_be_bytes();
+    for i in 0..32 {
+        data[160 + i] = secret_hash_bytes[i];
+    }
+
+    sha256_to_field(data)
 }
 
 #[aztec]

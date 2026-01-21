@@ -208,14 +208,22 @@ export async function claimPrivate(
   console.log("[claimPrivate DEBUG]   secret (hex):", "0x" + params.secret?.toString(16));
   console.log("[claimPrivate DEBUG]   messageLeafIndex:", params.messageLeafIndex?.toString());
   console.log("[claimPrivate DEBUG]   from:", from?.toString());
-  console.log("[claimPrivate DEBUG]   contract address (BridgedToken):", contract?.address?.toString());
+  console.log(
+    "[claimPrivate DEBUG]   contract address (BridgedToken):",
+    contract?.address?.toString()
+  );
 
   // Verify secret hash computation using the same function as bridge.ts
   try {
     const { computeSecretHashFromValue } = await import("./crypto.js");
     const computedHash = await computeSecretHashFromValue(params.secret);
-    console.log("[claimPrivate DEBUG] Computed secretHash from poseidon2Hash([secret]):", computedHash.toString());
-    console.log("[claimPrivate DEBUG] Expected: Should match what was sent to L1 in DepositToAztecPrivate event");
+    console.log(
+      "[claimPrivate DEBUG] Computed secretHash from poseidon2Hash([secret]):",
+      computedHash.toString()
+    );
+    console.log(
+      "[claimPrivate DEBUG] Expected: Should match what was sent to L1 in DepositToAztecPrivate event"
+    );
   } catch (e) {
     console.log("[claimPrivate DEBUG] Could not compute secretHash for verification:", e);
   }
@@ -227,7 +235,9 @@ export async function claimPrivate(
     if (typeof methods.portal_address === "function") {
       const portalAddress = await methods.portal_address().simulate();
       console.log("[claimPrivate DEBUG] BridgedToken.portal_address():", portalAddress?.toString());
-      console.log("[claimPrivate DEBUG] IMPORTANT: This must match the L1 TokenPortal address that sent the deposit!");
+      console.log(
+        "[claimPrivate DEBUG] IMPORTANT: This must match the L1 TokenPortal address that sent the deposit!"
+      );
     } else {
       console.log("[claimPrivate DEBUG] portal_address() method not found on contract");
     }
@@ -248,8 +258,8 @@ export async function claimPrivate(
 
     // Compute the exact bytes that L1 and L2 would use
     // L1: abi.encodePacked(uint256 amount, bytes32 secretHash) = 64 bytes
-    const amountHex = params.amount.toString(16).padStart(64, '0');
-    const secretHashHex = secretHash.toString().slice(2).padStart(64, '0'); // remove 0x prefix
+    const amountHex = params.amount.toString(16).padStart(64, "0");
+    const secretHashHex = secretHash.toString().slice(2).padStart(64, "0"); // remove 0x prefix
     const combinedHex = amountHex + secretHashHex;
     console.log("[claimPrivate DEBUG]   amount as 32 bytes (hex):", "0x" + amountHex);
     console.log("[claimPrivate DEBUG]   secretHash as 32 bytes (hex):", "0x" + secretHashHex);
@@ -260,9 +270,11 @@ export async function claimPrivate(
     for (let i = 0; i < 64; i++) {
       combinedBytes[i] = parseInt(combinedHex.slice(i * 2, i * 2 + 2), 16);
     }
-    const hashBuffer = await crypto.subtle.digest('SHA-256', combinedBytes);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", combinedBytes);
     const hashArray = new Uint8Array(hashBuffer);
-    const sha256Hex = Array.from(hashArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    const sha256Hex = Array.from(hashArray)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
     console.log("[claimPrivate DEBUG]   sha256(combined):", "0x" + sha256Hex);
 
     // sha256ToField truncates to 31 bytes and prepends 0x00

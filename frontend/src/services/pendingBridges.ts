@@ -89,21 +89,23 @@ export async function scanPendingBridges(
   console.log("[scanPendingBridges] l2WalletAddress:", l2WalletAddress);
 
   // 1. Get all L1 deposit events
-  const events = await getDepositToAztecPrivateEvents(
-    publicClient,
-    tokenPortalAddress,
-    fromBlock
-  );
+  const events = await getDepositToAztecPrivateEvents(publicClient, tokenPortalAddress, fromBlock);
   console.log("[scanPendingBridges] Found L1 events:", events.length);
   if (events.length > 0) {
-    console.log("[scanPendingBridges] Event messageKeys:", events.map(e => e.messageKey));
+    console.log(
+      "[scanPendingBridges] Event messageKeys:",
+      events.map((e) => e.messageKey)
+    );
   }
 
   // 2. Get all stored secrets and build a lookup by intentId (messageKey)
   const secrets = await getAllSecrets(l2WalletAddress);
   console.log("[scanPendingBridges] Found stored secrets:", secrets.length);
   if (secrets.length > 0) {
-    console.log("[scanPendingBridges] Secret intentIds:", secrets.map(s => s.intentId));
+    console.log(
+      "[scanPendingBridges] Secret intentIds:",
+      secrets.map((s) => s.intentId)
+    );
   }
 
   const secretsByMessageKey = new Map<string, string>();
@@ -199,7 +201,12 @@ async function checkMessageReadiness(
     const currentBlock = await node.getBlockNumber();
     const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
 
-    console.log("[checkMessageReadiness] currentBlock:", currentBlock, "messageBlockNumber:", messageBlockNumber);
+    console.log(
+      "[checkMessageReadiness] currentBlock:",
+      currentBlock,
+      "messageBlockNumber:",
+      messageBlockNumber
+    );
 
     if (messageBlockNumber === undefined || currentBlock < messageBlockNumber) {
       console.log("[checkMessageReadiness] Message not ready (block check failed)");
@@ -210,24 +217,41 @@ async function checkMessageReadiness(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nodeAny = node as any;
 
-    console.log("[checkMessageReadiness] Has getL1ToL2MessageMembershipWitness:", typeof nodeAny.getL1ToL2MessageMembershipWitness === "function");
+    console.log(
+      "[checkMessageReadiness] Has getL1ToL2MessageMembershipWitness:",
+      typeof nodeAny.getL1ToL2MessageMembershipWitness === "function"
+    );
 
     if (typeof nodeAny.getL1ToL2MessageMembershipWitness === "function") {
       try {
         console.log("[checkMessageReadiness] Calling getL1ToL2MessageMembershipWitness...");
-        const witness = await nodeAny.getL1ToL2MessageMembershipWitness(currentBlock, messageLeafFr);
+        const witness = await nodeAny.getL1ToL2MessageMembershipWitness(
+          currentBlock,
+          messageLeafFr
+        );
         console.log("[checkMessageReadiness] witness:", witness);
         console.log("[checkMessageReadiness] witness type:", typeof witness);
         console.log("[checkMessageReadiness] witness length:", witness?.length);
         if (witness && witness.length >= 2) {
           const leafIndex = witness[0];
-          console.log("[checkMessageReadiness] leafIndex from witness:", leafIndex, "type:", typeof leafIndex);
+          console.log(
+            "[checkMessageReadiness] leafIndex from witness:",
+            leafIndex,
+            "type:",
+            typeof leafIndex
+          );
           return {
             ready: true,
-            leafIndex: typeof leafIndex === "bigint" ? leafIndex : BigInt(leafIndex?.toString?.() ?? leafIndex),
+            leafIndex:
+              typeof leafIndex === "bigint"
+                ? leafIndex
+                : BigInt(leafIndex?.toString?.() ?? leafIndex),
           };
         }
-        console.log("[checkMessageReadiness] Witness too short or null, witness.length:", witness?.length);
+        console.log(
+          "[checkMessageReadiness] Witness too short or null, witness.length:",
+          witness?.length
+        );
       } catch (err) {
         // Witness not available yet
         console.log("[checkMessageReadiness] getL1ToL2MessageMembershipWitness threw:", err);
@@ -236,8 +260,12 @@ async function checkMessageReadiness(
     }
 
     // Fallback if method doesn't exist - should not happen with proper node client
-    console.log("[checkMessageReadiness] FALLBACK - getL1ToL2MessageMembershipWitness not available!");
-    console.log("[checkMessageReadiness] Cannot claim without proper leaf index from membership witness");
+    console.log(
+      "[checkMessageReadiness] FALLBACK - getL1ToL2MessageMembershipWitness not available!"
+    );
+    console.log(
+      "[checkMessageReadiness] Cannot claim without proper leaf index from membership witness"
+    );
     return { ready: false };
   } catch (err) {
     console.log("[checkMessageReadiness] Outer catch - error:", err);
@@ -261,7 +289,11 @@ export function addPendingBridge(_l2WalletAddress: string, _bridge: unknown): vo
 }
 
 /** @deprecated Status is derived from chain state */
-export function updateBridgeStatus(_l2WalletAddress: string, _messageKey: string, _status: string): void {
+export function updateBridgeStatus(
+  _l2WalletAddress: string,
+  _messageKey: string,
+  _status: string
+): void {
   console.warn("updateBridgeStatus is deprecated - status is derived from chain state");
 }
 
@@ -271,12 +303,20 @@ export function markBridgeReady(_l2WalletAddress: string, _messageKey: string): 
 }
 
 /** @deprecated Status is derived from chain state */
-export function markBridgeClaimed(_l2WalletAddress: string, _messageKey: string, _l2TxHash: string): void {
+export function markBridgeClaimed(
+  _l2WalletAddress: string,
+  _messageKey: string,
+  _l2TxHash: string
+): void {
   console.warn("markBridgeClaimed is deprecated - use removeSecret after successful claim");
 }
 
 /** @deprecated Status is derived from chain state */
-export function markBridgeFailed(_l2WalletAddress: string, _messageKey: string, _error: string): void {
+export function markBridgeFailed(
+  _l2WalletAddress: string,
+  _messageKey: string,
+  _error: string
+): void {
   console.warn("markBridgeFailed is deprecated - status is derived from chain state");
 }
 
