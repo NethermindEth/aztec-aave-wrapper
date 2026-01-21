@@ -115,8 +115,8 @@ flowchart LR
     ADDR --> P
     P --> |"ONE-WAY<br/>(cannot reverse)"| OH
 
-    style ADDR fill:#90EE90
-    style OH fill:#FFB6C1
+    style ADDR fill:#2E7D32,color:#fff
+    style OH fill:#C62828,color:#fff
 ```
 
 > **Security**: Given `ownerHash`, an attacker cannot recover the original address. `poseidon2` is a ZK-friendly hash function.
@@ -183,11 +183,11 @@ flowchart TB
 
     P1 --> P2 --> P3 --> P4 --> P5
 
-    style P1L fill:#FFB6C1
-    style P2L fill:#90EE90
-    style P3L fill:#32CD32
-    style P4L fill:#90EE90
-    style P5L fill:#FFB6C1
+    style P1L fill:#C62828,color:#fff
+    style P2L fill:#2E7D32,color:#fff
+    style P3L fill:#1B5E20,color:#fff
+    style P4L fill:#2E7D32,color:#fff
+    style P5L fill:#C62828,color:#fff
 ```
 
 ### Cross-Chain Message Privacy
