@@ -175,6 +175,15 @@ export const PORTAL_ABI = [
       { name: "messageIndex", type: "uint256", indexed: false },
     ],
   },
+  {
+    type: "event",
+    name: "TokensDepositedToL2",
+    inputs: [
+      { name: "intentId", type: "bytes32", indexed: true },
+      { name: "messageKey", type: "bytes32", indexed: false },
+      { name: "messageIndex", type: "uint256", indexed: false },
+    ],
+  },
 ] as const;
 
 // =============================================================================
@@ -199,6 +208,10 @@ export interface ExecuteDepositResult {
 export interface ExecuteWithdrawResult {
   txHash: Hex;
   success: boolean;
+  /** Actual amount withdrawn from Aave (may differ from requested due to interest) */
+  withdrawnAmount: bigint;
+  /** Message key for claiming tokens on L2 (from TokensDepositedToL2 event) */
+  messageKey: Hex;
 }
 
 /**
@@ -387,11 +400,59 @@ export async function executeWithdraw(
     args: [intentTuple, secretHash, proof.l2BlockNumber, proof.leafIndex, proof.siblingPath],
   });
 
-  await publicClient.waitForTransactionReceipt({ hash: txHash });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-  logSuccess(`Withdraw executed (tx: ${txHash.slice(0, 10)}...)`);
+  // Parse events from the transaction receipt
+  let withdrawnAmount = intent.amount; // Default to requested amount
+  let messageKey: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-  return { txHash, success: true };
+  // Event topic signatures (keccak256 of event signature)
+  // WithdrawExecuted(bytes32 indexed,address indexed,uint256) - keccak256("WithdrawExecuted(bytes32,address,uint256)")
+  const withdrawExecutedTopic = "0xf5fcca62037075195a3fc429e3478dcc6fc9e9d6b14fcd71cae6eeab97b20910";
+  // TokensDepositedToL2(bytes32 indexed,bytes32,uint256) - keccak256("TokensDepositedToL2(bytes32,bytes32,uint256)")
+  const tokensDepositedToL2Topic = "0x0227d4acbd7d255fe4ff206c94b800ab01abfc72e94c650ff7af246ee5208e0b";
+  // L2MessageSent(bytes32 indexed,bytes32,uint256) - keccak256("L2MessageSent(bytes32,bytes32,uint256)")
+  const l2MessageSentTopic = "0xda6a32d6995bf9aa269353dddbe234d0866298db111521e41d8a65ab4f6c96a7";
+
+  // Debug: log all events
+  console.log("[executeWithdraw] === PARSING ALL EVENTS ===");
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() === portalAddress.toLowerCase()) {
+      console.log(`[executeWithdraw]   Topic[0]: ${log.topics[0]}`);
+      console.log(`[executeWithdraw]   Data: ${log.data?.slice(0, 140)}...`);
+    }
+  }
+  console.log("[executeWithdraw] ========================");
+
+  for (const log of receipt.logs) {
+    // Only look at logs from the portal contract
+    if (log.address.toLowerCase() !== portalAddress.toLowerCase()) continue;
+    if (!log.topics[0] || !log.data) continue;
+
+    const eventTopic = log.topics[0].toLowerCase();
+
+    if (eventTopic === withdrawExecutedTopic.toLowerCase() && log.data.length >= 66) {
+      // WithdrawExecuted event - parse amount from data
+      withdrawnAmount = BigInt(log.data.slice(0, 66));
+      console.log("[executeWithdraw] Parsed withdrawn amount from WithdrawExecuted:", withdrawnAmount.toString());
+    } else if (eventTopic === tokensDepositedToL2Topic.toLowerCase() && log.data.length >= 130) {
+      // TokensDepositedToL2 event - parse messageKey from data (first 32 bytes)
+      messageKey = `0x${log.data.slice(2, 66)}` as Hex;
+      console.log("[executeWithdraw] Parsed messageKey from TokensDepositedToL2:", messageKey);
+    } else if (eventTopic === l2MessageSentTopic.toLowerCase() && log.data.length >= 130) {
+      // L2MessageSent event - log the messageLeaf (L1-computed content hash)
+      const messageLeaf = `0x${log.data.slice(2, 66)}` as Hex;
+      const messageIndex = BigInt(`0x${log.data.slice(66, 130)}`);
+      console.log("[executeWithdraw] === L2MessageSent (WITHDRAW CONFIRMATION) ===");
+      console.log(`[executeWithdraw]   messageLeaf (L1 computed): ${messageLeaf}`);
+      console.log(`[executeWithdraw]   messageIndex: ${messageIndex}`);
+      console.log("[executeWithdraw] ============================================");
+    }
+  }
+
+  logSuccess(`Withdraw executed (tx: ${txHash.slice(0, 10)}...), amount: ${withdrawnAmount}`);
+
+  return { txHash, success: true, withdrawnAmount, messageKey };
 }
 
 // =============================================================================

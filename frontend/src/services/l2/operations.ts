@@ -594,6 +594,33 @@ export async function executeFinalizeWithdraw(
 ): Promise<FinalizeResult> {
   logInfo("Finalizing withdrawal...");
 
+  // Debug: Log parameters and compute expected content hash
+  console.log("=== DEBUG: finalize_withdraw parameters ===");
+  console.log(`  intentId (bigint): ${params.intentId}`);
+  console.log(`  intentId (hex):    0x${params.intentId.toString(16).padStart(64, "0")}`);
+  console.log(`  assetId (bigint):  ${params.assetId}`);
+  console.log(`  assetId (hex):     0x${params.assetId.toString(16).padStart(64, "0")}`);
+  console.log(`  amount (bigint):   ${params.amount}`);
+  console.log(`  amount (hex):      0x${params.amount.toString(16).padStart(64, "0")}`);
+  console.log(`  secret:            0x${params.secret.toString(16).padStart(64, "0")}`);
+  console.log(`  messageLeafIndex:  ${params.messageLeafIndex}`);
+
+  // Compute expected content hash (must match L1 computation)
+  // L1: sha256ToField(abi.encodePacked(intentId, bytes32(asset), bytes32(amount)))
+  // Order: intentId (32) + asset (32) + amount (32) = 96 bytes
+  const intentIdBytes = params.intentId.toString(16).padStart(64, "0");
+  const assetIdBytes = params.assetId.toString(16).padStart(64, "0");
+  const amountBytes = params.amount.toString(16).padStart(64, "0");
+  const packedDataHex = `${intentIdBytes}${assetIdBytes}${amountBytes}`;
+  console.log(`  Packed data (192 hex chars): ${packedDataHex}`);
+
+  // Use the existing sha256ToField utility
+  const { sha256ToField: sha256ToFieldFn } = await import("./crypto.js");
+  const packedBuffer = Uint8Array.from(Buffer.from(packedDataHex, "hex"));
+  const expectedContentFr = await sha256ToFieldFn(packedBuffer);
+  console.log(`  Expected content:  ${expectedContentFr.toString()}`);
+  console.log(`  Expected content (hex): 0x${expectedContentFr.toBigInt().toString(16).padStart(64, "0")}`);
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;

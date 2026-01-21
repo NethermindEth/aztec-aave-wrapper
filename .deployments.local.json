@@ -8,11 +8,11 @@
     "aztecInbox": "0x0665fbb86a3aceca91df68388ec4bbe11556ddce"
   },
   "l2": {
-    "aaveWrapper": "0x1843f8fabe39acd334966387211956d07c4926ff0a9094f64b7ac799e27141c5",
-    "bridgedToken": "0x0cfbdff8ffb87ced71cdc8d95ba95162973e82b2577ce4dc007250bb6d4af65d"
+    "aaveWrapper": "0x2997ab1bb10c55e9b634737fa61d6b7730b302456231e5fa6a15c9fbe8632d1e",
+    "bridgedToken": "0x305d8650b385039c3459ed878a27ea4a73bd614f688cdbf5eb53aebe78363b4c"
   },
   "config": {
     "l1ChainId": 31337,
-    "deployedAt": "2026-01-21T00:12:20.474Z"
+    "deployedAt": "2026-01-21T03:35:24.770Z"
   }
 }

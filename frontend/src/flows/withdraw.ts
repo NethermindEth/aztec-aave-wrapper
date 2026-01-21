@@ -643,15 +643,21 @@ export async function executeWithdrawFlow(
       proof
     );
     txHashes.l1Execute = executeResult.txHash;
+    const actualWithdrawnAmount = executeResult.withdrawnAmount;
+
+    const messageKey = executeResult.messageKey;
 
     console.log("=== L1 EXECUTE WITHDRAW SUCCESS ===");
     console.log(`  txHash: ${executeResult.txHash}`);
+    console.log(`  actualWithdrawnAmount: ${actualWithdrawnAmount}`);
+    console.log(`  messageKey: ${messageKey}`);
     logSuccess(`Withdraw executed on L1 (tx: ${executeResult.txHash.slice(0, 10)}...)`);
 
-    // Store secret for later token claim
+    // Store secret for later token claim - use messageKey as the key (not intentId)
+    // because the pending bridges scanner matches secrets by messageKey
     try {
-      await storeWithdrawSecret(intentIdStr, secret.toString(), wallet.address.toString());
-      logSuccess("Withdrawal secret stored for token claim");
+      await storeWithdrawSecret(messageKey, secret.toString(), wallet.address.toString());
+      logSuccess(`Withdrawal secret stored for token claim (messageKey: ${messageKey.slice(0, 18)}...)`);
     } catch (storeError) {
       // Log but don't fail the flow - user can still try to claim if they have the secret
       logError(
@@ -671,12 +677,13 @@ export async function executeWithdrawFlow(
       await waitForL1ToL2Message(publicClient, node);
 
       console.log("Executing finalize_withdraw...");
+      console.log(`  Using actualWithdrawnAmount: ${actualWithdrawnAmount}`);
       const finalizeResult = await executeFinalizeWithdraw(
         contract,
         {
           intentId,
-          assetId: 1n, // USDC asset ID in MVP
-          amount: withdrawAmount,
+          assetId: assetId, // L1 token address as Field (must match L1 confirmation message)
+          amount: actualWithdrawnAmount, // Use actual amount from L1 (may include interest)
           secret,
           messageLeafIndex: 0n,
         },
@@ -705,7 +712,7 @@ export async function executeWithdrawFlow(
       intentId: intentIdStr,
       secret,
       secretHash,
-      amount: withdrawAmount,
+      amount: actualWithdrawnAmount, // Actual amount withdrawn from Aave (may include interest)
       txHashes,
     };
   } catch (error) {

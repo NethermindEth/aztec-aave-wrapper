@@ -30,6 +30,8 @@ E2E_DIR := e2e
 # Uses `aztec start --local-network` which manages both L1 and L2 internally
 AZTEC_PID_FILE := .aztec.pid
 AZTEC_LOG_FILE := .aztec.log
+AUTOMINE_PID_FILE := .automine.pid
+AUTOMINE_LOG_FILE := .automine.log
 
 # Network ports
 export ANVIL_L1_PORT ?= 8545
@@ -40,7 +42,7 @@ export PXE_PORT ?= 8080
 # ==============================================================================
 .PHONY: help check-tooling check-tool-docker check-tool-foundry check-tool-bun \
         check-tool-aztec check-tool-aztec devnet-up devnet-down devnet-health \
-        devnet-logs advance-blocks build build-l1 build-l2 test test-l1 test-l2 \
+        devnet-logs automine-logs advance-blocks build build-l1 build-l2 test test-l1 test-l2 \
         deploy-local e2e clean
 
 # ==============================================================================
@@ -59,7 +61,7 @@ help:
 	@grep -E '^## check' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
 	@echo ""
 	@echo "Devnet:"
-	@grep -E '^## devnet|^## advance' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
+	@grep -E '^## devnet|^## automine|^## advance' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
 	@echo ""
 	@echo "Build:"
 	@grep -E '^## build' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:/: /'
@@ -210,8 +212,13 @@ devnet-up:
 	@echo "Deploying contracts..."
 	@bun run scripts/deploy-local.ts
 	@echo ""
+	@echo "Starting automine (advances blocks every 5s)..."
+	@nohup bun run $(E2E_DIR)/scripts/automine.ts > $(AUTOMINE_LOG_FILE) 2>&1 & echo $$! > $(AUTOMINE_PID_FILE)
+	@echo "Started automine (PID: $$(cat $(AUTOMINE_PID_FILE)))"
+	@echo ""
 	@echo -e "$(GREEN)Devnet ready with contracts deployed!$(NC)"
 	@echo "Run 'make devnet-logs' to view logs."
+	@echo "Run 'make automine-logs' to view automine logs."
 	@echo ""
 
 ## devnet-down: Stop local development network
@@ -219,6 +226,13 @@ devnet-down:
 	@echo ""
 	@echo "Stopping local devnet..."
 	@echo ""
+	@# Stop automine process
+	@if [ -f $(AUTOMINE_PID_FILE) ]; then \
+		PID=$$(cat $(AUTOMINE_PID_FILE)); \
+		kill $$PID 2>/dev/null || true; \
+		rm -f $(AUTOMINE_PID_FILE); \
+		echo "Stopped automine"; \
+	fi
 	@# Stop any aztec Docker containers (aztec CLI runs Docker internally)
 	@docker ps -q --filter "name=aztec-start" | xargs -r docker stop 2>/dev/null || true
 	@docker ps -aq --filter "name=aztec-start" | xargs -r docker rm 2>/dev/null || true
@@ -247,6 +261,15 @@ devnet-logs:
 		exit 1; \
 	fi
 
+## automine-logs: View logs from automine process
+automine-logs:
+	@if [ -f $(AUTOMINE_LOG_FILE) ]; then \
+		tail -f $(AUTOMINE_LOG_FILE); \
+	else \
+		echo "No automine log file found. Is devnet running?"; \
+		exit 1; \
+	fi
+
 ## devnet-restart: Restart the local development network
 devnet-restart: devnet-down devnet-up
 
@@ -265,6 +288,7 @@ devnet-clean:
 	@echo ""
 	@$(MAKE) devnet-down
 	@rm -f $(AZTEC_LOG_FILE) $(AZTEC_PID_FILE)
+	@rm -f $(AUTOMINE_LOG_FILE) $(AUTOMINE_PID_FILE)
 	@rm -f .deployments.local.json
 	@rm -rf /tmp/aztec-world-state-*
 	@echo ""
