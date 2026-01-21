@@ -1,48 +1,52 @@
-# Spec: Privacy-Preserving Deposit Flow Redesign
+# Spec: Privacy-Preserving Deposit Flow (Implemented)
 
 ## Summary
 
-Replace the current L1-direct deposit flow with an L2-first flow that preserves user privacy. The current implementation requires users to transfer USDC directly from their L1 wallet to the portal, which links their L1 identity to Aave deposits and defeats the privacy model. The new flow requires users to first bridge USDC to L2, then request Aave deposits from their private L2 balance.
+This document describes the privacy-preserving deposit flow that has been implemented. The flow requires users to first bridge USDC to L2, then request Aave deposits from their private L2 balance. This breaks the link between the user's L1 wallet and their Aave position.
+
+## Implementation Status
+
+All core functionality has been implemented and tested.
 
 ## Decisions Made
 
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Token source for deposits | L2 bridged USDC | Breaks link between L1 wallet and Aave position |
-| Old L1-direct flow | Remove entirely | No reason to keep non-private path |
+| Old L1-direct flow | Removed entirely | No reason to keep non-private path |
 | L2 → L1 token movement | Burn on L2, claim from TokenPortal on L1 | Standard Aztec bridge pattern |
 | Request atomicity | Single L2 tx | User calls request_deposit which burns tokens + sends L2→L1 message |
 | L1 execution | Anyone can execute | Permissionless relay model |
-| Relayer compensation | Fixed fee deducted from deposit | Simple, predictable (e.g., 0.1%) |
+| Fee mechanism | 0.1% transferred to protocol treasury | Simple, predictable fee to treasury address |
 | Liveness failure handling | Anyone can execute + timeout refund | Dual mechanism for safety |
-| Timeout refund source | Mint new L2 tokens | L2 contract authorized to mint if L1 claim never happened |
-| Minimum deposit | None | User accepts potential loss on small amounts |
-| Token type required | Canonical bridged USDC | Must use TokenPortal-bridged token |
-| Bridge implementation | Aztec reference contracts | Use/adapt official token bridge tutorial |
+| Timeout refund source | Mint new L2 tokens via BridgedToken | L2 contract authorized to mint if L1 execution never happened |
+| Minimum deposit | 1 USDC (1,000,000 base units) | Ensures meaningful deposits and non-zero fees |
+| Token type required | Canonical bridged USDC | Must use TokenPortal-bridged token via BridgedToken contract |
+| Bridge implementation | Aztec reference contracts | Uses official token bridge pattern |
 
-## Requirements
+## Requirements (Completed)
 
 ### Must Have
-- [ ] Deploy TokenPortal (L1) and L2 Token contract for USDC in local sandbox
-- [ ] Modify `request_deposit` to burn L2 tokens instead of expecting L1 transfer
-- [ ] Modify `executeDeposit` to claim tokens from TokenPortal instead of expecting portal balance
-- [ ] Remove approve+transfer steps (TX #2 and TX #3) from frontend deposit flow
-- [ ] Add fee deduction logic (fixed percentage) before Aave supply
-- [ ] Implement timeout + refund mechanism for failed L1 executions
-- [ ] Update frontend to show separate "Bridge to L2" and "Deposit to Aave" flows
+- [x] Deploy TokenPortal (L1) and BridgedToken contract for USDC in local sandbox
+- [x] Modify `request_deposit` to burn L2 tokens via BridgedToken.burn_from
+- [x] Modify `executeDeposit` to claim tokens from TokenPortal via withdraw()
+- [x] Remove approve+transfer steps from frontend deposit flow
+- [x] Add fee deduction logic (0.1%) - fee transferred to treasury before burn
+- [x] Implement timeout + refund mechanism via `cancel_deposit()`
+- [x] Update frontend to show separate "Bridge to L2" and "Deposit to Aave" flows
 
 ### Must Not
-- [ ] User's L1 wallet must NOT interact with AavePortal during deposit (only during initial bridge)
-- [ ] L1 events must NOT contain any user-identifying information
-- [ ] Relayer must NOT be required (anyone can execute)
+- [x] User's L1 wallet does NOT interact with AavePortal during deposit
+- [x] L1 events contain only intentId - no user-identifying information
+- [x] Relayer is NOT required - anyone can execute
 
 ## Behavior
 
-### New Deposit Flow
+### Deposit Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    NEW PRIVACY-PRESERVING DEPOSIT FLOW                       │
+│                    PRIVACY-PRESERVING DEPOSIT FLOW                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 PREREQUISITE (Separate Flow - can be done days/weeks earlier):
@@ -52,7 +56,7 @@ User bridges USDC from L1 to L2 via TokenPortal
   ├── TX A: User approves TokenPortal for USDC (L1 - MetaMask)
   ├── TX B: User calls TokenPortal.depositToAztecPrivate() (L1 - MetaMask)
   │         └── Tokens held by TokenPortal on L1
-  └── TX C: User claims L2 USDC via L2 Token contract (L2 - Azguard)
+  └── TX C: User claims L2 USDC via BridgedToken.claim_private() (L2 - Azguard)
             └── User now has private L2 USDC balance
 
 DEPOSIT FLOW (Privacy-Preserving):
@@ -65,18 +69,24 @@ User clicks "Deposit to Aave"
 ╠═════════════════════════════════════════════════════════════════════════════╣
 ║  Signer:    User via Azguard Wallet                                         ║
 ║  Contract:  AaveWrapper (L2)                                                ║
-║  Function:  request_deposit(asset, amount, deadline, secret_hash)           ║
+║  Function:  request_deposit(asset, amount, original_decimals,               ║
+║                             deadline, secret_hash)                          ║
 ║                                                                             ║
 ║  Actions:                                                                   ║
-║  ├── Burn user's L2 USDC tokens (calls L2Token.burn)                        ║
-║  ├── Deduct fee (e.g., 0.1%) - fee stays as L2 tokens for relayer           ║
-║  ├── Create DepositIntent with net amount                                   ║
-║  ├── Store intent_owners[intentId] = caller                                 ║
-║  └── Send L2→L1 message to portal                                           ║
+║  ├── Validate amount >= MIN_DEPOSIT_AMOUNT (1,000,000 = 1 USDC)             ║
+║  ├── Calculate fee (0.1%) and net_amount                                    ║
+║  ├── Transfer fee to protocol treasury via BridgedToken.transfer_from      ║
+║  ├── Burn user's L2 USDC (net_amount) via BridgedToken.burn_from            ║
+║  ├── Compute ownerHash = poseidon2_hash(caller) for privacy                 ║
+║  ├── Compute salt = poseidon2_hash(caller, secret_hash) for uniqueness      ║
+║  ├── Compute intent_id from all parameters                                  ║
+║  ├── Send L2→L1 message with deposit intent to portal                       ║
+║  └── Store intent_owners, intent_deadlines, intent_net_amounts, status      ║
 ╚═════════════════════════════════════════════════════════════════════════════╝
          │
          │  L2 → L1 Message (async, ~2 blocks)
-         │  Contains: intentId, ownerHash, asset, netAmount, deadline, secretHash
+         │  Contains: intentId, ownerHash, asset, net_amount, original_decimals,
+         │            deadline, salt, secretHash
          ▼
 ╔═════════════════════════════════════════════════════════════════════════════╗
 ║  TX #2: EXECUTE DEPOSIT (L1 - Ethereum)                                     ║
@@ -86,27 +96,34 @@ User clicks "Deposit to Aave"
 ║  Function:  executeDeposit(intent, l2BlockNumber, leafIndex, siblingPath)   ║
 ║                                                                             ║
 ║  Actions:                                                                   ║
+║  ├── Check consumedDepositIntents[intentId] for replay protection           ║
+║  ├── Validate deadline (5 min to 24 hours from now)                         ║
 ║  ├── Consume L2→L1 message from Aztec outbox                                ║
-║  ├── Claim tokens from TokenPortal (L2 burn authorized withdrawal)          ║
-║  ├── Supply tokens to Aave V3                                               ║
-║  ├── Track intentShares[intentId] = shares                                  ║
-║  └── Send L1→L2 confirmation message                                        ║
+║  ├── Mark consumedDepositIntents[intentId] = true                           ║
+║  ├── Claim tokens from TokenPortal via withdraw()                           ║
+║  ├── Approve and supply tokens to Aave V3                                   ║
+║  ├── Track intentShares[intentId] and intentAssets[intentId]                ║
+║  └── Send L1→L2 confirmation message (intentId, asset, shares)              ║
 ╚═════════════════════════════════════════════════════════════════════════════╝
          │
          │  L1 → L2 Message (async, ~10 blocks)
+         │  Contains: intentId, asset, shares (secretHash passed separately)
          ▼
 ╔═════════════════════════════════════════════════════════════════════════════╗
 ║  TX #3: FINALIZE DEPOSIT (L2 - Aztec)                                       ║
 ╠═════════════════════════════════════════════════════════════════════════════╣
 ║  Signer:    User via Azguard Wallet                                         ║
 ║  Contract:  AaveWrapper (L2)                                                ║
-║  Function:  finalize_deposit(intentId, asset, shares, secret, leafIndex)    ║
+║  Function:  finalize_deposit(intent_id, asset_id, shares, secret,           ║
+║                              message_leaf_index)                            ║
 ║                                                                             ║
 ║  Actions:                                                                   ║
-║  ├── Consume L1→L2 message                                                  ║
-║  ├── Verify caller owns intent                                              ║
-║  ├── Create PositionReceiptNote (encrypted)                                 ║
-║  └── Clear intent_owners[intentId]                                          ║
+║  ├── Consume L1→L2 message (verifies secret)                                ║
+║  ├── Create PositionReceiptNote (encrypted, status=ACTIVE)                  ║
+║  ├── Insert note into user's private receipts set                           ║
+║  ├── Mark consumed_intents[intentId] = true                                 ║
+║  ├── Update intent_status[intentId] = CONFIRMED                             ║
+║  └── Clear intent_owners, intent_deadlines, intent_net_amounts              ║
 ╚═════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -124,15 +141,17 @@ User clicks "Deposit to Aave"
 │                                   │                                         │
 │                                   │ L1→L2 message                           │
 │                                   ▼                                         │
-│   L2: L2Token mints ──L2USDC──► User L2 Balance (private)                   │
+│   L2: BridgedToken mints ──L2USDC──► User L2 Balance (private)              │
 │                                                                             │
-│   DEPOSIT PHASE (private):                                                  │
-│   ════════════════════════                                                  │
+│   DEPOSIT PHASE (privacy-preserving):                                       │
+│   ══════════════════════════════════                                        │
 │                                                                             │
-│   L2: User L2 Balance ──burn──► AaveWrapper (records intent)                │
-│                                       │                                     │
-│                                       │ L2→L1 message (contains burn proof) │
-│                                       ▼                                     │
+│   L2: User L2 Balance ──transfer (0.1% fee)──► Protocol Treasury            │
+│            │                                                                │
+│            └──burn (net_amount)──► AaveWrapper (records intent)             │
+│                                          │                                  │
+│                                          │ L2→L1 message                    │
+│                                          ▼                                  │
 │   L1: TokenPortal ──USDC──► AavePortal ──USDC──► Aave Pool                  │
 │                    (claim)              (supply)     │                      │
 │                                                      │                      │
@@ -145,86 +164,148 @@ User clicks "Deposit to Aave"
 
 | Case | Behavior |
 |------|----------|
-| L1 execution never happens | After deadline, user can call `cancel_deposit()` on L2 to mint tokens back |
+| L1 execution never happens | After deadline, user can call `cancel_deposit()` on L2 to mint net_amount back |
 | Relayer executes but L1→L2 message fails | User can retry `finalize_deposit()` - message remains consumable |
-| User tries to cancel after L1 execution | Cancel fails - intent already consumed on L1 |
-| Deposit amount < fee | Transaction reverts (net amount would be 0 or negative) |
+| User tries to cancel after L1 execution | Cancel fails - intent already consumed on L1 (intent marked consumed on L2) |
+| Deposit amount < MIN_DEPOSIT_AMOUNT | Transaction reverts ("Amount must be at least minimum deposit amount") |
+| Net amount after fee is 0 | Transaction reverts ("Net amount after fee must be greater than zero") |
 | TokenPortal has insufficient L1 reserves | executeDeposit reverts - should not happen if bridge is consistent |
 | User double-spends L2 tokens | Impossible - tokens burned atomically in request_deposit |
+| Deadline too short (<5 min) or too long (>24h) | L1 executeDeposit reverts with InvalidDeadline |
 
-### Timeout Refund Flow
+### Timeout Refund Flow (cancel_deposit)
 
 ```
-User calls request_deposit()
+User calls request_deposit(asset, amount, decimals, deadline, secret_hash)
          │
-         ├── L2 tokens burned
+         ├── Fee (0.1%) transferred to treasury
+         ├── L2 tokens burned (net_amount)
          ├── Intent created with deadline
+         ├── intent_net_amounts[intentId] = net_amount (stored for refund)
          │
          ▼
     [Deadline passes without L1 execution]
          │
          ▼
-User calls cancel_deposit(intentId)
+User calls cancel_deposit(intentId, current_time, net_amount)
          │
-         ├── Verify deadline has passed
-         ├── Verify intent not consumed on L1 (check via L1→L2 oracle or proof)
-         ├── Mint L2 tokens back to user (minus any penalty?)
-         └── Mark intent as cancelled
+         ├── Private: Mint net_amount back to user via BridgedToken.mint_private
+         │
+         └── Public (_cancel_deposit_public):
+             ├── Verify intent status is PENDING_DEPOSIT
+             ├── Verify intent not already consumed
+             ├── Verify caller owns the intent
+             ├── Verify deadline has passed (current_time > deadline)
+             ├── Verify net_amount matches stored value
+             ├── Mark intent as consumed
+             ├── Set status to CANCELLED
+             └── Clear intent_owners, intent_deadlines, intent_net_amounts
 ```
 
-## Technical Notes
+**Note**: The fee (0.1%) is NOT refunded on cancellation - only the net_amount is returned.
 
-### L2 Token Contract Requirements
-- Must implement burn functionality callable by AaveWrapper
-- Must implement mint functionality callable by AaveWrapper (for refunds)
-- Must be the canonical bridged token from TokenPortal
-- Use Aztec reference implementation from token bridge tutorial
+## Technical Details
 
-### L1 Portal Changes
-- Remove expectation that tokens are pre-transferred to portal
-- Add call to TokenPortal to claim tokens based on L2 burn proof
-- TokenPortal must authorize AavePortal to claim burned tokens
+### Fee Configuration (L2 AaveWrapper)
+```rust
+pub mod FeeConfig {
+    pub global FEE_BASIS_POINTS: u128 = 10;           // 0.1%
+    pub global BASIS_POINTS_DENOMINATOR: u128 = 10000; // 100%
+    pub global MIN_DEPOSIT_AMOUNT: u128 = 1_000_000;   // 1 USDC (6 decimals)
+}
+```
 
-### Fee Handling
-- Fixed fee percentage (suggest 0.1% = 10 basis points)
-- Fee deducted on L2 before burn
-- Fee tokens could: stay as L2 tokens, be burned and claimable by protocol, or sent to fee recipient
-- Decision: Keep simple for MVP - fee stays as L2 tokens sent to protocol fee address
+### Deadline Constraints (L1 AztecAavePortalL1)
+```solidity
+uint256 public constant MIN_DEADLINE = 5 minutes;
+uint256 public constant MAX_DEADLINE = 24 hours;
+```
 
-### Message Content Changes
-- L2→L1 deposit message must include proof/authorization for TokenPortal claim
-- May need to include burn nonce or similar to prevent replay
+### Intent Status Values (L2 AaveWrapper)
+```rust
+pub mod IntentStatus {
+    pub global UNKNOWN: u8 = 0;
+    pub global PENDING_DEPOSIT: u8 = 1;
+    pub global CONFIRMED: u8 = 2;
+    pub global FAILED: u8 = 3;
+    pub global PENDING_WITHDRAW: u8 = 4;
+    pub global CANCELLED: u8 = 5;
+}
+```
 
-### Infrastructure to Deploy (Local Sandbox)
-1. USDC ERC20 on L1 (mock)
-2. TokenPortal for USDC on L1
-3. L2 Token contract for bridged USDC on L2
-4. Update AavePortal constructor to reference TokenPortal
+### L2 Storage Mappings
+| Mapping | Purpose |
+|---------|---------|
+| `intent_status` | Tracks intent lifecycle (UNKNOWN → PENDING_DEPOSIT → CONFIRMED/CANCELLED) |
+| `consumed_intents` | Replay protection - true after finalization or cancellation |
+| `intent_owners` | Maps intentId to L2 owner for authorization checks |
+| `intent_deadlines` | Maps intentId to deadline for cancel validation |
+| `intent_net_amounts` | Maps intentId to net amount for cancel refunds |
 
-## Open Questions
+### L1 Storage Mappings
+| Mapping | Purpose |
+|---------|---------|
+| `consumedDepositIntents` | Replay protection for deposits |
+| `consumedWithdrawIntents` | Replay protection for withdrawals (separate mapping) |
+| `intentShares` | Maps intentId to aToken shares received |
+| `intentAssets` | Maps intentId to asset address |
 
-1. **Burn proof mechanism**: How does TokenPortal verify that L2 tokens were actually burned? Need to investigate Aztec's L2→L1 message content and what proofs are available.
+### Cross-Chain Message Hashing
 
-2. **Fee recipient**: Where do fees go? Options: L2 protocol treasury address, burned, or claimable by relayers.
+**L2→L1 Deposit Message** (256 bytes):
+```
+sha256_to_field([
+    intent_id,        // 32 bytes
+    owner_hash,       // 32 bytes
+    asset,            // 32 bytes (L1 address as Field)
+    net_amount,       // 32 bytes
+    original_decimals,// 32 bytes
+    deadline,         // 32 bytes
+    salt,             // 32 bytes
+    secret_hash       // 32 bytes
+])
+```
 
-3. **Cancel verification**: How does L2 contract verify that L1 execution hasn't happened before allowing cancel? May need L1→L2 state proof or oracle.
+**L1→L2 Confirmation Message** (96 bytes):
+```
+sha256ToField(abi.encodePacked(
+    intentId,         // 32 bytes
+    asset,            // 32 bytes (address padded)
+    shares            // 32 bytes
+))
+```
 
-4. **Existing positions**: Users with existing positions (from old flow) - how to handle? Likely: old positions continue working, only new deposits use new flow.
+Note: The secretHash is passed as a separate parameter to `sendL2Message`, not included in the content hash.
 
-## Out of Scope
+## Resolved Questions
 
-- Multi-asset support (USDC only for MVP)
+1. **Burn proof mechanism**: Standard Aztec L2→L1 message consumption. The L1 portal consumes the message from the Aztec outbox, which proves the L2 transaction (including the burn) was included in a proven L2 block.
+
+2. **Fee recipient**: Fees go to `fee_treasury` address set during AaveWrapper initialization. The treasury is an L2 address that receives the 0.1% fee via BridgedToken.transfer_from.
+
+3. **Cancel verification**: Uses L2 public state:
+   - `intent_status` must be PENDING_DEPOSIT
+   - `consumed_intents` must be false
+   - `intent_owners` must match caller
+   - `current_time > intent_deadlines[intentId]`
+
+4. **Minimum deposit**: Set to 1 USDC (1,000,000 base units with 6 decimals) to ensure meaningful deposits and non-zero fees.
+
+## Out of Scope (MVP)
+
+- Multi-asset support (USDC only)
 - Dynamic fee based on gas prices
 - Relayer marketplace/competition
 - Partial withdrawals
 - L2 token swaps before deposit
 - Privacy set analysis/recommendations
 
-## Migration Path
+## Deployed Contracts
 
-1. Deploy new TokenPortal + L2 Token infrastructure
-2. Deploy updated AavePortal with TokenPortal integration
-3. Deploy updated L2 AaveWrapper with burn logic
-4. Update frontend to use new flow
-5. Old positions remain functional (withdrawal path unchanged)
-6. Deprecate old deposit documentation
+| Contract | Layer | Purpose |
+|----------|-------|---------|
+| MockUSDC | L1 | Test ERC20 token |
+| TokenPortal | L1 | L1↔L2 token bridge (holds L1 USDC) |
+| AztecAavePortalL1 | L1 | Aave integration, message consumption |
+| BridgedToken | L2 | L2 representation of bridged USDC |
+| AaveWrapper | L2 | Privacy-preserving deposit/withdraw orchestration |
