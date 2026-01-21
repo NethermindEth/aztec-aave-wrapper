@@ -61,7 +61,7 @@ User clicks "Deposit to Aave" button
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
          │
          │  L2 → L1 Message (async, ~2 blocks)
-         │  Contains: intentId, ownerHash, asset, net_amount, deadline, salt, secretHash
+         │  Contains: intentId, ownerHash, asset, net_amount, original_decimals, deadline, salt, secretHash
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  WAIT: Poll for L2→L1 message availability                                              │
@@ -89,7 +89,7 @@ User clicks "Deposit to Aave" button
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
          │
          │  L1 → L2 Message (async, ~10 blocks)
-         │  Contains: intentId, asset, shares, secretHash
+         │  Contains: intentId, asset, shares (secretHash passed separately for auth)
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
 │  WAIT: Poll for L1→L2 message availability                                              │
@@ -270,7 +270,7 @@ fn request_deposit(
 **Fee Configuration**:
 - `FEE_BASIS_POINTS`: 10 (0.1%)
 - `BASIS_POINTS_DENOMINATOR`: 10000
-- `MIN_DEPOSIT_AMOUNT`: 100 tokens
+- `MIN_DEPOSIT_AMOUNT`: 1_000_000 base units (1 USDC with 6 decimals)
 
 **State Changes**:
 | Storage | Before | After |
@@ -297,7 +297,7 @@ function executeDeposit(
     bytes32[] calldata siblingPath
 ) external whenNotPaused {
     // Step 1: Check for replay attack first (cheapest check)
-    if (consumedIntents[intent.intentId]) {
+    if (consumedDepositIntents[intent.intentId]) {
         revert IntentAlreadyConsumed(intent.intentId);
     }
 
@@ -327,7 +327,7 @@ function executeDeposit(
     IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
     // Step 6: Mark intent as consumed for replay protection
-    consumedIntents[intent.intentId] = true;
+    consumedDepositIntents[intent.intentId] = true;
 
     // Step 7: Claim tokens from TokenPortal (AavePortal is authorized withdrawer)
     // Note: Uses simplified withdraw(amount, recipient) for authorized callers
@@ -397,7 +397,7 @@ struct DepositIntent {
 **State Changes**:
 | Storage | Before | After |
 |---------|--------|-------|
-| `consumedIntents[intentId]` | `false` | `true` |
+| `consumedDepositIntents[intentId]` | `false` | `true` |
 | `intentShares[intentId]` | `0` | `shares` |
 | `intentAssets[intentId]` | `0x0` | `asset` |
 | TokenPortal USDC balance | `X` | `X - amount` |
@@ -409,7 +409,7 @@ struct DepositIntent {
 
 **Contract**: `AaveWrapper (L2)`
 
-```noir
+```rust
 #[external("private")]
 fn finalize_deposit(
     intent_id: Field,
@@ -460,7 +460,7 @@ fn finalize_deposit(
 ```
 
 **PositionReceiptNote Struct** (`aztec/src/types/position_receipt.nr`):
-```noir
+```rust
 struct PositionReceiptNote {
     owner: AztecAddress,
     nonce: Field,

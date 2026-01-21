@@ -68,7 +68,7 @@ User selects position and clicks "Withdraw"
 ║  ├── Validates deadline within bounds (5 min to 24 hours)                               ║
 ║  ├── Consumes L2→L1 message from Aztec outbox                                           ║
 ║  ├── Verifies message proof against outbox Merkle tree                                  ║
-║  ├── Marks consumedIntents[intentId] = true                                             ║
+║  ├── Marks consumedWithdrawIntents[intentId] = true                                     ║
 ║  ├── Clears intentShares[intentId] and intentAssets[intentId]                           ║
 ║  ├── Calls Aave LendingPool.withdraw(asset, shares, portal)                             ║
 ║  ├── Approves TokenPortal and deposits tokens via depositToAztecPrivate                 ║
@@ -124,7 +124,7 @@ User selects position and clicks "Withdraw"
 
 **Contract**: `AaveWrapper (L2)`
 
-```noir
+```rust
 #[external("private")]
 fn request_withdraw(
     nonce: Field,
@@ -224,7 +224,8 @@ function executeWithdraw(
     bytes32[] calldata siblingPath
 ) external whenNotPaused {
     // Step 1: Check for replay attack first
-    if (consumedIntents[intent.intentId]) {
+    // Note: Use separate mapping from deposits since the intentId is reused
+    if (consumedWithdrawIntents[intent.intentId]) {
         revert IntentAlreadyConsumed(intent.intentId);
     }
 
@@ -245,7 +246,7 @@ function executeWithdraw(
     address asset = intentAssets[intent.intentId];
 
     // Step 5: Compute message content (intent hash) for outbox consumption
-    bytes32 intentHash = IntentLib.hashWithdrawIntent(intent);
+    bytes32 intentHash = IntentLib.hashWithdrawIntent(intent, asset, secretHash);
 
     // Step 6: Construct L2ToL1Msg and consume from Aztec outbox
     DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
@@ -262,7 +263,7 @@ function executeWithdraw(
     IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
     // Step 7: Mark intent as consumed for replay protection
-    consumedIntents[intent.intentId] = true;
+    consumedWithdrawIntents[intent.intentId] = true;
 
     // Step 8: Clear shares for this intent (full withdrawal)
     delete intentShares[intent.intentId];
@@ -328,7 +329,7 @@ struct WithdrawIntent {
 **State Changes**:
 | Storage | Before | After |
 |---------|--------|-------|
-| `consumedIntents[intentId]` | `false` | `true` |
+| `consumedWithdrawIntents[intentId]` | `false` | `true` |
 | `intentShares[intentId]` | `shares` | `0` (deleted) |
 | `intentAssets[intentId]` | `asset` | `0x0` (deleted) |
 | Aave `aToken.balanceOf(portal)` | `X` | `X - shares` |
@@ -341,7 +342,7 @@ struct WithdrawIntent {
 
 **Contract**: `AaveWrapper (L2)`
 
-```noir
+```rust
 #[external("private")]
 fn finalize_withdraw(
     intent_id: Field,
@@ -506,7 +507,7 @@ The relayer handles all L1 interactions.
 ## MVP Constraints
 
 **Full Withdrawal Only**:
-```noir
+```rust
 // MVP: Enforce full withdrawal only (no partial withdrawals)
 assert(
     amount == receipt.shares,
@@ -524,7 +525,7 @@ If a withdrawal request expires (deadline passes without L1 execution), users ca
 
 **Contract**: `AaveWrapper (L2)`
 
-```noir
+```rust
 #[external("private")]
 fn claim_refund(nonce: Field, current_time: u64) {
     // Validate current_time is non-zero
