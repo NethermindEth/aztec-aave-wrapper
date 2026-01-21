@@ -13,6 +13,15 @@ This document details every transaction signed during the withdrawal flow in the
 
 ---
 
+## Frontend UI Flow (WithdrawFlow.tsx)
+
+- **Selectable positions**: Only positions with `status = Confirmed` are available to withdraw.
+- **Preconditions**: Requires both L1 and L2 wallets connected and contracts deployed (`portal` + `l2Wrapper`).
+- **Step indicator labels**: Request withdrawal on L2 → Wait for L2→L1 message → Execute withdrawal on L1 → Finalize withdrawal on L2 → Claim tokens on L2.
+- **Pending Claims**: Shown when a position is `PendingWithdraw` and a secret is stored; claim uses the stored secret and triggers `onClaim(intentId)`.
+
+---
+
 ## ASCII Transaction Flow Diagram
 
 ```
@@ -41,7 +50,7 @@ User selects position and clicks "Withdraw"
 ║  ├── Finds PositionReceiptNote by nonce (original deposit intentId)                     ║
 ║  ├── Verifies receipt status is ACTIVE and amount equals full shares (MVP)              ║
 ║  ├── Nullifies ACTIVE note, creates PENDING_WITHDRAW note                               ║
-║  ├── Computes ownerHash = Poseidon(userL2Address) for privacy                           ║
+║  ├── Computes ownerHash = poseidon2(userL2Address) for privacy                          ║
 ║  ├── Stores intent_owners[intentId] = caller for finalization routing                   ║
 ║  ├── Stores intent_deadlines[intentId] = deadline for refund validation                 ║
 ║  ├── Updates intent_status[intentId] = PENDING_WITHDRAW                                 ║
@@ -77,7 +86,7 @@ User selects position and clicks "Withdraw"
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
          │
          │  L1 → L2 Messages (async, ~10 blocks):
-         │  1. Confirmation: intentId, asset, withdrawnAmount
+         │  1. Confirmation: intentId, asset, withdrawnAmount (secretHash = 0, not secret-bound)
          │  2. TokenPortal: amount, secretHash (for private token claim)
          ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────────┐
@@ -356,7 +365,8 @@ fn finalize_withdraw(
 
     // Compute the expected message content hash
     // This must match exactly what the L1 portal sent
-    // Note: owner is NOT in the hash - authentication is via the secret
+    // Note: owner is NOT in the hash. Current L1 implementation sends secretHash = 0,
+    // so this confirmation is not secret-bound (see Current Limitations in PROTOCOL.md).
     let content = compute_withdraw_confirmation_content(intent_id, asset_id, amount);
 
     // Get the portal address for message verification
@@ -465,7 +475,7 @@ fn finalize_withdraw(
 │   L2 (Aztec - Private)              L1 (Ethereum - Public)               │
 │   ════════════════════              ═══════════════════════              │
 │                                                                          │
-│   User owns PositionReceiptNote     ownerHash: hash(user)                │
+│   User owns PositionReceiptNote     ownerHash: poseidon2(user)            │
 │   (encrypted, only user can see)          │                              │
 │         │                                 │ Never reveals                │
 │         │                                 │ actual address               │
@@ -476,7 +486,7 @@ fn finalize_withdraw(
 │         │                          - Deposits to Token Portal            │
 │         │                                 │                              │
 │         ▼                                 │ secretHash binds             │
-│   finalize_withdraw()                     │ tokens to user               │
+│   finalize_withdraw()                     │ token claim only             │
 │   - Consumes L1→L2 message               ▼                              │
 │   - Nullifies PENDING note         Tokens deposited privately            │
 │   - Position fully closed          (user claims with secret)             │
@@ -485,10 +495,26 @@ fn finalize_withdraw(
 ```
 
 **Key Privacy Features**:
-1. `ownerHash = poseidon2_hash([userL2Address])` - L1 never sees actual L2 address
+1. `ownerHash = poseidon2_hash([userL2Address])` - L1 never sees actual L2 address, but ownerHash is linkable across intents
 2. Relayer signs TX #2 - User's wallet address not linked to L1 execution
-3. Token Portal uses `secretHash` - Only user who knows secret can claim tokens
+3. Token Portal uses `secretHash` - Only user who knows secret can claim tokens (confirmation is not secret-bound yet)
 4. `PositionReceiptNote` is encrypted - Position data private to owner
+
+---
+
+## Current Limitations (Implementation)
+
+- **Withdraw confirmation not secret-bound**: L1 sends the L1→L2 confirmation with `secretHash = 0`, so finalization is not authenticated by the user’s secret.
+- **Owner hash is stable**: `ownerHash = poseidon2(owner)` is deterministic and linkable across intents.
+- **Finalize step depends on L1→L2 messaging**: In devnet or without an archiver, `finalize_withdraw` may fail and must be retried later.
+
+---
+
+## Frontend Implementation Notes
+
+- `frontend/src/flows/withdraw.ts` uses `secretHash` in `executeWithdraw` and stores the `messageKey` for the TokenPortal claim flow.
+- The frontend currently attempts `finalize_withdraw` opportunistically and uses a placeholder `messageLeafIndex` when real L1→L2 messaging is unavailable.
+- The asset ID for L2→L1 message hashing is taken from `l1Addresses.mockUsdc` in the current flow.
 
 ---
 

@@ -13,6 +13,16 @@ This document details every transaction signed during the deposit flow in the Az
 
 ---
 
+## Frontend UI Flow (DepositFlow.tsx)
+
+- **Inputs**: Amount (USDC) with max button, deadline selector (30m–24h).
+- **Preconditions**: Requires both L1 + L2 wallets connected and contracts deployed (`portal` + `l2Wrapper`).
+- **Fee preview**: Shows deposit amount, protocol fee, and net amount to Aave.
+- **Step indicator labels**: Generate secret → Request deposit on L2 → Wait for L2→L1 message → Execute deposit on L1 → Wait for L1→L2 message → Finalize deposit on L2.
+- **Validation**: Enforces minimum deposit and deadline bounds before submitting.
+
+---
+
 ## ASCII Transaction Flow Diagram
 
 ```
@@ -56,7 +66,7 @@ User clicks "Deposit to Aave" button
 ║  ├── Stores intent_owners[intentId] = caller (L2 public state)                          ║
 ║  ├── Stores intent_deadlines[intentId] = deadline                                       ║
 ║  ├── Stores intent_net_amounts[intentId] = net_amount (for refunds)                     ║
-║  ├── Computes ownerHash = Poseidon(userL2Address) for privacy                           ║
+║  ├── Computes ownerHash = poseidon2(userL2Address) for privacy                          ║
 ║  └── Sends L2→L1 message to Aztec outbox                                                ║
 ╚═════════════════════════════════════════════════════════════════════════════════════════╝
          │
@@ -107,7 +117,7 @@ User clicks "Deposit to Aave" button
 ║                                                                                         ║
 ║  State Changes:                                                                         ║
 ║  ├── Consumes L1→L2 message from Aztec inbox                                            ║
-║  ├── Verifies caller owns the intent via intent_owners mapping                          ║
+║  ├── Verifies L1→L2 message using secret and message leaf index                         ║
 ║  ├── Creates PositionReceiptNote (encrypted private note)                               ║
 ║  │   └── Contains: owner, intentId, asset, shares                                       ║
 ║  ├── Note stored in user's private state (PXE)                                          ║
@@ -171,18 +181,17 @@ IERC20(usdc).approve(tokenPortalAddress, amount)
 **TX B: Deposit to Aztec (L1)**
 ```solidity
 TokenPortal.depositToAztecPrivate(
-    secretHashForL2MessageConsumption,
     amount,
-    secretHashForRedeemingMintedNotes
+    secretHashForL2MessageConsumption
 )
 ```
 
 **TX C: Claim L2 Tokens (L2)**
 ```noir
 BridgedToken.claim_private(
-    secret_for_L1_to_L2_message_consumption,
     amount,
-    secret_for_redeeming_minted_notes
+    secret_for_L1_to_L2_message_consumption,
+    message_leaf_index
 )
 ```
 
@@ -206,7 +215,7 @@ fn request_deposit(
     // Get caller address for intent binding (kept private)
     let caller = self.msg_sender().unwrap();
 
-    // Validate amount meets minimum (100 tokens)
+    // Validate amount meets minimum (1 USDC = 1_000_000 base units)
     assert(
         amount >= FeeConfig::MIN_DEPOSIT_AMOUNT,
         "Amount must be at least minimum deposit amount",
@@ -493,7 +502,7 @@ struct PositionReceiptNote {
 │   L2 (Aztec - Private)              L1 (Ethereum - Public)               │
 │   ════════════════════              ═══════════════════════              │
 │                                                                          │
-│   User Address: 0xABC...            ownerHash: hash(0xABC...)            │
+│   User Address: 0xABC...            ownerHash: poseidon2(0xABC...)        │
 │         │                                     │                          │
 │         │                                     │ Never reveals            │
 │         ▼                                     │ actual address           │
@@ -514,11 +523,11 @@ struct PositionReceiptNote {
 
 **Key Privacy Features**:
 1. **L2 Token Burn**: User's L2 tokens are burned privately - no L1 transfer from user wallet
-2. `ownerHash = poseidon2_hash([userL2Address])` - L1 never sees actual L2 address
+2. `ownerHash = poseidon2_hash([userL2Address])` - L1 never sees actual L2 address, but ownerHash is linkable across intents
 3. **Anyone-can-execute**: TX #2 can be executed by anyone - user's L1 wallet not linked to portal
 4. **TokenPortal claim**: Tokens come from TokenPortal, not from user's L1 wallet
 5. `PositionReceiptNote` is encrypted - Only owner can read position data
-6. Public events emit only `intentId` - No user-identifying information
+6. Public events emit only `intentId` - intent owner mapping is still public for pending intents
 
 ---
 
@@ -539,7 +548,7 @@ struct PositionReceiptNote {
 If any transaction fails, the flow stops at that step:
 - **Prerequisite fails**: No state changed on L2, user can retry bridge
 - **TX #1 fails**: No tokens burned, no intent created - user can retry
-- **TX #2 fails**: Intent queued in portal retry queue, retryable by anyone later
+- **TX #2 fails**: Intent remains pending; any relayer can retry executeDeposit later
 - **TX #2 deadline expires**: User can call `cancel_deposit()` to reclaim tokens on L2
 - **TX #3 fails**: Shares on L1, message exists - can retry finalization
 
