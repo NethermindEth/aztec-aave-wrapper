@@ -396,7 +396,6 @@ export async function getAllSecrets(l2AddressHex: string): Promise<SecretEntry[]
           "error:",
           err
         );
-        continue;
       }
     }
   } catch (err) {

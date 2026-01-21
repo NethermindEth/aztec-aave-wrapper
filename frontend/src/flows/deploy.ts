@@ -18,14 +18,14 @@ import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClien
 
 // L1 Services
 import {
-  deployL1Contracts,
   type AztecL1Addresses,
+  deployL1Contracts,
   type L1Addresses,
   type L1DeploymentArtifacts,
 } from "../services/l1/deploy.js";
 
 // L2 Services
-import { createL2NodeClient, type AztecNodeClient } from "../services/l2/client.js";
+import { type AztecNodeClient, createL2NodeClient } from "../services/l2/client.js";
 import { type AaveWrapperContract, deployL2Contract } from "../services/l2/deploy.js";
 import type { AztecAddress, TestWallet } from "../services/l2/wallet.js";
 

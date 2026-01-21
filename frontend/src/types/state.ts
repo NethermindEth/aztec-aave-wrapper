@@ -6,8 +6,8 @@
  */
 
 import type { Address, AztecAddress, IntentStatus } from "@aztec-aave-wrapper/shared";
-import type { OperationStatus, OperationType } from "./operations.js";
 import type { ContractConfig } from "../services/contractConfig.js";
+import type { OperationStatus, OperationType } from "./operations.js";
 
 // =============================================================================
 // Bigint Serialization Utilities

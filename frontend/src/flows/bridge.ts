@@ -19,16 +19,16 @@ import { type Address, type Hex, pad, toHex } from "viem";
 
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
-import { approve, allowance, balanceOf } from "../services/l1/tokens.js";
 import {
-  depositToAztecPrivate,
   type DepositToAztecPrivateResult,
+  depositToAztecPrivate,
 } from "../services/l1/tokenPortal.js";
+import { allowance, approve, balanceOf } from "../services/l1/tokens.js";
 
 // L2 Services
-import { generateSecretPair, type Fr } from "../services/l2/crypto.js";
+import { type Fr, generateSecretPair } from "../services/l2/crypto.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
-
+import { storeSecret } from "../services/secrets.js";
 // Store
 import {
   clearOperation,
@@ -47,7 +47,6 @@ import {
   UserRejectedError,
 } from "../types/errors.js";
 import { formatUSDC } from "../types/state.js";
-import { storeSecret } from "../services/secrets.js";
 
 // Re-export shared error types for consumers importing from this module
 export { NetworkError, TimeoutError, UserRejectedError } from "../types/errors.js";

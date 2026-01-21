@@ -14,9 +14,9 @@
  * - MAX_DEADLINE: 24 hours
  */
 
-import type { Address, PublicClient, Transport, Chain } from "viem";
+import type { Address, Chain, PublicClient, Transport } from "viem";
+import { DEADLINE_CONSTRAINTS, FEE_CONFIG } from "../config/constants.js";
 import { logError, logInfo, logSuccess } from "../store/logger.js";
-import { FEE_CONFIG, DEADLINE_CONSTRAINTS } from "../config/constants.js";
 
 // =============================================================================
 // Types
@@ -60,7 +60,7 @@ export interface ContractConfig {
 // L2 AaveWrapper ABI (minimal for fee config)
 // =============================================================================
 
-const AAVE_WRAPPER_CONFIG_ABI = [
+const _AAVE_WRAPPER_CONFIG_ABI = [
   {
     type: "function",
     name: "get_fee_basis_points",

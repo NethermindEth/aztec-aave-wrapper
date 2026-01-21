@@ -10,15 +10,14 @@
  */
 
 import { createL1PublicClient } from "./services/l1/client";
-import { createL2NodeClient } from "./services/l2/client";
 import { loadContractWithAzguard } from "./services/l2/contract";
+import { getSponsoredFeePaymentMethod } from "./services/l2/operations";
 import {
   L2PositionStatus,
   type PendingDepositInfo,
   queryPendingDeposit,
 } from "./services/l2/positions";
 import { connectAztecWallet } from "./services/wallet/aztec";
-import { getSponsoredFeePaymentMethod } from "./services/l2/operations";
 import { formatUSDC } from "./types/state";
 
 /**

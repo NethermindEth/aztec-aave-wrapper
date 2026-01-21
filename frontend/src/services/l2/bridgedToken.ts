@@ -11,8 +11,8 @@
  */
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
-import { getSponsoredFeePaymentMethod } from "./operations.js";
 import type { AzguardWallet } from "../wallet/aztec.js";
+import { getSponsoredFeePaymentMethod } from "./operations.js";
 import type { AztecAddress } from "./wallet.js";
 
 // =============================================================================
@@ -205,7 +205,7 @@ export async function claimPrivate(
   console.log("[claimPrivate DEBUG] Parameters:");
   console.log("[claimPrivate DEBUG]   amount:", params.amount?.toString());
   console.log("[claimPrivate DEBUG]   secret (type):", typeof params.secret);
-  console.log("[claimPrivate DEBUG]   secret (hex):", "0x" + params.secret?.toString(16));
+  console.log("[claimPrivate DEBUG]   secret (hex):", `0x${params.secret?.toString(16)}`);
   console.log("[claimPrivate DEBUG]   messageLeafIndex:", params.messageLeafIndex?.toString());
   console.log("[claimPrivate DEBUG]   from:", from?.toString());
   console.log(
@@ -261,9 +261,9 @@ export async function claimPrivate(
     const amountHex = params.amount.toString(16).padStart(64, "0");
     const secretHashHex = secretHash.toString().slice(2).padStart(64, "0"); // remove 0x prefix
     const combinedHex = amountHex + secretHashHex;
-    console.log("[claimPrivate DEBUG]   amount as 32 bytes (hex):", "0x" + amountHex);
-    console.log("[claimPrivate DEBUG]   secretHash as 32 bytes (hex):", "0x" + secretHashHex);
-    console.log("[claimPrivate DEBUG]   combined 64 bytes (hex):", "0x" + combinedHex);
+    console.log("[claimPrivate DEBUG]   amount as 32 bytes (hex):", `0x${amountHex}`);
+    console.log("[claimPrivate DEBUG]   secretHash as 32 bytes (hex):", `0x${secretHashHex}`);
+    console.log("[claimPrivate DEBUG]   combined 64 bytes (hex):", `0x${combinedHex}`);
 
     // Compute sha256 of the combined bytes
     const combinedBytes = new Uint8Array(64);
@@ -275,11 +275,11 @@ export async function claimPrivate(
     const sha256Hex = Array.from(hashArray)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
-    console.log("[claimPrivate DEBUG]   sha256(combined):", "0x" + sha256Hex);
+    console.log("[claimPrivate DEBUG]   sha256(combined):", `0x${sha256Hex}`);
 
     // sha256ToField truncates to 31 bytes and prepends 0x00
-    const sha256ToFieldHex = "00" + sha256Hex.slice(0, 62);
-    console.log("[claimPrivate DEBUG]   sha256ToField (L1):", "0x" + sha256ToFieldHex);
+    const sha256ToFieldHex = `00${sha256Hex.slice(0, 62)}`;
+    console.log("[claimPrivate DEBUG]   sha256ToField (L1):", `0x${sha256ToFieldHex}`);
     console.log("[claimPrivate DEBUG]   (This is the expected content hash)");
   } catch (e) {
     console.log("[claimPrivate DEBUG] Could not compute content hash preview:", e);
@@ -348,7 +348,7 @@ export async function getBalance(
 
     // balance_of_private is an unconstrained (view) function
     // Try calling without options first, then with empty options if that fails
-    let balance;
+    let balance: unknown;
     try {
       balance = await methods.balance_of_private(owner).simulate();
     } catch (simError) {
@@ -360,7 +360,9 @@ export async function getBalance(
     console.log("[getBalance] Raw balance result:", balance);
 
     // Convert to bigint (result may be Fr or number)
-    const balanceBigInt = BigInt(balance?.toString?.() ?? balance ?? 0);
+    const balanceStr =
+      (balance as { toString?: () => string })?.toString?.() ?? String(balance ?? 0);
+    const balanceBigInt = BigInt(balanceStr);
 
     console.log("[getBalance] Converted balance:", balanceBigInt.toString());
     logInfo(`Balance: ${balanceBigInt}`);

@@ -18,7 +18,6 @@
  */
 
 import {
-  type Account,
   type Address,
   type Chain,
   type Hex,
@@ -26,7 +25,6 @@ import {
   pad,
   type Transport,
   toHex,
-  type WalletClient,
 } from "viem";
 
 // L1 Services
@@ -37,14 +35,19 @@ import { executeWithdraw, type MerkleProof } from "../services/l1/portal.js";
 
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
-import { bigIntToBytes32, computeOwnerHash, generateSecretPair, sha256ToField } from "../services/l2/crypto.js";
+import {
+  bigIntToBytes32,
+  computeOwnerHash,
+  generateSecretPair,
+  sha256ToField,
+} from "../services/l2/crypto.js";
 import type { AaveWrapperContract } from "../services/l2/deploy.js";
 import {
   computeLeafId,
   getOutboxVersion,
   hasMessageBeenConsumed,
-  waitForL2ToL1MessageProof,
   type L2ToL1MessageProofResult,
+  waitForL2ToL1MessageProof,
 } from "../services/l2/messageProof.js";
 import {
   executeFinalizeWithdraw,
@@ -561,15 +564,18 @@ export async function executeWithdrawFlow(
     // asset_id is the L1 token address as Field (matches receipt.asset_id stored during deposit)
     const assetId = BigInt(l1Addresses.mockUsdc);
     const contentFields = [
-      BigInt(intentIdStr),      // intent.intent_id
-      ownerHash,                // intent.owner_hash
-      withdrawAmount,           // intent.amount
-      deadline,                 // intent.deadline
-      assetId,                  // receipt.asset_id (L1 token address as Field)
-      secretHash.toBigInt(),    // secret_hash
+      BigInt(intentIdStr), // intent.intent_id
+      ownerHash, // intent.owner_hash
+      withdrawAmount, // intent.amount
+      deadline, // intent.deadline
+      assetId, // receipt.asset_id (L1 token address as Field)
+      secretHash.toBigInt(), // secret_hash
     ];
 
-    console.log("Content fields for L2→L1 message:", contentFields.map(f => `0x${f.toString(16)}`));
+    console.log(
+      "Content fields for L2→L1 message:",
+      contentFields.map((f) => `0x${f.toString(16)}`)
+    );
 
     // Pack fields into bytes (each field as 32-byte big-endian) and compute sha256
     const packedData = new Uint8Array(contentFields.length * 32);
@@ -578,7 +584,13 @@ export async function executeWithdrawFlow(
     }
     console.log("=== SHA256 DEBUG ===");
     console.log("Packed data length:", packedData.length, "bytes (expected 192)");
-    console.log("Packed data (hex):", "0x" + Array.from(packedData).map(b => b.toString(16).padStart(2, "0")).join(""));
+    console.log(
+      "Packed data (hex):",
+      "0x" +
+        Array.from(packedData)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+    );
 
     // Compute sha256 and convert to field (truncate to 31 bytes/248 bits to fit in BN254 field)
     const contentHash = await sha256ToField(packedData);
@@ -609,7 +621,9 @@ export async function executeWithdrawFlow(
       throw new Error(`Failed to get L2→L1 message proof: ${proofResult.error}`);
     }
 
-    logSuccess(`Message proof obtained: block=${proofResult.l2BlockNumber}, leafIndex=${proofResult.leafIndex}`);
+    logSuccess(
+      `Message proof obtained: block=${proofResult.l2BlockNumber}, leafIndex=${proofResult.leafIndex}`
+    );
 
     // Check if message was already consumed
     const leafId = computeLeafId(proofResult.leafIndex!, proofResult.siblingPath!.length);
@@ -657,7 +671,9 @@ export async function executeWithdrawFlow(
     // because the pending bridges scanner matches secrets by messageKey
     try {
       await storeWithdrawSecret(messageKey, secret.toString(), wallet.address.toString());
-      logSuccess(`Withdrawal secret stored for token claim (messageKey: ${messageKey.slice(0, 18)}...)`);
+      logSuccess(
+        `Withdrawal secret stored for token claim (messageKey: ${messageKey.slice(0, 18)}...)`
+      );
     } catch (storeError) {
       // Log but don't fail the flow - user can still try to claim if they have the secret
       logError(

@@ -13,7 +13,7 @@
  * the deadline has passed without L1 execution.
  */
 
-import type { PublicClient, Transport, Chain } from "viem";
+import type { Chain, PublicClient, Transport } from "viem";
 
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
@@ -25,12 +25,12 @@ import type { AztecAddress } from "../services/l2/wallet.js";
 // Store
 import {
   clearOperation,
+  removePosition,
   setOperationError,
   setOperationIntentId,
   setOperationStatus,
   setOperationStep,
   startOperation,
-  removePosition,
 } from "../store/actions.js";
 import { logError, logInfo, logStep, logSuccess } from "../store/logger.js";
 import {
@@ -128,7 +128,7 @@ export class DeadlineNotExpiredError extends Error {
  */
 export class NetAmountMismatchError extends Error {
   constructor(expected: bigint, provided: bigint) {
-    super(`Net amount mismatch during cancel. ` + `Expected: ${expected}, Provided: ${provided}`);
+    super(`Net amount mismatch during cancel. Expected: ${expected}, Provided: ${provided}`);
     this.name = "NetAmountMismatchError";
   }
 }

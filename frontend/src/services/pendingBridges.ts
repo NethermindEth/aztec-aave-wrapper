@@ -10,8 +10,8 @@
 
 import type { Address, Chain, PublicClient, Transport } from "viem";
 import { getDepositToAztecPrivateEvents } from "./l1/tokenPortal.js";
-import { getAllSecrets } from "./secrets.js";
 import type { AztecNodeClient } from "./l2/client.js";
+import { getAllSecrets } from "./secrets.js";
 
 // =============================================================================
 // Types
@@ -195,7 +195,7 @@ async function checkMessageReadiness(
     const { Fr } = await import("@aztec/aztec.js/fields");
     const messageLeafFr = Fr.fromString(messageKey);
 
-    console.log("[checkMessageReadiness] Checking message:", messageKey.slice(0, 18) + "...");
+    console.log("[checkMessageReadiness] Checking message:", `${messageKey.slice(0, 18)}...`);
     console.log("[checkMessageReadiness] messageIndex from L1:", messageIndex.toString());
 
     const currentBlock = await node.getBlockNumber();

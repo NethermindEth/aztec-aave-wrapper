@@ -6,6 +6,7 @@
  */
 
 import type { Address, AztecAddress } from "@aztec-aave-wrapper/shared";
+import type { ContractConfig } from "../services/contractConfig.js";
 import type { OperationStatus, OperationType } from "../types/operations.js";
 import type {
   ContractsState,
@@ -17,7 +18,6 @@ import type {
   PositionDisplay,
   WalletState,
 } from "../types/state.js";
-import type { ContractConfig } from "../services/contractConfig.js";
 import type { TxLogOptions } from "./logger.js";
 import { setState } from "./state.js";
 

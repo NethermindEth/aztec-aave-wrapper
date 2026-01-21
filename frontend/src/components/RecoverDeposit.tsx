@@ -5,10 +5,11 @@
  * finalize_deposit failed but tokens were already burned.
  */
 
-import { createSignal, For, Show, type JSX } from "solid-js";
+import { createSignal, For, type JSX, Show } from "solid-js";
 import { createL1PublicClient } from "../services/l1/client";
 import { getIntentShares } from "../services/l1/portal";
 import { loadContractWithAzguard } from "../services/l2/contract";
+import { executeFinalizeDeposit, getSponsoredFeePaymentMethod } from "../services/l2/operations";
 import {
   type FoundIntent,
   L2PositionStatus,
@@ -16,11 +17,10 @@ import {
   queryPendingDeposit,
   scanUserIntentsFromL1,
 } from "../services/l2/positions";
-import { executeFinalizeDeposit, getSponsoredFeePaymentMethod } from "../services/l2/operations";
 import { getSecret, hasSecret } from "../services/secrets";
 import { connectAztecWallet } from "../services/wallet/aztec";
-import { formatUSDC } from "../types/state";
 import { useAppState } from "../store/hooks";
+import { formatUSDC } from "../types/state";
 
 /**
  * Format timestamp to readable date
@@ -265,7 +265,7 @@ export function RecoverDeposit() {
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
 
       const intentIdFr = Fr.fromString(info.intentId);
-      const secretFr = Fr.fromString(secretEntry.secret);
+      const secretFr = Fr.fromString(secretEntry.secretHex);
       // Asset ID is the USDC address as a bigint (matches L1 encoding)
       const assetId = BigInt(state.contracts.mockUsdc);
 
@@ -273,7 +273,7 @@ export function RecoverDeposit() {
       console.log("  intentId:", info.intentId);
       console.log("  assetId:", assetId.toString());
       console.log("  shares:", shares.toString());
-      console.log("  secret:", secretEntry.secret.slice(0, 20) + "...");
+      console.log("  secret:", `${secretEntry.secretHex.slice(0, 20)}...`);
 
       // Call finalize_deposit
       // Note: messageLeafIndex is tricky - we try with 0 first, then scan if needed
@@ -365,6 +365,7 @@ export function RecoverDeposit() {
     <section class="bg-zinc-900 rounded-lg border border-zinc-800">
       {/* Collapsible Header */}
       <button
+        type="button"
         onClick={() => setIsExpanded(!isExpanded())}
         class="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/50 transition-colors rounded-lg"
       >
@@ -386,6 +387,7 @@ export function RecoverDeposit() {
                 <p class="text-xs text-zinc-500">Scan L1 events to find your pending deposits</p>
               </div>
               <button
+                type="button"
                 onClick={handleScan}
                 disabled={isScanning()}
                 class="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
@@ -408,6 +410,7 @@ export function RecoverDeposit() {
                 <For each={foundIntents()}>
                   {(intent) => (
                     <button
+                      type="button"
                       onClick={() => selectIntent(intent)}
                       class="w-full text-left p-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm transition-colors"
                     >
@@ -445,6 +448,7 @@ export function RecoverDeposit() {
                 class="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
               />
               <button
+                type="button"
                 onClick={handleQuery}
                 disabled={isQuerying() || !intentId().trim()}
                 class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-100 text-sm font-medium rounded transition-colors"
@@ -526,6 +530,7 @@ export function RecoverDeposit() {
                 <Show when={!info().isConsumed && secretExists()}>
                   <div class="pt-2">
                     <button
+                      type="button"
                       onClick={handleCompleteDeposit}
                       disabled={isCompleting()}
                       class="w-full px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
@@ -567,6 +572,7 @@ export function RecoverDeposit() {
                 <Show when={info().canCancel}>
                   <div class="pt-2">
                     <button
+                      type="button"
                       onClick={handleCancel}
                       disabled={isCancelling()}
                       class="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"

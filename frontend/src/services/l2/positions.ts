@@ -6,7 +6,7 @@
  * Only the owner can decrypt and view their own positions.
  */
 
-import type { PublicClient, Transport, Chain } from "viem";
+import type { Chain, PublicClient, Transport } from "viem";
 import type { AzguardWallet } from "../wallet/aztec.js";
 import type { AaveWrapperContract } from "./contract.js";
 

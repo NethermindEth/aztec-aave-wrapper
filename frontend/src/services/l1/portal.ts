@@ -6,15 +6,15 @@
  */
 
 import {
-  keccak256,
-  toBytes,
   type Abi,
   type Account,
   type Address,
   type Chain,
   type Hex,
+  keccak256,
   type PublicClient,
   type Transport,
+  toBytes,
   type WalletClient,
 } from "viem";
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
@@ -408,9 +408,11 @@ export async function executeWithdraw(
 
   // Event topic signatures (keccak256 of event signature)
   // WithdrawExecuted(bytes32 indexed,address indexed,uint256) - keccak256("WithdrawExecuted(bytes32,address,uint256)")
-  const withdrawExecutedTopic = "0xf5fcca62037075195a3fc429e3478dcc6fc9e9d6b14fcd71cae6eeab97b20910";
+  const withdrawExecutedTopic =
+    "0xf5fcca62037075195a3fc429e3478dcc6fc9e9d6b14fcd71cae6eeab97b20910";
   // TokensDepositedToL2(bytes32 indexed,bytes32,uint256) - keccak256("TokensDepositedToL2(bytes32,bytes32,uint256)")
-  const tokensDepositedToL2Topic = "0x0227d4acbd7d255fe4ff206c94b800ab01abfc72e94c650ff7af246ee5208e0b";
+  const tokensDepositedToL2Topic =
+    "0x0227d4acbd7d255fe4ff206c94b800ab01abfc72e94c650ff7af246ee5208e0b";
   // L2MessageSent(bytes32 indexed,bytes32,uint256) - keccak256("L2MessageSent(bytes32,bytes32,uint256)")
   const l2MessageSentTopic = "0xda6a32d6995bf9aa269353dddbe234d0866298db111521e41d8a65ab4f6c96a7";
 
@@ -434,7 +436,10 @@ export async function executeWithdraw(
     if (eventTopic === withdrawExecutedTopic.toLowerCase() && log.data.length >= 66) {
       // WithdrawExecuted event - parse amount from data
       withdrawnAmount = BigInt(log.data.slice(0, 66));
-      console.log("[executeWithdraw] Parsed withdrawn amount from WithdrawExecuted:", withdrawnAmount.toString());
+      console.log(
+        "[executeWithdraw] Parsed withdrawn amount from WithdrawExecuted:",
+        withdrawnAmount.toString()
+      );
     } else if (eventTopic === tokensDepositedToL2Topic.toLowerCase() && log.data.length >= 130) {
       // TokensDepositedToL2 event - parse messageKey from data (first 32 bytes)
       messageKey = `0x${log.data.slice(2, 66)}` as Hex;

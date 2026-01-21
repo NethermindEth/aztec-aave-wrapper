@@ -18,10 +18,9 @@ import type { Chain, Hex, PublicClient, Transport } from "viem";
 
 // L1 Services
 import { mineL1Block } from "../services/l1/mining.js";
-
+import { type BridgedTokenContract, claimPrivate } from "../services/l2/bridgedToken.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
-import { claimPrivate, type BridgedTokenContract } from "../services/l2/bridgedToken.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
 
 // Store
@@ -499,8 +498,8 @@ export { getClaimStepCount } from "../types/operations.js";
 // Bridge Claim Flow
 // =============================================================================
 
+import type { PendingBridge } from "../services/pendingBridges.js";
 import { removeSecret } from "../services/secrets.js";
-import { type PendingBridge } from "../services/pendingBridges.js";
 
 /**
  * Result of a bridge claim operation
@@ -673,7 +672,7 @@ export async function executeBridgeClaim(
   );
   console.log(
     "[executeBridgeClaim]   pendingBridge.secret (first 30):",
-    pendingBridge.secret?.slice(0, 30) + "..."
+    `${pendingBridge.secret?.slice(0, 30)}...`
   );
   console.log(
     "[executeBridgeClaim]   pendingBridge.l1BlockNumber:",
@@ -720,7 +719,7 @@ export async function executeBridgeClaim(
     // Debug logging summary
     console.log("[executeBridgeClaim] === CLAIM PARAMETERS SUMMARY ===");
     console.log("[executeBridgeClaim]   amount:", amount.toString());
-    console.log("[executeBridgeClaim]   secret (full hex):", "0x" + secret.toString(16));
+    console.log("[executeBridgeClaim]   secret (full hex):", `0x${secret.toString(16)}`);
     console.log("[executeBridgeClaim]   messageLeafIndex:", messageLeafIndex.toString());
     console.log("[executeBridgeClaim]   messageKey:", pendingBridge.messageKey);
     console.log("[executeBridgeClaim]   secretHash from L1 event:", pendingBridge.secretHash);

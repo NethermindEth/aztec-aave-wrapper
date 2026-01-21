@@ -13,7 +13,7 @@
  * new_nonce = poseidon2_hash([original_nonce, owner])
  */
 
-import type { PublicClient, Transport, Chain } from "viem";
+import type { Chain, PublicClient, Transport } from "viem";
 
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";

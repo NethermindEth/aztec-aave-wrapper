@@ -9,11 +9,11 @@
  */
 
 import { For, Show } from "solid-js";
+import type { PendingBridge, PendingBridgeStatus } from "../services/pendingBridges.js";
 import { formatBalance } from "./BalanceDisplay.js";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import type { PendingBridge, PendingBridgeStatus } from "../services/pendingBridges.js";
 
 /**
  * Props for ClaimPendingBridges component

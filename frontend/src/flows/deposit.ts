@@ -18,7 +18,6 @@
  */
 
 import {
-  type Account,
   type Address,
   type Chain,
   type Hex,
@@ -26,24 +25,28 @@ import {
   pad,
   type Transport,
   toHex,
-  type WalletClient,
 } from "viem";
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
-import { computeDepositIntentHash, type DepositIntent } from "../services/l1/intent.js";
+import type { DepositIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
 import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
 import { balanceOf, type L1AddressesForBalances } from "../services/l1/tokens.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
-import { bigIntToBytes32, computeOwnerHash, generateSecretPair, sha256ToField } from "../services/l2/crypto.js";
+import {
+  bigIntToBytes32,
+  computeOwnerHash,
+  generateSecretPair,
+  sha256ToField,
+} from "../services/l2/crypto.js";
 import type { AaveWrapperContract } from "../services/l2/deploy.js";
 import {
   computeLeafId,
   getOutboxVersion,
   hasMessageBeenConsumed,
-  waitForL2ToL1MessageProof,
   type L2ToL1MessageProofResult,
+  waitForL2ToL1MessageProof,
 } from "../services/l2/messageProof.js";
 import {
   executeFinalizeDeposit,
@@ -496,16 +499,19 @@ export async function executeDepositFlow(
     // Each field is encoded as 32 bytes (big-endian), total 256 bytes
     // IMPORTANT: intent.asset is the L1 token address as a Field (BigInt), NOT an asset ID!
     const contentFields = [
-      BigInt(intentIdStr),      // intent.intent_id
-      ownerHash,                // intent.owner_hash
+      BigInt(intentIdStr), // intent.intent_id
+      ownerHash, // intent.owner_hash
       BigInt(l1Addresses.mockUsdc), // intent.asset (L1 token address as Field)
-      netAmount,                // intent.amount (NET amount after fee!)
+      netAmount, // intent.amount (NET amount after fee!)
       BigInt(config.originalDecimals), // intent.original_decimals
-      deadline,                 // intent.deadline
-      l2Salt.toBigInt(),        // intent.salt (computed same as L2)
-      secretHash.toBigInt(),    // secret_hash
+      deadline, // intent.deadline
+      l2Salt.toBigInt(), // intent.salt (computed same as L2)
+      secretHash.toBigInt(), // secret_hash
     ];
-    console.log("Content fields for L2→L1 message:", contentFields.map(f => `0x${f.toString(16)}`));
+    console.log(
+      "Content fields for L2→L1 message:",
+      contentFields.map((f) => `0x${f.toString(16)}`)
+    );
 
     // Pack fields into bytes (each field as 32-byte big-endian) and compute sha256
     const packedData = new Uint8Array(contentFields.length * 32);
@@ -514,7 +520,13 @@ export async function executeDepositFlow(
     }
     console.log("=== SHA256 DEBUG ===");
     console.log("Packed data length:", packedData.length, "bytes (expected 256)");
-    console.log("Packed data (hex):", "0x" + Array.from(packedData).map(b => b.toString(16).padStart(2, "0")).join(""));
+    console.log(
+      "Packed data (hex):",
+      "0x" +
+        Array.from(packedData)
+          .map((b) => b.toString(16).padStart(2, "0"))
+          .join("")
+    );
 
     // Compute sha256 and convert to field (truncate to 31 bytes/248 bits to fit in BN254 field)
     const contentHash = await sha256ToField(packedData);
@@ -550,7 +562,9 @@ export async function executeDepositFlow(
       throw new Error(`Failed to get L2→L1 message proof: ${proofResult.error}`);
     }
 
-    logSuccess(`Message proof obtained: block=${proofResult.l2BlockNumber}, leafIndex=${proofResult.leafIndex}`);
+    logSuccess(
+      `Message proof obtained: block=${proofResult.l2BlockNumber}, leafIndex=${proofResult.leafIndex}`
+    );
 
     // Check if message was already consumed
     const leafId = computeLeafId(proofResult.leafIndex!, proofResult.siblingPath!.length);

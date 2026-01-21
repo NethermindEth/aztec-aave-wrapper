@@ -120,7 +120,10 @@ export async function computeDepositIntentMessageHash(
   // This is the sha256 hash of the deposit intent fields
   const content = sha256ToField([
     // Function selector for executeDeposit
-    Buffer.from("executeDeposit(bytes32,bytes32,address,uint128,uint64,uint8,uint256,uint256,bytes32[])", "utf-8"),
+    Buffer.from(
+      "executeDeposit(bytes32,bytes32,address,uint128,uint64,uint8,uint256,uint256,bytes32[])",
+      "utf-8"
+    ),
     new Fr(params.intentId).toBuffer(),
     new Fr(params.ownerHash).toBuffer(),
     EthAddress.fromString(params.asset).toBuffer32(),
@@ -163,7 +166,10 @@ export async function computeWithdrawIntentMessageHash(
   // Compute the message content - matches the intent hash computed in Solidity
   const content = sha256ToField([
     // Function selector for executeWithdraw
-    Buffer.from("executeWithdraw(bytes32,bytes32,uint128,uint64,bytes32,uint256,uint256,bytes32[])", "utf-8"),
+    Buffer.from(
+      "executeWithdraw(bytes32,bytes32,uint128,uint64,bytes32,uint256,uint256,bytes32[])",
+      "utf-8"
+    ),
     new Fr(params.intentId).toBuffer(),
     new Fr(params.ownerHash).toBuffer(),
     new Fr(params.amount).toBuffer(),
@@ -199,7 +205,9 @@ export async function computeL2ToL1MembershipWitness(
   l2BlockNumber: number,
   message: Fr
 ): Promise<L2ToL1MembershipWitness | undefined> {
-  const { computeL2ToL1MembershipWitness: computeWitness } = await import("@aztec/stdlib/messaging");
+  const { computeL2ToL1MembershipWitness: computeWitness } = await import(
+    "@aztec/stdlib/messaging"
+  );
 
   // Cast to BlockNumber type expected by the SDK
   return computeWitness(node, l2BlockNumber as Parameters<typeof computeWitness>[1], message);
