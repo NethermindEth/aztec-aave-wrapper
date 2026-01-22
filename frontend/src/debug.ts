@@ -10,14 +10,14 @@
  */
 
 import { createL1PublicClient } from "./services/l1/client";
-import { loadContractWithAzguard } from "./services/l2/contract";
+import { loadContractWithAzguard, loadContractWithDevWallet } from "./services/l2/contract";
 import { getSponsoredFeePaymentMethod } from "./services/l2/operations";
 import {
   L2PositionStatus,
   type PendingDepositInfo,
   queryPendingDeposit,
 } from "./services/l2/positions";
-import { connectAztecWallet } from "./services/wallet/aztec";
+import { connectWallet, isDevWallet } from "./services/wallet/index.js";
 import { formatUSDC } from "./types/state";
 
 /**
@@ -61,8 +61,10 @@ export async function queryIntent(intentId: string): Promise<PendingDepositInfo 
 
   try {
     // Connect to wallet and load contract
-    const { wallet } = await connectAztecWallet();
-    const { contract } = await loadContractWithAzguard(wallet, deployments.l2Wrapper);
+    const { wallet } = await connectWallet();
+    const { contract } = isDevWallet(wallet)
+      ? await loadContractWithDevWallet(wallet, deployments.l2Wrapper)
+      : await loadContractWithAzguard(wallet, deployments.l2Wrapper);
 
     // Get current L1 timestamp
     const publicClient = createL1PublicClient();
@@ -133,8 +135,10 @@ export async function cancelDeposit(intentId: string, netAmount: bigint): Promis
 
   try {
     // Connect to wallet and load contract
-    const { wallet, address: walletAddress } = await connectAztecWallet();
-    const { contract } = await loadContractWithAzguard(wallet, deployments.l2Wrapper);
+    const { wallet, address: walletAddress } = await connectWallet();
+    const { contract } = isDevWallet(wallet)
+      ? await loadContractWithDevWallet(wallet, deployments.l2Wrapper)
+      : await loadContractWithAzguard(wallet, deployments.l2Wrapper);
 
     // Get current L1 timestamp
     const publicClient = createL1PublicClient();
@@ -200,8 +204,10 @@ export async function completeDeposit(intentId: string, secretHex: string): Prom
 
   try {
     // Connect to wallet and load contract
-    const { wallet, address: walletAddress } = await connectAztecWallet();
-    const { contract } = await loadContractWithAzguard(wallet, deployments.l2Wrapper);
+    const { wallet, address: walletAddress } = await connectWallet();
+    const { contract } = isDevWallet(wallet)
+      ? await loadContractWithDevWallet(wallet, deployments.l2Wrapper)
+      : await loadContractWithAzguard(wallet, deployments.l2Wrapper);
 
     // Get L1 public client and portal address
     const publicClient = createL1PublicClient();

@@ -7,9 +7,13 @@
 
 import { LogLevel } from "../../components/LogViewer";
 import { usePositions } from "../../hooks/usePositions.js";
-import { getBalance, loadBridgedTokenWithAzguard } from "../../services/l2/bridgedToken";
-import { loadContractWithAzguard } from "../../services/l2/contract";
-import { connectAztecWallet } from "../../services/wallet/aztec";
+import {
+  getBalance,
+  loadBridgedTokenWithAzguard,
+  loadBridgedTokenWithDevWallet,
+} from "../../services/l2/bridgedToken";
+import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
+import { connectWallet, isDevWallet } from "../../services/wallet/index.js";
 import { setL2UsdcBalance } from "../../store";
 import { useApp } from "../../store/hooks";
 import { formatUSDC } from "../../types/state.js";
@@ -53,17 +57,18 @@ export function useL2Positions(): UseL2PositionsResult {
     addLog("Refreshing positions from L2...");
 
     try {
-      const { wallet, address: walletAddress } = await connectAztecWallet();
-      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+      const { wallet, address: walletAddress } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       await refreshFromL2(contract, wallet, walletAddress);
 
       if (l2BridgedTokenAddress) {
         try {
-          const { contract: bridgedTokenContract } = await loadBridgedTokenWithAzguard(
-            wallet,
-            l2BridgedTokenAddress
-          );
+          const { contract: bridgedTokenContract } = isDevWallet(wallet)
+            ? await loadBridgedTokenWithDevWallet(wallet, l2BridgedTokenAddress)
+            : await loadBridgedTokenWithAzguard(wallet, l2BridgedTokenAddress);
           const { AztecAddress } = await import("@aztec/aztec.js/addresses");
           const l2Balance = await getBalance(
             bridgedTokenContract,

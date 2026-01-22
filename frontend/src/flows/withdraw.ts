@@ -661,10 +661,15 @@ export async function executeWithdrawFlow(
 
     const messageKey = executeResult.messageKey;
 
+    const l1ToL2MessageIndex = executeResult.messageIndex;
+    const l1MessageLeaf = executeResult.messageLeaf;
+
     console.log("=== L1 EXECUTE WITHDRAW SUCCESS ===");
     console.log(`  txHash: ${executeResult.txHash}`);
     console.log(`  actualWithdrawnAmount: ${actualWithdrawnAmount}`);
     console.log(`  messageKey: ${messageKey}`);
+    console.log(`  messageIndex: ${l1ToL2MessageIndex}`);
+    console.log(`  messageLeaf: ${l1MessageLeaf}`);
     logSuccess(`Withdraw executed on L1 (tx: ${executeResult.txHash.slice(0, 10)}...)`);
 
     // Store secret for later token claim - use messageKey as the key (not intentId)
@@ -690,18 +695,25 @@ export async function executeWithdrawFlow(
     console.log("=== OPTIONAL: FINALIZE WITHDRAW ON L2 ===");
     try {
       console.log("Waiting for L1→L2 message...");
-      await waitForL1ToL2Message(publicClient, node);
+      await waitForL1ToL2Message(publicClient, node, l1MessageLeaf);
 
       console.log("Executing finalize_withdraw...");
       console.log(`  Using actualWithdrawnAmount: ${actualWithdrawnAmount}`);
+      console.log(`  Using messageLeafIndex: ${l1ToL2MessageIndex}`);
+      // IMPORTANT: L1 portal sends the confirmation message with secretHash = 0
+      // (see AztecAavePortalL1.sol line 372: sendL2Message(..., bytes32(0)))
+      // So we must use 0n as the secret for consume_l1_to_l2_message to succeed.
+      // The user's withdrawal secret is for token claiming, not for this L1→L2 message.
+      const { Fr } = await import("@aztec/aztec.js/fields");
+      const zeroSecret = Fr.ZERO;
       const finalizeResult = await executeFinalizeWithdraw(
         contract,
         {
           intentId,
           assetId: assetId, // L1 token address as Field (must match L1 confirmation message)
           amount: actualWithdrawnAmount, // Use actual amount from L1 (may include interest)
-          secret,
-          messageLeafIndex: 0n,
+          secret: zeroSecret, // L1 sends with secretHash=0, so secret must be preimage of 0
+          messageLeafIndex: l1ToL2MessageIndex,
         },
         wallet.address
       );

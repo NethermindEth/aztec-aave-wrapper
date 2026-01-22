@@ -35,9 +35,9 @@ import {
 } from "../../services/l1/client";
 import { getAztecOutbox } from "../../services/l1/portal";
 import { createL2NodeClient } from "../../services/l2/client";
-import { loadContractWithAzguard } from "../../services/l2/contract";
-import { connectAztecWallet } from "../../services/wallet/aztec";
+import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
 import { connectEthereumWallet } from "../../services/wallet/ethereum";
+import { connectWallet, isDevWallet } from "../../services/wallet/index.js";
 import { formatAmount } from "../../shared/format/usdc";
 import { setWallet } from "../../store";
 import { useApp } from "../../store/hooks";
@@ -127,7 +127,7 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       };
 
       addLog("Connecting to Aztec wallet...");
-      const { address: walletAddress } = await connectAztecWallet();
+      const { address: walletAddress } = await connectWallet();
 
       setWallet({ l2Address: walletAddress as `0x${string}` });
 
@@ -203,10 +203,12 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       const node = await createL2NodeClient();
 
       addLog("Connecting to Aztec wallet...");
-      const { wallet, address: walletAddress } = await connectAztecWallet();
+      const { wallet, address: walletAddress } = await connectWallet();
 
       addLog("Loading AaveWrapper contract...");
-      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
       const l2Context: DepositL2Context = {
@@ -295,10 +297,12 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
         const node = await createL2NodeClient();
 
         addLog("Connecting to Aztec wallet...");
-        const { wallet, address: walletAddress } = await connectAztecWallet();
+        const { wallet, address: walletAddress } = await connectWallet();
 
         addLog("Loading AaveWrapper contract...");
-        const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+        const { contract } = isDevWallet(wallet)
+          ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+          : await loadContractWithAzguard(wallet, l2WrapperAddress);
 
         const { AztecAddress } = await import("@aztec/aztec.js/addresses");
         const { Fr } = await import("@aztec/aztec.js/fields");
@@ -358,10 +362,12 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       const node = await createL2NodeClient();
 
       addLog("Connecting to Aztec wallet...");
-      const { wallet, address: walletAddress } = await connectAztecWallet();
+      const { wallet, address: walletAddress } = await connectWallet();
 
       addLog("Loading AaveWrapper contract...");
-      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
       const { Fr } = await import("@aztec/aztec.js/fields");
@@ -419,10 +425,12 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       const node = await createL2NodeClient();
 
       addLog("Connecting to Aztec wallet...");
-      const { wallet, address: walletAddress } = await connectAztecWallet();
+      const { wallet, address: walletAddress } = await connectWallet();
 
       addLog("Loading AaveWrapper contract...");
-      const { contract } = await loadContractWithAzguard(wallet, l2WrapperAddress);
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
       const { Fr } = await import("@aztec/aztec.js/fields");

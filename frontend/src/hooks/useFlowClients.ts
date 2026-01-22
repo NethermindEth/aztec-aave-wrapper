@@ -18,9 +18,11 @@ import { balanceOf } from "../services/l1/tokens.js";
 import type { AztecNodeClient } from "../services/l2/client.js";
 import { createL2NodeClientNoWait, waitForL2Node } from "../services/l2/client.js";
 import type { AaveWrapperContract, AztecAddress } from "../services/l2/contract.js";
-import { loadContractWithAzguard } from "../services/l2/contract.js";
+import { loadContractWithAzguard, loadContractWithDevWallet } from "../services/l2/contract.js";
 import type { AzguardWallet } from "../services/wallet/aztec.js";
+import type { DevWallet } from "../services/wallet/devWallet.js";
 import type { EthereumWalletConnection } from "../services/wallet/ethereum.js";
+import { type AnyAztecWallet, isDevWallet } from "../services/wallet/index.js";
 import { setATokenBalance, setEthBalance, setUsdcBalance } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 
@@ -127,7 +129,7 @@ let initializationVersion = 0;
  */
 export function useFlowClients(
   l1Connection: Accessor<EthereumWalletConnection | null>,
-  l2Wallet: Accessor<AzguardWallet | null>
+  l2Wallet: Accessor<AnyAztecWallet | null>
 ): UseFlowClientsResult {
   const appState = useAppState();
 
@@ -226,10 +228,10 @@ export function useFlowClients(
   }
 
   /**
-   * Initialize L2 context from Azguard wallet.
+   * Initialize L2 context from Aztec wallet (DevWallet or Azguard).
    */
   async function initializeL2Context(
-    wallet: AzguardWallet,
+    wallet: AnyAztecWallet,
     wrapperAddress: string
   ): Promise<FlowL2Context> {
     // Create node client (don't wait - we'll wait separately)
@@ -238,13 +240,20 @@ export function useFlowClients(
     // Wait for node to be ready
     await waitForL2Node(node);
 
-    // Load the contract with Azguard wallet
-    const { contract } = await loadContractWithAzguard(wallet, wrapperAddress);
+    // Load the contract with appropriate wallet loader
+    let contract: AaveWrapperContract;
+    if (isDevWallet(wallet)) {
+      const result = await loadContractWithDevWallet(wallet, wrapperAddress);
+      contract = result.contract;
+    } else {
+      const result = await loadContractWithAzguard(wallet, wrapperAddress);
+      contract = result.contract;
+    }
 
     // Get the user's L2 address from the wallet
     const accounts = await wallet.getAccounts();
     if (!accounts || accounts.length === 0) {
-      throw new Error("No accounts found in Azguard wallet");
+      throw new Error("No accounts found in wallet");
     }
 
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");

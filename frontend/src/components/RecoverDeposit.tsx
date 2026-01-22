@@ -8,7 +8,7 @@
 import { createSignal, For, type JSX, Show } from "solid-js";
 import { createL1PublicClient } from "../services/l1/client";
 import { getIntentShares } from "../services/l1/portal";
-import { loadContractWithAzguard } from "../services/l2/contract";
+import { loadContractWithAzguard, loadContractWithDevWallet } from "../services/l2/contract";
 import { executeFinalizeDeposit, getSponsoredFeePaymentMethod } from "../services/l2/operations";
 import {
   type FoundIntent,
@@ -18,7 +18,7 @@ import {
   scanUserIntentsFromL1,
 } from "../services/l2/positions";
 import { getSecret, hasSecret } from "../services/secrets";
-import { connectAztecWallet } from "../services/wallet/aztec";
+import { connectWallet, isDevWallet } from "../services/wallet/index.js";
 import { useAppState } from "../store/hooks";
 import { formatUSDC } from "../types/state";
 
@@ -125,8 +125,10 @@ export function RecoverDeposit() {
 
     try {
       // Connect to wallet and load contract
-      const { wallet } = await connectAztecWallet();
-      const { contract } = await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
+      const { wallet } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, state.contracts.l2Wrapper)
+        : await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
 
       // Get current L1 timestamp
       const publicClient = createL1PublicClient();
@@ -175,8 +177,10 @@ export function RecoverDeposit() {
 
     try {
       // Connect to wallet and load contract
-      const { wallet, address: walletAddress } = await connectAztecWallet();
-      const { contract } = await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
+      const { wallet, address: walletAddress } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, state.contracts.l2Wrapper)
+        : await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
 
       // Get current L1 timestamp
       const publicClient = createL1PublicClient();
@@ -239,8 +243,10 @@ export function RecoverDeposit() {
 
     try {
       // Connect to wallet and load contract
-      const { wallet, address: walletAddress } = await connectAztecWallet();
-      const { contract } = await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
+      const { wallet, address: walletAddress } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, state.contracts.l2Wrapper)
+        : await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
 
       // Get the stored secret
       const secretEntry = await getSecret(info.intentId, walletAddress);
@@ -319,8 +325,10 @@ export function RecoverDeposit() {
 
     try {
       // Connect to wallet and load contract
-      const { wallet, address: walletAddress } = await connectAztecWallet();
-      const { contract } = await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
+      const { wallet, address: walletAddress } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, state.contracts.l2Wrapper)
+        : await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
 
       // Create L1 client
       const publicClient = createL1PublicClient();

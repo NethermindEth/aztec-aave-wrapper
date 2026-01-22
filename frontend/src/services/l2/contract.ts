@@ -8,6 +8,7 @@
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
 import type { AzguardWallet } from "../wallet/aztec.js";
+import type { DevWallet } from "../wallet/devWallet.js";
 import type { AaveWrapperContract } from "./deploy.js";
 import type { AztecAddress } from "./wallet.js";
 
@@ -124,4 +125,73 @@ export async function loadContractWithAzguard(
 export async function getContractArtifact() {
   const { AaveWrapperContractArtifact } = await import("@generated/AaveWrapper");
   return AaveWrapperContractArtifact;
+}
+
+// =============================================================================
+// Dev Wallet Contract Loading
+// =============================================================================
+
+/**
+ * Load the AaveWrapper contract with a DevWallet.
+ *
+ * Similar to loadContractWithAzguard but uses the DevWallet's underlying
+ * AccountWallet directly for Contract.at(), bypassing the Azguard extension.
+ *
+ * @param wallet - Connected DevWallet instance
+ * @param contractAddressString - L2 address of the deployed AaveWrapper contract
+ * @returns Contract instance and its address
+ */
+export async function loadContractWithDevWallet(
+  wallet: DevWallet,
+  contractAddressString: string
+): Promise<ContractLoadResult> {
+  logInfo(`[DevWallet] Loading AaveWrapper contract at ${contractAddressString.slice(0, 16)}...`);
+
+  try {
+    const { AaveWrapperContract, AaveWrapperContractArtifact } = await import(
+      "@generated/AaveWrapper"
+    );
+    const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+    const { createAztecNodeClient } = await import("@aztec/aztec.js/node");
+
+    const contractAddress = AztecAddress.fromString(contractAddressString);
+
+    // First try to get contract metadata from PXE (in case already registered)
+    logInfo("[DevWallet] Checking if contract is registered with PXE...");
+    const contractMetadata = await wallet.getContractMetadata(contractAddress);
+
+    let contractInstance = contractMetadata.contractInstance;
+
+    // If not found in PXE, fetch from node directly
+    if (!contractInstance) {
+      logInfo("[DevWallet] Contract not in PXE, fetching from node...");
+      const node = createAztecNodeClient("http://localhost:8080");
+      contractInstance = await node.getContract(contractAddress);
+
+      if (!contractInstance) {
+        throw new Error(
+          `Contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
+        );
+      }
+    }
+
+    // Register contract with PXE
+    logInfo("[DevWallet] Registering contract artifact with PXE...");
+    await wallet.registerContract(contractInstance, AaveWrapperContractArtifact);
+
+    // Use the underlying AccountWallet for Contract.at()
+    const underlyingWallet = wallet.getUnderlyingWallet();
+    const contract = AaveWrapperContract.at(contractAddress, underlyingWallet);
+
+    logSuccess(`[DevWallet] AaveWrapper contract loaded at ${contractAddress.toString()}`);
+
+    return {
+      contract,
+      address: contractAddress,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error loading contract";
+    logError(`[DevWallet] Failed to load AaveWrapper contract: ${errorMessage}`);
+    throw error;
+  }
 }

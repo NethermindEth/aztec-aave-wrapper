@@ -12,12 +12,14 @@ import path from 'path';
 const nodeModulesPath = `${searchForWorkspaceRoot(process.cwd())}/node_modules`;
 
 // Serve .deployments.local.json from project root during development
+// Also handle WASM MIME types
 const serveDeploymentsPlugin = (): Plugin => {
   const deploymentsPath = path.resolve(__dirname, '../.deployments.local.json');
   return {
-    name: 'serve-deployments',
+    name: 'serve-deployments-and-wasm',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
+        // Handle deployments file
         if (req.url === '/.deployments.local.json') {
           if (fs.existsSync(deploymentsPath)) {
             res.setHeader('Content-Type', 'application/json');
@@ -27,6 +29,10 @@ const serveDeploymentsPlugin = (): Plugin => {
             res.end(JSON.stringify({ error: 'Deployments file not found. Run deploy script first.' }));
           }
           return;
+        }
+        // Ensure WASM files have correct MIME type
+        if (req.url?.endsWith('.wasm')) {
+          res.setHeader('Content-Type', 'application/wasm');
         }
         next();
       });
@@ -124,6 +130,15 @@ export default defineConfig({
           src: '../.deployments.local.json',
           dest: '.',
         },
+        // Copy Aztec WASM files for browser execution
+        {
+          src: '../node_modules/.bun/@aztec+noir-acvm_js@*/node_modules/@aztec/noir-acvm_js/web/*.wasm',
+          dest: 'wasm',
+        },
+        {
+          src: '../node_modules/.bun/@aztec+noir-noirc_abi@*/node_modules/@aztec/noir-noirc_abi/web/*.wasm',
+          dest: 'wasm',
+        },
       ],
     }),
   ],
@@ -164,11 +179,23 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
     fs: {
-      // Allow serving files from the monorepo
+      // Allow serving files from the monorepo and all of node_modules
       allow: [
         path.resolve(__dirname, '..'),
         path.resolve(__dirname, '../node_modules'),
+        // Bun stores packages in .bun subdirectory
+        path.resolve(__dirname, '../node_modules/.bun'),
       ],
+    },
+  },
+  // Ensure WASM files are handled correctly
+  assetsInclude: ['**/*.wasm'],
+  optimizeDeps: {
+    esbuildOptions: {
+      // Node.js global to browser globalThis
+      define: {
+        global: 'globalThis',
+      },
     },
   },
   build: {

@@ -194,37 +194,60 @@ devnet-up:
 		echo "Run 'make devnet-down' first to stop it."; \
 		exit 1; \
 	fi
-	@echo "Starting Aztec Local Network (aztec start --local-network)..."
-	@echo "This manages both L1 (Anvil) and L2 (PXE) with proper timing coordination."
-	@echo ""
-	@echo "Endpoints:"
-	@echo "  - L1 Anvil:    http://localhost:$(ANVIL_L1_PORT)"
-	@echo "  - L2 PXE:      http://localhost:$(PXE_PORT)"
-	@echo ""
-	@echo "Logs: $(AZTEC_LOG_FILE)"
-	@echo ""
-	@nohup aztec start --local-network > $(AZTEC_LOG_FILE) 2>&1 & echo $$! > $(AZTEC_PID_FILE)
-	@echo "Started aztec (PID: $$(cat $(AZTEC_PID_FILE)))"
-	@echo ""
-	@echo "Waiting for services to be healthy..."
-	@./scripts/wait-for-services.sh
-	@echo ""
-	@echo "Deploying contracts..."
-	@bun run scripts/deploy-local.ts
-	@echo ""
-	@echo "Starting automine (advances blocks every 5s)..."
-	@nohup bun run $(E2E_DIR)/scripts/automine.ts > $(AUTOMINE_LOG_FILE) 2>&1 & echo $$! > $(AUTOMINE_PID_FILE)
-	@echo "Started automine (PID: $$(cat $(AUTOMINE_PID_FILE)))"
-	@echo ""
-	@echo -e "$(GREEN)Devnet ready with contracts deployed!$(NC)"
-	@echo "Run 'make devnet-logs' to view logs."
-	@echo "Run 'make automine-logs' to view automine logs."
+	@# Check for stopped containers that can be resumed
+	@STOPPED_CONTAINERS=$$(docker ps -aq --filter "name=aztec-start" --filter "status=exited" 2>/dev/null); \
+	if [ -n "$$STOPPED_CONTAINERS" ]; then \
+		echo "Resuming stopped devnet containers (preserving blockchain state)..."; \
+		echo ""; \
+		docker start $$STOPPED_CONTAINERS; \
+		echo ""; \
+		echo "Endpoints:"; \
+		echo "  - L1 Anvil:    http://localhost:$(ANVIL_L1_PORT)"; \
+		echo "  - L2 PXE:      http://localhost:$(PXE_PORT)"; \
+		echo ""; \
+		echo "Waiting for services to be healthy..."; \
+		./scripts/wait-for-services.sh; \
+		echo ""; \
+		echo "Starting automine (advances blocks every 5s)..."; \
+		nohup bun run $(E2E_DIR)/scripts/automine.ts > $(AUTOMINE_LOG_FILE) 2>&1 & echo $$! > $(AUTOMINE_PID_FILE); \
+		echo "Started automine (PID: $$(cat $(AUTOMINE_PID_FILE)))"; \
+		echo ""; \
+		echo -e "$(GREEN)Devnet resumed! Contracts already deployed.$(NC)"; \
+		echo "Run 'make devnet-logs' to view logs."; \
+		echo "Run 'make devnet-clean' to start fresh."; \
+	else \
+		echo "Starting fresh Aztec Local Network (aztec start --local-network)..."; \
+		echo "This manages both L1 (Anvil) and L2 (PXE) with proper timing coordination."; \
+		echo ""; \
+		echo "Endpoints:"; \
+		echo "  - L1 Anvil:    http://localhost:$(ANVIL_L1_PORT)"; \
+		echo "  - L2 PXE:      http://localhost:$(PXE_PORT)"; \
+		echo ""; \
+		echo "Logs: $(AZTEC_LOG_FILE)"; \
+		echo ""; \
+		nohup aztec start --local-network > $(AZTEC_LOG_FILE) 2>&1 & echo $$! > $(AZTEC_PID_FILE); \
+		echo "Started aztec (PID: $$(cat $(AZTEC_PID_FILE)))"; \
+		echo ""; \
+		echo "Waiting for services to be healthy..."; \
+		./scripts/wait-for-services.sh; \
+		echo ""; \
+		echo "Deploying contracts..."; \
+		bun run scripts/deploy-local.ts; \
+		echo ""; \
+		echo "Starting automine (advances blocks every 5s)..."; \
+		nohup bun run $(E2E_DIR)/scripts/automine.ts > $(AUTOMINE_LOG_FILE) 2>&1 & echo $$! > $(AUTOMINE_PID_FILE); \
+		echo "Started automine (PID: $$(cat $(AUTOMINE_PID_FILE)))"; \
+		echo ""; \
+		echo -e "$(GREEN)Devnet ready with contracts deployed!$(NC)"; \
+		echo "Run 'make devnet-logs' to view logs."; \
+		echo "Run 'make automine-logs' to view automine logs."; \
+	fi
 	@echo ""
 
-## devnet-down: Stop local development network
+## devnet-down: Stop local development network (preserves state for restart)
 devnet-down:
 	@echo ""
-	@echo "Stopping local devnet..."
+	@echo "Stopping local devnet (preserving state)..."
 	@echo ""
 	@# Stop automine process
 	@if [ -f $(AUTOMINE_PID_FILE) ]; then \
@@ -233,9 +256,8 @@ devnet-down:
 		rm -f $(AUTOMINE_PID_FILE); \
 		echo "Stopped automine"; \
 	fi
-	@# Stop any aztec Docker containers (aztec CLI runs Docker internally)
+	@# Stop aztec Docker containers (don't remove - preserves blockchain state)
 	@docker ps -q --filter "name=aztec-start" | xargs -r docker stop 2>/dev/null || true
-	@docker ps -aq --filter "name=aztec-start" | xargs -r docker rm 2>/dev/null || true
 	@# Kill the aztec CLI wrapper processes
 	@if [ -f $(AZTEC_PID_FILE) ]; then \
 		PID=$$(cat $(AZTEC_PID_FILE)); \
@@ -281,18 +303,20 @@ advance-blocks: check-devnet-running
 	cd $(E2E_DIR) && bun run scripts/advance-blocks.ts $(or $(N),2)
 	@echo ""
 
-## devnet-clean: Stop devnet and remove all data/logs
+## devnet-clean: Stop devnet and remove all data/containers (full reset)
 devnet-clean:
 	@echo ""
 	@echo "Stopping devnet and removing all data..."
 	@echo ""
 	@$(MAKE) devnet-down
+	@# Remove containers (allows fresh start)
+	@docker ps -aq --filter "name=aztec-start" | xargs -r docker rm 2>/dev/null || true
 	@rm -f $(AZTEC_LOG_FILE) $(AZTEC_PID_FILE)
 	@rm -f $(AUTOMINE_LOG_FILE) $(AUTOMINE_PID_FILE)
 	@rm -f .deployments.local.json
 	@rm -rf /tmp/aztec-world-state-*
 	@echo ""
-	@echo -e "$(GREEN)Devnet cleaned.$(NC)"
+	@echo -e "$(GREEN)Devnet cleaned. Next 'make devnet-up' will start fresh.$(NC)"
 	@echo ""
 
 # ==============================================================================

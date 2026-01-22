@@ -10,10 +10,14 @@ import { createStore } from "solid-js/store";
 import { LogLevel } from "../../components/LogViewer";
 import { type ClaimL2Context, executeBridgeClaim } from "../../flows/claim";
 import { createL1PublicClient } from "../../services/l1/client";
-import { getBalance, loadBridgedTokenWithAzguard } from "../../services/l2/bridgedToken";
+import {
+  getBalance,
+  loadBridgedTokenWithAzguard,
+  loadBridgedTokenWithDevWallet,
+} from "../../services/l2/bridgedToken";
 import { createL2NodeClient } from "../../services/l2/client";
 import { type PendingBridge, scanPendingBridges } from "../../services/pendingBridges";
-import { connectAztecWallet } from "../../services/wallet/aztec";
+import { connectWallet, isDevWallet } from "../../services/wallet/index.js";
 import { formatAmount } from "../../shared/format/usdc";
 import { setL2UsdcBalance } from "../../store";
 import { useApp } from "../../store/hooks";
@@ -81,7 +85,7 @@ export function useBridge(): UseBridgeResult {
     setBridgeState("error", null);
 
     try {
-      const { address: walletAddress } = await connectAztecWallet();
+      const { address: walletAddress } = await connectWallet();
       const node = await createL2NodeClient();
       const publicClient = createL1PublicClient();
 
@@ -134,20 +138,36 @@ export function useBridge(): UseBridgeResult {
       const node = await createL2NodeClient();
 
       addLog("Connecting to Aztec wallet...");
-      const { wallet, address: walletAddress } = await connectAztecWallet();
+      const { wallet, address: walletAddress } = await connectWallet();
 
       addLog("Loading BridgedToken contract...");
-      const { contract: bridgedTokenContract } = await loadBridgedTokenWithAzguard(
-        wallet,
-        l2BridgedTokenAddress
-      );
+      console.log("[handleClaimBridge] l2BridgedTokenAddress:", l2BridgedTokenAddress);
+      console.log("[handleClaimBridge] wallet type:", isDevWallet(wallet) ? "DevWallet" : "Azguard");
+
+      if (!l2BridgedTokenAddress) {
+        throw new Error("BridgedToken contract address not found in state. Ensure contracts are deployed.");
+      }
+
+      const { contract: bridgedTokenContract } = isDevWallet(wallet)
+        ? await loadBridgedTokenWithDevWallet(wallet, l2BridgedTokenAddress)
+        : await loadBridgedTokenWithAzguard(wallet, l2BridgedTokenAddress);
+
+      console.log("[handleClaimBridge] bridgedTokenContract loaded:", !!bridgedTokenContract);
+      console.log("[handleClaimBridge] bridgedTokenContract.address:", bridgedTokenContract?.address?.toString?.());
 
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+
+      if (!walletAddress) {
+        throw new Error("Wallet address not available");
+      }
+
       const l2Context: ClaimL2Context = {
         node,
         wallet: { address: AztecAddress.fromString(walletAddress) },
         bridgedTokenContract,
       };
+
+      console.log("[handleClaimBridge] l2Context.wallet.address:", l2Context.wallet.address.toString());
 
       addLog("Executing claim...");
       const result = await executeBridgeClaim(l2Context, bridge);

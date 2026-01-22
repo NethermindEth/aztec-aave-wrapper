@@ -9,13 +9,6 @@ import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
 import { createL1PublicClient } from "../services/l1/client.js";
 import { balanceOf } from "../services/l1/tokens.js";
 import {
-  type AztecWalletConnection,
-  connectAztecWallet,
-  disconnectAztecWallet,
-  onAztecWalletDisconnected,
-  truncateAztecAddress,
-} from "../services/wallet/aztec.js";
-import {
   connectEthereumWallet,
   type EthereumWalletConnection,
   formatEthBalance,
@@ -26,6 +19,12 @@ import {
   onChainChanged,
   switchToAnvil,
 } from "../services/wallet/ethereum.js";
+import {
+  type AnyWalletConnection,
+  connectWallet,
+  disconnectWallet,
+  truncateAztecAddress,
+} from "../services/wallet/index.js";
 import { useApp } from "../store/hooks.js";
 import { formatUSDCFromString } from "../types/state.js";
 import { Badge } from "./ui/badge";
@@ -75,7 +74,7 @@ export function WalletInfo() {
 
   // Store wallet instances for balance queries
   let ethConnection: EthereumWalletConnection | null = null;
-  let aztecConnection: AztecWalletConnection | null = null;
+  let aztecConnection: AnyWalletConnection | null = null;
 
   // Cleanup event listeners
   let cleanupAccountsChanged: (() => void) | null = null;
@@ -212,25 +211,25 @@ export function WalletInfo() {
   };
 
   /**
-   * Handle L2 wallet connection via Azguard
+   * Handle L2 wallet connection (DevWallet in dev mode, Azguard in production)
    */
   const handleConnectL2 = async () => {
     setL2Connecting(true);
     setL2Error(null);
 
     try {
-      const connection = await connectAztecWallet();
+      const connection = await connectWallet();
       aztecConnection = connection;
 
       // Set up disconnect handler
-      onAztecWalletDisconnected(connection.wallet, () => {
+      connection.wallet.onDisconnected.addHandler(() => {
         aztecConnection = null;
         actions.setWallet({ l2Address: null });
       });
 
       actions.setWallet({ l2Address: connection.address as `0x${string}` });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to connect Azguard wallet";
+      const message = err instanceof Error ? err.message : "Failed to connect wallet";
       setL2Error(message);
     } finally {
       setL2Connecting(false);
@@ -242,7 +241,7 @@ export function WalletInfo() {
    */
   const handleDisconnectL2 = async () => {
     if (aztecConnection?.wallet) {
-      await disconnectAztecWallet(aztecConnection.wallet);
+      await disconnectWallet(aztecConnection.wallet);
     }
     aztecConnection = null;
     actions.setWallet({ l2Address: null });
@@ -372,7 +371,7 @@ export function WalletInfo() {
                   disabled={l2Connecting()}
                   class="w-full"
                 >
-                  {l2Connecting() ? "Connecting..." : "Connect Azguard"}
+                  {l2Connecting() ? "Connecting..." : "Connect Aztec"}
                 </Button>
               }
             >

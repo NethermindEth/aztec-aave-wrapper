@@ -29,7 +29,7 @@ import {
   type SecretEntry,
   storeSecret,
 } from "../services/secrets.js";
-import type { AzguardWallet } from "../services/wallet/aztec.js";
+import type { AnyAztecWallet } from "../services/wallet/index.js";
 import { addPosition, removePosition, setPositions, updatePosition } from "../store/actions.js";
 import { useAppState } from "../store/hooks.js";
 import type { PositionDisplay } from "../types/state.js";
@@ -94,7 +94,7 @@ export interface UsePositionsResult {
   /** Refresh positions from L2 contract (source of truth) */
   refreshFromL2: (
     contract: AaveWrapperContract,
-    wallet: AzguardWallet,
+    wallet: AnyAztecWallet,
     ownerAddress: string
   ) => Promise<void>;
   /** Whether L2 refresh is in progress */
@@ -253,7 +253,7 @@ export function usePositions(): UsePositionsResult {
    */
   async function refreshFromL2(
     contract: AaveWrapperContract,
-    wallet: AzguardWallet,
+    wallet: AnyAztecWallet,
     ownerAddress: string
   ): Promise<void> {
     console.log("[refreshFromL2] Starting refresh for owner:", ownerAddress);

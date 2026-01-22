@@ -12,6 +12,7 @@
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
 import type { AzguardWallet } from "../wallet/aztec.js";
+import type { DevWallet } from "../wallet/devWallet.js";
 import { getSponsoredFeePaymentMethod } from "./operations.js";
 import type { AztecAddress } from "./wallet.js";
 
@@ -161,6 +162,84 @@ export async function loadBridgedTokenWithAzguard(
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error loading contract";
     logError(`Failed to load BridgedToken contract: ${errorMessage}`);
+    throw error;
+  }
+}
+
+/**
+ * Load the BridgedToken contract with a DevWallet.
+ *
+ * Similar to loadBridgedTokenWithAzguard but uses the DevWallet's underlying
+ * AccountWallet directly for Contract.at(), bypassing the Azguard extension.
+ *
+ * @param wallet - Connected DevWallet instance
+ * @param contractAddressString - L2 address of the deployed BridgedToken contract
+ * @returns Contract instance and its address
+ */
+export async function loadBridgedTokenWithDevWallet(
+  wallet: DevWallet,
+  contractAddressString: string
+): Promise<BridgedTokenLoadResult> {
+  logInfo(`[DevWallet] Loading BridgedToken contract at ${contractAddressString.slice(0, 16)}...`);
+
+  try {
+    const { BridgedTokenContract, BridgedTokenContractArtifact } = await import(
+      "@generated/BridgedToken"
+    );
+    const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+    const { createAztecNodeClient } = await import("@aztec/aztec.js/node");
+
+    const contractAddress = AztecAddress.fromString(contractAddressString);
+
+    // First try to get contract metadata from PXE (in case already registered)
+    logInfo("[DevWallet] Checking if BridgedToken is registered with PXE...");
+    const contractMetadata = await wallet.getContractMetadata(contractAddress);
+
+    let contractInstance = contractMetadata.contractInstance;
+
+    // If not found in PXE, fetch from node directly
+    if (!contractInstance) {
+      logInfo("[DevWallet] BridgedToken not in PXE, fetching from node...");
+      const node = createAztecNodeClient("http://localhost:8080");
+      const fetchedInstance = await node.getContract(contractAddress);
+      console.log("[DevWallet] Node getContract result:", fetchedInstance);
+
+      if (!fetchedInstance) {
+        throw new Error(
+          `BridgedToken contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
+        );
+      }
+      contractInstance = fetchedInstance;
+    }
+
+    // Register contract with PXE
+    logInfo("[DevWallet] Registering BridgedToken contract artifact with PXE...");
+    console.log("[DevWallet] Contract instance to register:", contractInstance);
+    console.log("[DevWallet] Contract instance type:", typeof contractInstance);
+    console.log("[DevWallet] Contract instance keys:", contractInstance ? Object.keys(contractInstance) : "null");
+    if (contractInstance?.address) {
+      console.log("[DevWallet] Contract instance address:", contractInstance.address.toString());
+    } else {
+      console.log("[DevWallet] Contract instance has no address property!");
+    }
+
+    await wallet.registerContract(contractInstance, BridgedTokenContractArtifact);
+
+    // Use the underlying AccountWallet for Contract.at()
+    const underlyingWallet = wallet.getUnderlyingWallet();
+    console.log("[DevWallet] Got underlying wallet, creating contract instance...");
+    const contract = BridgedTokenContract.at(contractAddress, underlyingWallet);
+    console.log("[DevWallet] Contract created, address:", contract?.address?.toString?.() ?? "undefined");
+
+    logSuccess(`[DevWallet] BridgedToken contract loaded at ${contractAddressString}`);
+
+    return {
+      contract,
+      address: contractAddress,
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error loading contract";
+    logError(`[DevWallet] Failed to load BridgedToken contract: ${errorMessage}`);
     throw error;
   }
 }

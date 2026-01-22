@@ -87,6 +87,8 @@ export interface L1ExecuteWithdrawResult {
   success: boolean;
   /** Amount actually withdrawn from Aave */
   withdrawnAmount?: bigint;
+  /** Message leaf index for L1→L2 message (needed for finalization) */
+  messageLeafIndex?: bigint;
 }
 
 /**
@@ -215,13 +217,15 @@ export class WithdrawFlowOrchestrator {
 
     // Step 3: L2 finalize_withdraw (user executes)
     const withdrawnAmount = l1Execute.withdrawnAmount || params.amount;
+    const messageLeafIndex = l1Execute.messageLeafIndex ?? 0n;
     const l2Finalize = await this.executeL2Finalize(
       l2Contract,
       userWallet,
       l2Request.intentId,
       params.assetId,
       withdrawnAmount,
-      secret
+      secret,
+      messageLeafIndex
     );
 
     return {
@@ -305,10 +309,12 @@ export class WithdrawFlowOrchestrator {
       );
 
       // MVP: withdrawnAmount = amount (no yield accounting in mock)
+      // Mock message leaf index is 0 (in real execution, this comes from sendL2Message return value)
       return {
         txHash: mockTxHash,
         success: true,
         withdrawnAmount: params.amount,
+        messageLeafIndex: 0n,
       };
     }
 
@@ -319,6 +325,14 @@ export class WithdrawFlowOrchestrator {
 
   /**
    * Step 3: Finalize withdrawal on L2.
+   *
+   * @param l2Contract L2 contract instance
+   * @param userWallet User's wallet
+   * @param intentId The intent ID from the withdrawal request
+   * @param assetId The asset ID for the withdrawal
+   * @param amount Amount withdrawn from Aave
+   * @param secret The secret for message authentication
+   * @param messageLeafIndex Index of the L1→L2 message in the inbox tree
    */
   private async executeL2Finalize(
     l2Contract: unknown,
@@ -326,7 +340,8 @@ export class WithdrawFlowOrchestrator {
     intentId: bigint,
     assetId: bigint,
     amount: bigint,
-    secret: bigint
+    secret: bigint,
+    messageLeafIndex: bigint
   ): Promise<{ success: boolean; txHash?: string }> {
     // Type assertion for aztec.js contract
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -340,9 +355,8 @@ export class WithdrawFlowOrchestrator {
 
       // Call finalize_withdraw
       // Signature: finalize_withdraw(intent_id, asset_id, amount, secret, message_leaf_index)
-      // message_leaf_index is 0 for mock mode (no real L1->L2 message)
       const tx = await methods
-        .finalize_withdraw(intentId, assetId, amount, secret, 0n)
+        .finalize_withdraw(intentId, assetId, amount, secret, messageLeafIndex)
         .send()
         .wait();
 

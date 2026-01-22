@@ -7,7 +7,7 @@
  */
 
 import type { Chain, PublicClient, Transport } from "viem";
-import type { AzguardWallet } from "../wallet/aztec.js";
+import type { AnyAztecWallet } from "../wallet/index.js";
 import type { AaveWrapperContract } from "./contract.js";
 
 // =============================================================================
@@ -87,7 +87,7 @@ export const L2PositionStatus = {
  */
 export async function queryL2Positions(
   contract: AaveWrapperContract,
-  _wallet: AzguardWallet,
+  _wallet: AnyAztecWallet,
   ownerAddress: string
 ): Promise<L2PositionsResult> {
   console.log("[queryL2Positions] Starting query for owner:", ownerAddress);

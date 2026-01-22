@@ -212,6 +212,10 @@ export interface ExecuteWithdrawResult {
   withdrawnAmount: bigint;
   /** Message key for claiming tokens on L2 (from TokensDepositedToL2 event) */
   messageKey: Hex;
+  /** The L1→L2 message leaf index (for L2 finalization) */
+  messageIndex: bigint;
+  /** The L1→L2 message leaf hash (from L2MessageSent event) */
+  messageLeaf: Hex;
 }
 
 /**
@@ -405,6 +409,8 @@ export async function executeWithdraw(
   // Parse events from the transaction receipt
   let withdrawnAmount = intent.amount; // Default to requested amount
   let messageKey: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
+  let messageIndex = 0n;
+  let messageLeaf: Hex = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
   // Event topic signatures (keccak256 of event signature)
   // WithdrawExecuted(bytes32 indexed,address indexed,uint256) - keccak256("WithdrawExecuted(bytes32,address,uint256)")
@@ -445,9 +451,9 @@ export async function executeWithdraw(
       messageKey = `0x${log.data.slice(2, 66)}` as Hex;
       console.log("[executeWithdraw] Parsed messageKey from TokensDepositedToL2:", messageKey);
     } else if (eventTopic === l2MessageSentTopic.toLowerCase() && log.data.length >= 130) {
-      // L2MessageSent event - log the messageLeaf (L1-computed content hash)
-      const messageLeaf = `0x${log.data.slice(2, 66)}` as Hex;
-      const messageIndex = BigInt(`0x${log.data.slice(66, 130)}`);
+      // L2MessageSent event - extract messageLeaf and messageIndex for L2 finalization
+      messageLeaf = `0x${log.data.slice(2, 66)}` as Hex;
+      messageIndex = BigInt(`0x${log.data.slice(66, 130)}`);
       console.log("[executeWithdraw] === L2MessageSent (WITHDRAW CONFIRMATION) ===");
       console.log(`[executeWithdraw]   messageLeaf (L1 computed): ${messageLeaf}`);
       console.log(`[executeWithdraw]   messageIndex: ${messageIndex}`);
@@ -455,9 +461,11 @@ export async function executeWithdraw(
     }
   }
 
-  logSuccess(`Withdraw executed (tx: ${txHash.slice(0, 10)}...), amount: ${withdrawnAmount}`);
+  logSuccess(
+    `Withdraw executed (tx: ${txHash.slice(0, 10)}...), amount: ${withdrawnAmount}, messageIndex: ${messageIndex}`
+  );
 
-  return { txHash, success: true, withdrawnAmount, messageKey };
+  return { txHash, success: true, withdrawnAmount, messageKey, messageIndex, messageLeaf };
 }
 
 // =============================================================================

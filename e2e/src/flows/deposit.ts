@@ -98,6 +98,8 @@ export interface L1ExecuteResult {
   success: boolean;
   /** Shares received from Aave supply */
   shares?: bigint;
+  /** Message leaf index for L1→L2 message (needed for finalization) */
+  messageLeafIndex?: bigint;
 }
 
 /**
@@ -230,12 +232,15 @@ export class DepositFlowOrchestrator {
 
     // Step 3: L2 finalize_deposit (user executes)
     const shares = l1Execute.shares || params.amount; // MVP: shares = amount
+    const messageLeafIndex = l1Execute.messageLeafIndex ?? 0n;
     const l2Finalize = await this.executeL2Finalize(
       l2Contract,
       userWallet,
       l2Request.intentId,
+      params.assetId,
       params.secret,
-      shares
+      shares,
+      messageLeafIndex
     );
 
     return {
@@ -326,10 +331,12 @@ export class DepositFlowOrchestrator {
       );
 
       // MVP: shares = amount (no yield accounting in mock)
+      // Mock message leaf index is 0 (in real execution, this comes from sendL2Message return value)
       return {
         txHash: mockTxHash,
         success: true,
         shares: params.amount,
+        messageLeafIndex: 0n,
       };
     }
 
@@ -340,13 +347,23 @@ export class DepositFlowOrchestrator {
 
   /**
    * Step 3: Finalize deposit on L2.
+   *
+   * @param l2Contract L2 contract instance
+   * @param userWallet User's wallet
+   * @param intentId The intent ID from the deposit request
+   * @param assetId The asset ID for the deposit
+   * @param secret The secret for message authentication
+   * @param shares Number of aToken shares received
+   * @param messageLeafIndex Index of the L1→L2 message in the inbox tree
    */
   private async executeL2Finalize(
     l2Contract: unknown,
     userWallet: unknown,
     intentId: bigint,
+    assetId: bigint,
     secret: bigint,
-    shares: bigint
+    shares: bigint,
+    messageLeafIndex: bigint
   ): Promise<{ success: boolean; txHash?: string }> {
     // Type assertion for aztec.js contract
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -359,7 +376,11 @@ export class DepositFlowOrchestrator {
       const methods = contractWithWallet.methods;
 
       // Call finalize_deposit
-      const tx = await methods.finalize_deposit(intentId, shares, secret).send().wait();
+      // Signature: finalize_deposit(intent_id, asset_id, shares, secret, message_leaf_index)
+      const tx = await methods
+        .finalize_deposit(intentId, assetId, shares, secret, messageLeafIndex)
+        .send()
+        .wait();
 
       return {
         success: true,

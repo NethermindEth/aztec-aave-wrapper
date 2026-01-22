@@ -14,13 +14,6 @@ import {
   verifyL2Connection,
 } from "../services/l2/client.js";
 import {
-  type AztecWalletConnection,
-  connectAztecWallet,
-  disconnectAztecWallet,
-  onAztecWalletDisconnected,
-  truncateAztecAddress,
-} from "../services/wallet/aztec.js";
-import {
   connectEthereumWallet,
   type EthereumWalletConnection,
   formatEthBalance,
@@ -31,6 +24,12 @@ import {
   onChainChanged,
   switchToAnvil,
 } from "../services/wallet/ethereum.js";
+import {
+  type AnyWalletConnection,
+  connectWallet,
+  disconnectWallet,
+  truncateAztecAddress,
+} from "../services/wallet/index.js";
 import { useApp } from "../store/hooks.js";
 import { formatUSDCFromString } from "../types/state.js";
 
@@ -124,7 +123,7 @@ export function TopBar() {
   let l2PollInterval: ReturnType<typeof setInterval> | undefined;
   let nodeClient: AztecNodeClient | undefined;
   let ethConnection: EthereumWalletConnection | null = null;
-  let aztecConnection: AztecWalletConnection | null = null;
+  let aztecConnection: AnyWalletConnection | null = null;
 
   // Wallet event cleanup
   let cleanupAccountsChanged: (() => void) | null = null;
@@ -307,15 +306,15 @@ export function TopBar() {
   };
 
   /**
-   * Auto-connect Aztec wallet
+   * Auto-connect Aztec wallet (DevWallet in dev mode, Azguard in production)
    */
   const connectAztecWalletAuto = async () => {
     setAztecWalletStatus("connecting");
     try {
-      const connection = await connectAztecWallet();
+      const connection = await connectWallet();
       aztecConnection = connection;
 
-      onAztecWalletDisconnected(connection.wallet, () => {
+      connection.wallet.onDisconnected.addHandler(() => {
         aztecConnection = null;
         setAztecWalletStatus("disconnected");
         actions.setWallet({ l2Address: null });
@@ -333,7 +332,7 @@ export function TopBar() {
    */
   const disconnectAztecWalletHandler = async () => {
     if (aztecConnection?.wallet) {
-      await disconnectAztecWallet(aztecConnection.wallet);
+      await disconnectWallet(aztecConnection.wallet);
     }
     aztecConnection = null;
     setAztecWalletStatus("disconnected");

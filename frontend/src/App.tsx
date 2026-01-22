@@ -51,7 +51,7 @@ const App: Component = () => {
           {/* Main Operations */}
           <ErrorBoundary>
             <OperationTabs
-              defaultTab="deposit"
+              defaultTab="bridge"
               onBridge={controller.actions.handleBridge}
               onDeposit={controller.actions.handleDeposit}
               onWithdraw={controller.actions.handleWithdraw}
