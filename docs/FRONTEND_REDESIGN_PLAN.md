@@ -455,7 +455,7 @@ grep -q "btn-cta" frontend/src/components/BridgeFlow.tsx && echo "OK"
 
 ---
 
-## Phase 8: Position Cards Redesign
+## Phase 8: Position Cards Redesign **COMPLETE**
 
 Enhance position display with modern card styling and status indicators.
 
@@ -530,7 +530,7 @@ Style the collapsible recovery section with modern accordion UI.
 grep -q "accordion" frontend/src/components/RecoverDeposit.tsx && echo "Phase 9 complete"
 ```
 
-### Step 24: Add accordion component styling
+### Step 24: Add accordion component styling **COMPLETE**
 
 #### Goal
 Create accordion CSS classes with header, chevron rotation, and slide-down content animation.
