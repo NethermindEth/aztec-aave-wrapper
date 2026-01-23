@@ -22,11 +22,38 @@ function truncateAddress(address: string): string {
 }
 
 /**
+ * L1 icon (Ethereum-style)
+ */
+function L1Icon() {
+  return (
+    <svg class="contract-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 12l10 10 10-10L12 2z" />
+      <path d="M12 8v8" />
+      <path d="M8 12h8" />
+    </svg>
+  );
+}
+
+/**
+ * L2 icon (Aztec-style with layers)
+ */
+function L2Icon() {
+  return (
+    <svg class="contract-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
+    </svg>
+  );
+}
+
+/**
  * Contract address entry for display
  */
 interface ContractEntry {
   name: string;
   address: string;
+  layer: "L1" | "L2";
 }
 
 /**
@@ -67,22 +94,43 @@ export function ContractDeployment() {
     const entries: ContractEntry[] = [];
 
     if (state.contracts.portal) {
-      entries.push({ name: "Portal (L1)", address: state.contracts.portal });
+      entries.push({ name: "Portal", address: state.contracts.portal, layer: "L1" });
     }
     if (state.contracts.mockUsdc) {
-      entries.push({ name: "Mock USDC (L1)", address: state.contracts.mockUsdc });
+      entries.push({ name: "Mock USDC", address: state.contracts.mockUsdc, layer: "L1" });
     }
     if (state.contracts.mockLendingPool) {
-      entries.push({ name: "Lending Pool (L1)", address: state.contracts.mockLendingPool });
+      entries.push({ name: "Lending Pool", address: state.contracts.mockLendingPool, layer: "L1" });
     }
     if (state.contracts.l2BridgedToken) {
-      entries.push({ name: "BridgedToken (L2)", address: state.contracts.l2BridgedToken });
+      entries.push({ name: "BridgedToken", address: state.contracts.l2BridgedToken, layer: "L2" });
     }
     if (state.contracts.l2Wrapper) {
-      entries.push({ name: "AaveWrapper (L2)", address: state.contracts.l2Wrapper });
+      entries.push({ name: "AaveWrapper", address: state.contracts.l2Wrapper, layer: "L2" });
     }
 
     return entries;
+  };
+
+  /**
+   * Copy address to clipboard with visual feedback
+   */
+  const copyToClipboard = async (address: string, event: MouseEvent) => {
+    const target = event.currentTarget as HTMLElement;
+    try {
+      // Check if clipboard API is available (requires secure context)
+      if (!navigator.clipboard) {
+        throw new Error("Clipboard API not available");
+      }
+      await navigator.clipboard.writeText(address);
+      target.setAttribute("data-copied", "true");
+      setTimeout(() => {
+        target.removeAttribute("data-copied");
+      }, 1500);
+    } catch (err) {
+      // Fallback: select text for manual copy (useful in dev/insecure contexts)
+      console.warn("Clipboard copy failed, address:", address, err);
+    }
   };
 
   /**
@@ -152,15 +200,19 @@ export function ContractDeployment() {
           </Show>
 
           <Show when={hasContracts()}>
-            <div class="space-y-2">
+            <div class="contracts-grid">
               <For each={contractEntries()}>
                 {(contract) => (
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-foreground">{contract.name}</span>
-                    <span class="font-mono" title={contract.address}>
-                      {truncateAddress(contract.address)}
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    class="contract-pill"
+                    title={`Click to copy: ${contract.address}`}
+                    onClick={(e) => copyToClipboard(contract.address, e)}
+                  >
+                    {contract.layer === "L1" ? <L1Icon /> : <L2Icon />}
+                    <span class="contract-name">{contract.name}</span>
+                    <span class="contract-address">{truncateAddress(contract.address)}</span>
+                  </button>
                 )}
               </For>
             </div>

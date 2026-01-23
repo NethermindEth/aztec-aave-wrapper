@@ -684,6 +684,16 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     CONTRACTS GRID LAYOUT
+     ────────────────────────────────────────────────────────────────────────── */
+  .contracts-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    align-items: flex-start;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      CONTRACT PILL COMPONENT
      ────────────────────────────────────────────────────────────────────────── */
   .contract-pill {
@@ -701,6 +711,7 @@
     transition: all var(--transition-fast);
     max-width: 100%;
     text-decoration: none;
+    position: relative; /* Required for tooltip positioning */
   }
 
   .contract-pill:hover {
@@ -753,13 +764,51 @@
     color: var(--text-muted);
   }
 
+  /* Contract pill icon */
+  .contract-pill-icon {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    opacity: 0.7;
+  }
+
+  .contract-pill:hover .contract-pill-icon {
+    opacity: 1;
+  }
+
+  /* Copy feedback tooltip */
+  .contract-pill[data-copied="true"]::after {
+    content: 'Copied!';
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    color: var(--text-primary);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.65rem;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: fadeInOut 1.5s ease-in-out forwards;
+  }
+
+  @keyframes fadeInOut {
+    0% { opacity: 0; transform: translateX(-50%) translateY(4px); }
+    15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    100% { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  }
+
   /* ──────────────────────────────────────────────────────────────────────────
      REDUCED MOTION SUPPORT
      ────────────────────────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .tab-panel,
     .accordion.open .accordion-content,
-    .network-dot.connecting {
+    .network-dot.connecting,
+    .contract-pill[data-copied="true"]::after {
       animation: none;
     }
 
