@@ -615,7 +615,7 @@ grep -q "log-type\|log-entry" frontend/src/components/LogViewer.tsx && echo "OK"
 
 ---
 
-## Phase 11: Responsive Design Polish
+## Phase 11: Responsive Design Polish **COMPLETE**
 
 Ensure all components work correctly across viewport sizes.
 
@@ -671,7 +671,7 @@ Verify all components integrate correctly and build succeeds.
 cd frontend && npm run build && npm run lint && echo "Phase 12 complete - Redesign finished"
 ```
 
-### Step 30: Update Card primitive with glass variant
+### Step 30: Update Card primitive with glass variant **COMPLETE**
 
 #### Goal
 Add glass variant to Card component for consistent glassmorphism application across the app.

@@ -1,14 +1,43 @@
 import { type JSX, splitProps } from "solid-js";
 import { cn } from "~/lib/utils";
 
-export interface CardProps extends JSX.HTMLAttributes<HTMLDivElement> {}
+export type CardVariant = "default" | "glass";
+
+const cardVariants: {
+  base: string;
+  variant: Record<CardVariant, string>;
+} = {
+  base: "rounded-lg border text-card-foreground",
+  variant: {
+    default: "bg-card shadow-sm",
+    glass: [
+      "bg-[var(--bg-glass)]",
+      "backdrop-blur-xl",
+      "border-[var(--border-glass)]",
+      "transition-all duration-200",
+      "relative overflow-hidden",
+      "hover:bg-[var(--bg-card-hover)]",
+      "hover:border-[var(--border-active)]",
+      "hover:shadow-[var(--shadow-glow)]",
+      "hover:-translate-y-0.5",
+    ].join(" "),
+  },
+};
+
+export interface CardProps extends JSX.HTMLAttributes<HTMLDivElement> {
+  variant?: CardVariant;
+}
 
 export function Card(props: CardProps) {
-  const [local, others] = splitProps(props, ["class", "children"]);
+  const [local, others] = splitProps(props, ["variant", "class", "children"]);
 
   return (
     <div
-      class={cn("rounded-lg border bg-card text-card-foreground shadow-sm", local.class)}
+      class={cn(
+        cardVariants.base,
+        cardVariants.variant[local.variant ?? "default"],
+        local.class
+      )}
       {...others}
     >
       {local.children}
