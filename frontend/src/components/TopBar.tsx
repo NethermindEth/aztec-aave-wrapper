@@ -48,26 +48,25 @@ function truncateEthAddress(address: string): string {
 
 /**
  * Connection status indicator with pulse animation
+ * Uses .network-dot CSS class with state modifiers for consistent styling
  */
 function StatusIndicator(props: { status: "connected" | "connecting" | "disconnected" | "error" }) {
-  const colorClass = () => {
+  const stateClass = () => {
     switch (props.status) {
       case "connected":
-        return "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]";
+        return "connected";
       case "connecting":
-        return "bg-amber-400 animate-pulse";
+        return "connecting";
       case "error":
-        return "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)]";
+        return "error";
+      case "disconnected":
+        return "disconnected";
       default:
-        return "bg-zinc-600";
+        return "disconnected";
     }
   };
 
-  return (
-    <span
-      class={`inline-block w-1.5 h-1.5 rounded-full transition-all duration-300 ${colorClass()}`}
-    />
-  );
+  return <span class={`network-dot ${stateClass()}`} />;
 }
 
 /**

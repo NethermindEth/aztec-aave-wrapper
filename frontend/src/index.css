@@ -215,6 +215,51 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     NETWORK STATUS DOT
+     ────────────────────────────────────────────────────────────────────────── */
+  .network-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #52525b; /* zinc-600 - neutral gray as safe default */
+    position: relative;
+    flex-shrink: 0;
+    transition: background var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .network-dot.connected {
+    background: var(--status-success);
+    box-shadow: 0 0 10px var(--status-success);
+  }
+
+  .network-dot.connecting {
+    background: var(--status-warning);
+    animation: network-dot-pulse 1.5s ease-in-out infinite;
+  }
+
+  .network-dot.error {
+    background: var(--status-error);
+    box-shadow: 0 0 6px var(--status-error);
+  }
+
+  .network-dot.disconnected {
+    background: #52525b; /* zinc-600 - neutral gray for disconnected state */
+    box-shadow: none;
+  }
+
+  @keyframes network-dot-pulse {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(1.2);
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      GLASS CARD COMPONENT
      ────────────────────────────────────────────────────────────────────────── */
   .glass-card {
@@ -545,7 +590,8 @@
      ────────────────────────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
     .tab-panel,
-    .accordion.open .accordion-content {
+    .accordion.open .accordion-content,
+    .network-dot.connecting {
       animation: none;
     }
 

@@ -123,7 +123,7 @@ grep -q "logo-icon" frontend/src/components/TopBar.tsx && grep -q "class=\\\"log
 
 ---
 
-### Step 6: Enhance network status indicators with animations
+### Step 6: Enhance network status indicators with animations **COMPLETE**
 
 #### Goal
 Update the StatusIndicator component to use `.network-dot` with `connected` and `connecting` state classes defined in the redesign spec.
