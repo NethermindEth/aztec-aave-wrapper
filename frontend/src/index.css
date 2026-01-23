@@ -1237,6 +1237,58 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     RESPONSIVE BREAKPOINTS - HEADER (768px)
+     ────────────────────────────────────────────────────────────────────────── */
+  @media (max-width: 768px) {
+    /* Header: stack elements vertically on mobile */
+    .header {
+      flex-wrap: wrap;
+      gap: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      min-height: 56px; /* Prevent height jump on wrap */
+    }
+
+    .header-right {
+      gap: var(--space-sm);
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    /* Network status: ensure minimum touch target size */
+    .network-dot {
+      width: 10px;
+      height: 10px;
+    }
+
+    /* Wallet buttons: maintain readable size on mobile */
+    .btn-wallet {
+      padding: var(--space-sm) var(--space-sm);
+      font-size: 0.6875rem;
+      min-height: 36px; /* Touch target minimum */
+    }
+
+    /* Logo: slightly smaller on mobile */
+    .logo-icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    .logo-icon svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .logo-text {
+      font-size: 0.875rem;
+    }
+
+    /* Sticky expanded header adjusts for smaller header (matches min-height: 56px) */
+    .header-expanded {
+      top: 56px;
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      REDUCED MOTION SUPPORT
      ────────────────────────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {

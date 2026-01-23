@@ -568,7 +568,7 @@ grep -q "accordion\|⚠️" frontend/src/components/RecoverDeposit.tsx && echo "
 
 ---
 
-## Phase 10: Log Viewer Enhancement
+## Phase 10: Log Viewer Enhancement **COMPLETE**
 
 Modernize the operation logs display with styled entries and status badges.
 
@@ -624,7 +624,7 @@ Ensure all components work correctly across viewport sizes.
 grep -q "@media\|max-width: 768px" frontend/src/index.css && echo "Phase 11 complete"
 ```
 
-### Step 28: Add responsive breakpoints for header
+### Step 28: Add responsive breakpoints for header **COMPLETE**
 
 #### Goal
 Create mobile-first responsive rules for header layout, network status, and wallet buttons.
