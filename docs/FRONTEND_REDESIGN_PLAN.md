@@ -368,7 +368,7 @@ grep -q "input-wrapper\|USDC" frontend/src/components/BridgeFlow.tsx && echo "OK
 
 ---
 
-### Step 17: Update DepositFlow input styling
+### Step 17: Update DepositFlow input styling **COMPLETE**
 
 #### Goal
 Apply new input wrapper structure to DepositFlow component's amount input with consistent styling.
