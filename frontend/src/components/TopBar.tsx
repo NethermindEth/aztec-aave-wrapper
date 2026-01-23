@@ -378,11 +378,13 @@ export function TopBar() {
       {/* Main bar */}
       <div class="h-10 px-3 flex items-center justify-between">
         {/* Logo/Title */}
-        <div class="flex items-center gap-2">
-          <div class="w-5 h-5 rounded bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-            <span class="text-[10px] font-bold text-white">A</span>
+        <div class="logo">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
           </div>
-          <span class="text-sm font-medium tracking-tight text-zinc-100">Aztec Aave</span>
+          <span class="logo-text">Aztec Aave</span>
         </div>
 
         {/* Status indicators */}
