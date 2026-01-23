@@ -975,6 +975,199 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     POSITION CARD COMPONENT
+     ────────────────────────────────────────────────────────────────────────── */
+  .position-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    transition: all var(--transition-base);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .position-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  }
+
+  .position-card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-active);
+    box-shadow: var(--shadow-glow);
+  }
+
+  /* Prevent card hover from affecting nested buttons */
+  .position-card .btn-cta,
+  .position-card button {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Position header with ID and status badge */
+  .position-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-md);
+  }
+
+  .position-id {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  /* Position info section with token and amount */
+  .position-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md);
+  }
+
+  /* Token icon with dynamic background color */
+  .position-token-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    /* Default background - overridden by token-specific classes */
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: box-shadow var(--transition-fast);
+  }
+
+  .position-card:hover .position-token-icon {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+
+  .position-token-icon img {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    object-fit: contain;
+  }
+
+  /* Token-specific background colors */
+  .position-token-icon.usdc {
+    background: rgba(39, 117, 202, 0.2); /* USDC blue */
+    box-shadow: 0 2px 12px rgba(39, 117, 202, 0.15);
+  }
+
+  .position-card:hover .position-token-icon.usdc {
+    box-shadow: 0 4px 20px rgba(39, 117, 202, 0.25);
+  }
+
+  .position-token-icon.eth {
+    background: rgba(98, 126, 234, 0.2); /* ETH purple-blue */
+    box-shadow: 0 2px 12px rgba(98, 126, 234, 0.15);
+  }
+
+  .position-card:hover .position-token-icon.eth {
+    box-shadow: 0 4px 20px rgba(98, 126, 234, 0.25);
+  }
+
+  .position-token-icon.wbtc {
+    background: rgba(242, 169, 0, 0.2); /* WBTC orange */
+    box-shadow: 0 2px 12px rgba(242, 169, 0, 0.15);
+  }
+
+  .position-card:hover .position-token-icon.wbtc {
+    box-shadow: 0 4px 20px rgba(242, 169, 0, 0.25);
+  }
+
+  /* Position amount display */
+  .position-amount {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .position-amount-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    line-height: 1.2;
+  }
+
+  .position-amount-symbol {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* APY indicator styling */
+  .position-apy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .position-apy-label {
+    font-size: 0.625rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .position-apy-value {
+    font-size: 1.125rem;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Positive APY gets accent gradient, negative gets warning color */
+  .position-apy-value.negative {
+    background: none;
+    -webkit-text-fill-color: var(--status-warning);
+    color: var(--status-warning);
+  }
+
+  /* Position actions row */
+  .position-actions {
+    display: flex;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--border-glass);
+  }
+
+  .position-actions button {
+    flex: 1;
+  }
+
+  /* Position status message */
+  .position-status-message {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: var(--space-sm);
+    padding: var(--space-sm);
+    background: var(--bg-input);
+    border-radius: var(--radius-sm);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      REDUCED MOTION SUPPORT
      ────────────────────────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
