@@ -549,7 +549,7 @@ grep -q "accordion-header" frontend/src/index.css && echo "OK"
 
 ---
 
-### Step 25: Update RecoverDeposit with accordion styling
+### Step 25: Update RecoverDeposit with accordion styling **COMPLETE**
 
 #### Goal
 Apply accordion pattern to RecoverDeposit component for collapsible stuck deposit recovery.

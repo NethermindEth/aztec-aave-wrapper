@@ -47,12 +47,14 @@ function getStatusLabel(status: number): string {
 }
 
 /**
- * Chevron icon component
+ * Chevron icon component for accordion
  */
-function ChevronIcon(props: { expanded: boolean }): JSX.Element {
+function ChevronIcon(): JSX.Element {
   return (
     <svg
-      class={`w-4 h-4 transition-transform ${props.expanded ? "rotate-180" : ""}`}
+      class="accordion-chevron"
+      width="16"
+      height="16"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -370,23 +372,28 @@ export function RecoverDeposit() {
   };
 
   return (
-    <section class="bg-zinc-900 rounded-lg border border-zinc-800">
-      {/* Collapsible Header */}
+    <section class={`accordion ${isExpanded() ? "open" : ""}`}>
+      {/* Accordion Header */}
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded())}
-        class="w-full flex items-center justify-between p-4 text-left hover:bg-zinc-800/50 transition-colors rounded-lg"
+        class="accordion-header"
+        aria-expanded={isExpanded()}
+        aria-controls="recover-deposit-content"
       >
         <div>
-          <h2 class="text-lg font-medium text-zinc-100">Recover Stuck Deposit</h2>
-          <p class="text-sm text-zinc-500">Query and cancel failed deposits to recover tokens</p>
+          <div class="accordion-title">
+            <span class="accordion-icon">⚠️</span>
+            Recover Stuck Deposit
+          </div>
+          <p class="accordion-description">Query and cancel failed deposits to recover tokens</p>
         </div>
-        <ChevronIcon expanded={isExpanded()} />
+        <ChevronIcon />
       </button>
 
-      {/* Collapsible Content */}
-      <Show when={isExpanded()}>
-        <div class="px-4 pb-4 space-y-4 border-t border-zinc-800 pt-3">
+      {/* Accordion Content */}
+      <div class="accordion-content" id="recover-deposit-content">
+        <div class="space-y-4">
           {/* Scan Section */}
           <div class="bg-zinc-800/50 rounded p-3 space-y-3">
             <div class="flex items-center justify-between">
@@ -617,7 +624,7 @@ export function RecoverDeposit() {
             )}
           </Show>
         </div>
-      </Show>
+      </div>
     </section>
   );
 }
