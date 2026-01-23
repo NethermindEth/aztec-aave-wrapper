@@ -18,7 +18,6 @@ import { type StepConfig, StepIndicator } from "./StepIndicator";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
-import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 /**
@@ -200,8 +199,8 @@ export function BridgeFlow(props: BridgeFlowProps) {
     }
   };
 
-  // Determine error to display (validation error or operation error)
-  const displayError = () => validationError() ?? state.operation.error;
+  // Determine error to display (only operation errors, validation shown inline)
+  const displayError = () => state.operation.error;
 
   return (
     <Card class={props.class}>
@@ -218,26 +217,56 @@ export function BridgeFlow(props: BridgeFlowProps) {
 
         {/* Amount Input */}
         <div class="space-y-2">
-          <div class="flex justify-between">
-            <Label for="bridge-amount">Amount (USDC)</Label>
+          <Label for="bridge-amount">Amount</Label>
+          <div
+            class={`input-wrapper${validationError() ? " error" : ""}${isProcessing() ? " disabled" : ""}`}
+          >
+            <div class="input-token">
+              <svg
+                class="input-token-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="12" fill="#2775CA" />
+                <path
+                  d="M12 17.5c-3.03 0-5.5-2.47-5.5-5.5S8.97 6.5 12 6.5s5.5 2.47 5.5 5.5-2.47 5.5-5.5 5.5zm0-10c-2.48 0-4.5 2.02-4.5 4.5s2.02 4.5 4.5 4.5 4.5-2.02 4.5-4.5-2.02-4.5-4.5-4.5z"
+                  fill="white"
+                />
+                <path
+                  d="M12.75 14.25h-1.5v-.75h1.5v.75zm0-3h-1.5V9.75h1.5v1.5zm.75 1.5h-3v-1.5h3v1.5z"
+                  fill="white"
+                />
+              </svg>
+              <span class="input-token-symbol">USDC</span>
+            </div>
+            <input
+              id="bridge-amount"
+              type="text"
+              inputMode="decimal"
+              class="input-field"
+              placeholder="0.00"
+              value={amount()}
+              onInput={(e) => handleAmountChange(e.currentTarget.value)}
+              disabled={isProcessing()}
+              aria-invalid={validationError() ? "true" : undefined}
+              aria-describedby={validationError() ? "bridge-amount-error" : undefined}
+            />
             <button
               type="button"
-              class="text-xs text-primary hover:underline"
+              class="btn-max"
               onClick={handleMaxClick}
               disabled={isProcessing()}
             >
               Max
             </button>
           </div>
-          <Input
-            id="bridge-amount"
-            type="text"
-            inputMode="decimal"
-            placeholder="0.00"
-            value={amount()}
-            onInput={(e) => handleAmountChange(e.currentTarget.value)}
-            disabled={isProcessing()}
-          />
+          <Show when={validationError()}>
+            <p id="bridge-amount-error" class="input-error text-sm">
+              {validationError()}
+            </p>
+          </Show>
         </div>
 
         {/* Step Progress */}

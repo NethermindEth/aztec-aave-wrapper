@@ -349,7 +349,7 @@ grep -q "input-wrapper" frontend/src/index.css && grep -q "btn-max" frontend/src
 
 ---
 
-### Step 16: Update BridgeFlow input styling
+### Step 16: Update BridgeFlow input styling **COMPLETE**
 
 #### Goal
 Apply new input wrapper structure to BridgeFlow component's amount input with USDC icon and MAX button.
