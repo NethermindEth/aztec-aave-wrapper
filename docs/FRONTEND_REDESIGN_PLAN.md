@@ -321,7 +321,7 @@ grep -q "tab-panel" frontend/src/components/ui/tabs.tsx && echo "OK"
 
 ---
 
-## Phase 6: Input and Form Styling
+## Phase 6: Input and Form Styling **COMPLETE**
 
 Redesign form inputs with token icons, max buttons, and enhanced focus states.
 
@@ -415,7 +415,7 @@ Create prominent call-to-action buttons with gradient backgrounds and hover anim
 grep -q "btn-cta" frontend/src/components/ui/button.tsx && echo "Phase 7 complete"
 ```
 
-### Step 19: Add CTA button variant to Button primitive
+### Step 19: Add CTA button variant to Button primitive **COMPLETE**
 
 #### Goal
 Add `.btn-cta` class styles in CSS and apply them to primary action buttons (no new button variant required).
