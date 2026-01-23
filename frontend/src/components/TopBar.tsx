@@ -373,9 +373,8 @@ export function TopBar() {
     state.l1.connected && state.l2.connected && state.wallet.l1Address && state.wallet.l2Address;
 
   return (
-    <header class="fixed top-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-sm border-b border-zinc-800/60">
-      {/* Main bar */}
-      <div class="h-10 px-3 flex items-center justify-between">
+    <>
+      <header class="header">
         {/* Logo/Title */}
         <div class="logo">
           <div class="logo-icon">
@@ -387,7 +386,7 @@ export function TopBar() {
         </div>
 
         {/* Status indicators */}
-        <div class="flex items-center gap-4">
+        <div class="header-right">
           {/* Network status */}
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-1.5" title={`L1 Anvil - Chain ${state.l1.chainId}`}>
@@ -487,11 +486,11 @@ export function TopBar() {
             </svg>
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Expanded details panel */}
       <Show when={expanded()}>
-        <div class="px-3 py-3 border-t border-zinc-800/40 bg-zinc-900/50">
+        <div class="header-expanded px-3 py-3">
           <div class="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px]">
             {/* L1 Details */}
             <div class="space-y-1.5">
@@ -609,6 +608,6 @@ export function TopBar() {
           </div>
         </div>
       </Show>
-    </header>
+    </>
   );
 }
