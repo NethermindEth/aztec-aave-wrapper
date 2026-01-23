@@ -521,7 +521,7 @@ grep -q "empty-state\|No positions" frontend/src/components/PositionsList.tsx &&
 
 ---
 
-## Phase 9: Accordion and Recovery Section
+## Phase 9: Accordion and Recovery Section **COMPLETE**
 
 Style the collapsible recovery section with modern accordion UI.
 
@@ -577,7 +577,7 @@ Modernize the operation logs display with styled entries and status badges.
 grep -q "log-entry\|log-type" frontend/src/components/LogViewer.tsx && echo "Phase 10 complete"
 ```
 
-### Step 26: Add log entry styling
+### Step 26: Add log entry styling **COMPLETE**
 
 #### Goal
 Create log entry CSS classes with timestamp, type badge, and message styling.
@@ -668,7 +668,7 @@ Verify all components integrate correctly and build succeeds.
 
 ### Phase Validation
 ```bash
-cd frontend && npm run build && npm run lint && echo "Phase 12 complete - Redesign finished"
+cd frontend && bun run build && npm run typecheck && bun run check && echo "Phase 12 complete - Redesign finished"
 ```
 
 ### Step 30: Update Card primitive with glass variant
