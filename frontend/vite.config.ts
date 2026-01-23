@@ -126,10 +126,10 @@ export default defineConfig({
           src: '../eth/out/AztecAavePortalL1.sol/AztecAavePortalL1.json',
           dest: 'artifacts',
         },
-        {
-          src: '../.deployments.local.json',
-          dest: '.',
-        },
+        // Only copy deployments file if it exists (created during deploy)
+        ...(fs.existsSync(path.resolve(__dirname, '../.deployments.local.json'))
+          ? [{ src: '../.deployments.local.json', dest: '.' }]
+          : []),
         // Copy Aztec WASM files for browser execution
         {
           src: '../node_modules/.bun/@aztec+noir-acvm_js@*/node_modules/@aztec/noir-acvm_js/web/*.wasm',
