@@ -93,7 +93,7 @@ grep -q "rgba(102, 126, 234" frontend/src/index.css && echo "OK"
 
 ---
 
-## Phase 2: Header Redesign
+## Phase 2: Header Redesign **COMPLETE**
 
 Modernize the TopBar component with glassmorphism styling and animated network status indicators.
 
@@ -189,7 +189,7 @@ Redesign the hero area with privacy-focused branding and visual hierarchy.
 grep -q "PRIVACY-PRESERVING" frontend/src/components/dashboard/Hero.tsx && echo "Phase 3 complete"
 ```
 
-### Step 9: Add privacy-focused hero title and subtitle
+### Step 9: Add privacy-focused hero title and subtitle **COMPLETE**
 
 #### Goal
 Update Hero component to display the new "Privacy-Preserving Lending" messaging and apply `.hero`, `.hero-title`, and `.hero-subtitle` classes. The shield icon remains a CSS pseudo-element per the spec.

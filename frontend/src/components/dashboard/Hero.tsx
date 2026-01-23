@@ -25,11 +25,11 @@ export const Hero: Component<HeroProps> = (props) => {
     (props.totalValueLocked > 0n || props.activePositionCount > 0);
 
   return (
-    <section class="text-center py-6">
-      <h1 class="text-2xl font-semibold tracking-tight text-zinc-100">
+    <section class="hero text-center py-6">
+      <h1 class="hero-title text-2xl font-semibold tracking-tight text-zinc-100">
         Privacy-Preserving Lending
       </h1>
-      <p class="text-sm text-zinc-500 mt-1.5 max-w-md mx-auto">
+      <p class="hero-subtitle text-sm text-zinc-500 mt-1.5 max-w-md mx-auto">
         Deposit into Aave V3 from Aztec L2 while keeping your identity private
       </p>
 

@@ -293,6 +293,32 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     HERO SECTION
+     ────────────────────────────────────────────────────────────────────────── */
+  .hero {
+    position: relative;
+    padding: var(--space-xl) 0;
+  }
+
+  .hero-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: var(--primary-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: var(--space-xs);
+  }
+
+  .hero-subtitle {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+    max-width: 28rem;
+    margin: 0 auto;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      GLASS CARD COMPONENT
      ────────────────────────────────────────────────────────────────────────── */
   .glass-card {
