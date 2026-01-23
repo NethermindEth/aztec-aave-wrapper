@@ -19,8 +19,6 @@ import type { AztecNodeClient } from "../services/l2/client.js";
 import { createL2NodeClientNoWait, waitForL2Node } from "../services/l2/client.js";
 import type { AaveWrapperContract, AztecAddress } from "../services/l2/contract.js";
 import { loadContractWithAzguard, loadContractWithDevWallet } from "../services/l2/contract.js";
-import type { AzguardWallet } from "../services/wallet/aztec.js";
-import type { DevWallet } from "../services/wallet/devWallet.js";
 import type { EthereumWalletConnection } from "../services/wallet/ethereum.js";
 import { type AnyAztecWallet, isDevWallet } from "../services/wallet/index.js";
 import { setATokenBalance, setEthBalance, setUsdcBalance } from "../store/actions.js";

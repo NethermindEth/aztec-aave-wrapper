@@ -152,7 +152,7 @@ export async function connectDevWallet(): Promise<DevWalletConnection> {
   // Wait for node to be ready
   try {
     await waitForNode(node);
-  } catch (error) {
+  } catch (_error) {
     throw new Error(
       `Failed to connect to Aztec node at ${PXE_URL}. Is the devnet running? (make devnet-up)`
     );

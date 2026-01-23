@@ -22,7 +22,7 @@ import { type Accessor, createMemo, createSignal } from "solid-js";
 import { type Address, type Chain, type Hex, type PublicClient, pad, type Transport } from "viem";
 import { getWithdrawalBridgeMessageKey } from "../services/l1/portal.js";
 import type { AaveWrapperContract } from "../services/l2/contract.js";
-import { isIntentConsumed, L2PositionStatus, queryL2Positions } from "../services/l2/positions.js";
+import { L2PositionStatus, queryL2Positions } from "../services/l2/positions.js";
 import {
   clearAllSecrets,
   getSecret,
@@ -103,6 +103,14 @@ export interface UsePositionsResult {
   isRefreshing: Accessor<boolean>;
   /** Error from last L2 refresh attempt */
   refreshError: Accessor<string | null>;
+
+  // Post-refresh filtering
+  /** Filter out positions where withdrawal was already consumed on L1 */
+  filterClaimedWithdrawals: (
+    publicClient: PublicClient<Transport, Chain>,
+    portalAddress: Address,
+    l2WalletAddress: string
+  ) => Promise<void>;
 
   // Secret management for withdrawal finalization
   /** Store a secret for a position (call after successful deposit) */
@@ -341,7 +349,7 @@ export function usePositions(): UsePositionsResult {
     console.log(
       "[filterClaimedWithdrawals] Positions:",
       currentPositions.map((p) => ({
-        intentId: p.intentId.slice(0, 16) + "...",
+        intentId: `${p.intentId.slice(0, 16)}...`,
         status: p.status,
         statusName: IntentStatus[p.status],
       }))

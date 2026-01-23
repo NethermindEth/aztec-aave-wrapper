@@ -17,15 +17,7 @@
  * NOTE: Full withdrawal only - MVP constraint enforces withdrawing entire position.
  */
 
-import {
-  type Address,
-  type Chain,
-  type Hex,
-  type PublicClient,
-  pad,
-  type Transport,
-  toHex,
-} from "viem";
+import { type Address, type Hex, pad, toHex } from "viem";
 
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
