@@ -19,8 +19,10 @@
 
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import { type Accessor, createMemo, createSignal } from "solid-js";
+import { type Address, type Chain, type Hex, type PublicClient, pad, type Transport } from "viem";
+import { getWithdrawalBridgeMessageKey } from "../services/l1/portal.js";
 import type { AaveWrapperContract } from "../services/l2/contract.js";
-import { L2PositionStatus, queryL2Positions } from "../services/l2/positions.js";
+import { isIntentConsumed, L2PositionStatus, queryL2Positions } from "../services/l2/positions.js";
 import {
   clearAllSecrets,
   getSecret,
@@ -144,10 +146,12 @@ function getAllStoredSecretKeys(): string[] {
 /**
  * Map L2 position status to IntentStatus enum.
  *
- * L2 PositionReceiptNote status values:
- * - 0: PendingDeposit - Deposit initiated, awaiting L1 confirmation
- * - 1: Active - Position is active on L1 Aave pool
- * - 2: PendingWithdraw - Withdrawal initiated, awaiting completion
+ * L2 PositionReceiptNote status values (from main.nr):
+ * - 1: PendingDeposit - Deposit initiated, awaiting L1 confirmation
+ * - 2: Active (CONFIRMED) - Position is active on L1 Aave pool
+ * - 3: Cancelled - Deposit was cancelled
+ * - 4: PendingWithdraw - Withdrawal initiated, awaiting completion
+ * - 5: Withdrawn - Withdrawal completed
  */
 function mapL2StatusToIntentStatus(l2Status: number): IntentStatus {
   switch (l2Status) {
@@ -289,6 +293,7 @@ export function usePositions(): UsePositionsResult {
       });
 
       // Replace all positions with L2 data (L2 is source of truth)
+      // Note: PendingWithdraw positions are filtered separately based on pending bridges
       console.log("[refreshFromL2] Setting", l2Positions.length, "positions in state");
       setPositions(l2Positions);
 
@@ -308,6 +313,133 @@ export function usePositions(): UsePositionsResult {
       console.error("[refreshFromL2] Error:", errorMessage, error);
     } finally {
       setIsRefreshing(false);
+    }
+  }
+
+  /**
+   * Filter out PendingWithdraw positions where tokens have been claimed.
+   *
+   * This queries L1 for the TokensDepositedToL2 event to find the bridge messageKey,
+   * then checks if a secret exists for that messageKey. If no secret exists,
+   * the tokens were claimed and the position is filtered out.
+   *
+   * @param publicClient - L1 public client for querying events
+   * @param portalAddress - Portal contract address
+   * @param l2WalletAddress - L2 wallet address for secret lookup
+   */
+  async function filterClaimedWithdrawals(
+    publicClient: PublicClient<Transport, Chain>,
+    portalAddress: Address,
+    l2WalletAddress: string
+  ): Promise<void> {
+    console.log("[filterClaimedWithdrawals] START");
+    console.log("[filterClaimedWithdrawals] portalAddress:", portalAddress);
+    console.log("[filterClaimedWithdrawals] l2WalletAddress:", l2WalletAddress);
+
+    const currentPositions = state.positions;
+    console.log("[filterClaimedWithdrawals] Current positions count:", currentPositions.length);
+    console.log(
+      "[filterClaimedWithdrawals] Positions:",
+      currentPositions.map((p) => ({
+        intentId: p.intentId.slice(0, 16) + "...",
+        status: p.status,
+        statusName: IntentStatus[p.status],
+      }))
+    );
+
+    const filteredPositions: PositionDisplay[] = [];
+
+    // ABI for checking consumed withdrawal intents
+    const consumedWithdrawIntentsAbi = [
+      {
+        name: "consumedWithdrawIntents",
+        type: "function",
+        stateMutability: "view",
+        inputs: [{ type: "bytes32" }],
+        outputs: [{ type: "bool" }],
+      },
+    ] as const;
+
+    for (const pos of currentPositions) {
+      const intentIdRaw = pos.intentId.startsWith("0x")
+        ? (pos.intentId as Hex)
+        : (`0x${pos.intentId}` as Hex);
+      // Pad to 32 bytes for L1 contract calls (bytes32)
+      const intentIdHex = pad(intentIdRaw, { size: 32 });
+
+      // For ALL positions (not just PendingWithdraw), check if withdrawal was already consumed on L1
+      // This handles the case where L2 state is stale but L1 already processed the withdrawal
+      try {
+        const alreadyConsumed = await publicClient.readContract({
+          address: portalAddress,
+          abi: consumedWithdrawIntentsAbi,
+          functionName: "consumedWithdrawIntents",
+          args: [intentIdHex],
+        });
+
+        if (alreadyConsumed) {
+          console.log(
+            `[filterClaimedWithdrawals] Filtering out already-consumed position: ${pos.intentId.slice(0, 16)}... (L1 withdrawal already executed)`
+          );
+          continue;
+        }
+      } catch (err) {
+        console.warn(
+          `[filterClaimedWithdrawals] Failed to check L1 consumed status for ${pos.intentId.slice(0, 16)}...`,
+          err
+        );
+        // Continue with other checks if L1 query fails
+      }
+
+      // For PendingWithdraw positions, also check if tokens were claimed via bridge
+      if (pos.status === IntentStatus.PendingWithdraw) {
+        console.log(
+          `[filterClaimedWithdrawals] Processing PendingWithdraw position: ${pos.intentId.slice(0, 16)}...`
+        );
+
+        // Query L1 for the bridge messageKey corresponding to this intentId
+        console.log(`[filterClaimedWithdrawals] Querying L1 for intentId: ${intentIdHex}`);
+        const messageKey = await getWithdrawalBridgeMessageKey(
+          publicClient,
+          portalAddress,
+          intentIdHex
+        );
+        console.log(`[filterClaimedWithdrawals] Got messageKey: ${messageKey}`);
+
+        if (messageKey) {
+          // Check if there's a stored secret for this messageKey
+          // If secret exists, tokens not yet claimed - keep the position
+          // If no secret, tokens were claimed - filter out the position
+          // Note: Normalize case since hex strings may differ in case between sources
+          const normalizedKey = messageKey.toLowerCase();
+          const secretExists = hasSecret(normalizedKey);
+          console.log(
+            `[filterClaimedWithdrawals] Position ${pos.intentId.slice(0, 16)}...: messageKey=${messageKey.slice(0, 18)}..., secretExists=${secretExists}`
+          );
+          if (!secretExists) {
+            console.log(
+              `[filterClaimedWithdrawals] Filtering out claimed position: ${pos.intentId.slice(0, 16)}...`
+            );
+            continue;
+          }
+        }
+      } else {
+        console.log(
+          `[filterClaimedWithdrawals] Keeping non-PendingWithdraw position: ${pos.intentId.slice(0, 16)}... (status=${IntentStatus[pos.status]})`
+        );
+      }
+
+      // Keep the position if:
+      // - Withdrawal not consumed on L1
+      // - (For PendingWithdraw) No TokensDepositedToL2 event found OR secret still exists
+      filteredPositions.push(pos);
+    }
+
+    if (filteredPositions.length !== currentPositions.length) {
+      console.log(
+        `[filterClaimedWithdrawals] Filtered ${currentPositions.length - filteredPositions.length} claimed position(s)`
+      );
+      setPositions(filteredPositions);
     }
   }
 
@@ -430,6 +562,8 @@ export function usePositions(): UsePositionsResult {
     refreshFromL2,
     isRefreshing,
     refreshError,
+    // Post-refresh filtering
+    filterClaimedWithdrawals,
     // Secret management
     storePositionSecret,
     getPositionSecret,

@@ -258,7 +258,9 @@ export async function storeSecret(
   const secrets = loadStoredSecrets();
 
   // Remove any existing secret for this intent (prevents duplicates)
-  const filtered = secrets.filter((s) => s.intentId !== intentId);
+  // Note: Case-insensitive comparison since hex strings may vary in case
+  const normalizedId = intentId.toLowerCase();
+  const filtered = secrets.filter((s) => s.intentId.toLowerCase() !== normalizedId);
 
   // Add new secret
   filtered.push({
@@ -297,7 +299,9 @@ export async function getSecret(
   }
 
   const secrets = loadStoredSecrets();
-  const stored = secrets.find((s) => s.intentId === intentId);
+  // Note: Case-insensitive comparison since hex strings may vary in case
+  const normalizedId = intentId.toLowerCase();
+  const stored = secrets.find((s) => s.intentId.toLowerCase() === normalizedId);
 
   if (!stored) {
     return null;
@@ -329,7 +333,8 @@ export async function getSecret(
  */
 export function hasSecret(intentId: string): boolean {
   const secrets = loadStoredSecrets();
-  return secrets.some((s) => s.intentId === intentId);
+  const normalizedId = intentId.toLowerCase();
+  return secrets.some((s) => s.intentId.toLowerCase() === normalizedId);
 }
 
 /**
@@ -339,7 +344,8 @@ export function hasSecret(intentId: string): boolean {
  */
 export function removeSecret(intentId: string): void {
   const secrets = loadStoredSecrets();
-  const filtered = secrets.filter((s) => s.intentId !== intentId);
+  const normalizedId = intentId.toLowerCase();
+  const filtered = secrets.filter((s) => s.intentId.toLowerCase() !== normalizedId);
   saveStoredSecrets(filtered);
 }
 

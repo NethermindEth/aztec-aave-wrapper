@@ -70,3 +70,4 @@ e2e/node_modules
 !.weld/config.toml
 codegenCache.json
 *.pid
+.aztec-data

@@ -5,8 +5,10 @@
  * Orchestrates wallet connection, contract loading, and position refresh.
  */
 
+import type { Address } from "viem";
 import { LogLevel } from "../../components/LogViewer";
 import { usePositions } from "../../hooks/usePositions.js";
+import { createL1PublicClient } from "../../services/l1/client.js";
 import {
   getBalance,
   loadBridgedTokenWithAzguard,
@@ -43,7 +45,7 @@ export interface UseL2PositionsResult {
 export function useL2Positions(): UseL2PositionsResult {
   const { state } = useApp();
   const positionHooks = usePositions();
-  const { refreshFromL2 } = positionHooks;
+  const { refreshFromL2, filterClaimedWithdrawals } = positionHooks;
 
   const handleRefreshPositions = async (addLog: (message: string, level?: LogLevel) => void) => {
     if (!state.contracts.l2Wrapper) {
@@ -63,6 +65,26 @@ export function useL2Positions(): UseL2PositionsResult {
         : await loadContractWithAzguard(wallet, l2WrapperAddress);
 
       await refreshFromL2(contract, wallet, walletAddress);
+
+      // Filter out PendingWithdraw positions where tokens were already claimed
+      const portalAddress = state.contracts.portal;
+      console.log("[handleRefreshPositions] Portal address for filtering:", portalAddress);
+      if (portalAddress) {
+        try {
+          console.log("[handleRefreshPositions] Calling filterClaimedWithdrawals...");
+          const publicClient = createL1PublicClient();
+          await filterClaimedWithdrawals(publicClient, portalAddress as Address, walletAddress);
+          console.log("[handleRefreshPositions] filterClaimedWithdrawals completed");
+        } catch (filterError) {
+          // Non-critical - log but continue
+          console.warn(
+            "[handleRefreshPositions] Failed to filter claimed withdrawals:",
+            filterError
+          );
+        }
+      } else {
+        console.log("[handleRefreshPositions] Skipping filter - no portal address");
+      }
 
       if (l2BridgedTokenAddress) {
         try {

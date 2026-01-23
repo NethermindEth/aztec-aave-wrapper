@@ -406,10 +406,7 @@ contract PortalTest is Test {
         vm.expectEmit(true, true, false, true);
         emit AztecAavePortalL1.WithdrawExecuted(withdrawIntent.intentId, address(token), 1000e18);
 
-        vm.expectEmit(true, false, false, true);
-        emit AztecAavePortalL1.WithdrawConfirmed(
-            withdrawIntent.intentId, 1000e18, ConfirmationStatus.SUCCESS
-        );
+        // Note: WithdrawConfirmed event no longer emitted - token claim completes withdrawal
 
         vm.prank(relayer);
         portal.executeWithdraw(

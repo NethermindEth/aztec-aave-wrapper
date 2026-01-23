@@ -30,7 +30,6 @@ import {
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
 import type { WithdrawIntent } from "../services/l1/intent.js";
-import { mineL1Block } from "../services/l1/mining.js";
 import { executeWithdraw, type MerkleProof } from "../services/l1/portal.js";
 
 // L2 Services
@@ -49,11 +48,7 @@ import {
   type L2ToL1MessageProofResult,
   waitForL2ToL1MessageProof,
 } from "../services/l2/messageProof.js";
-import {
-  executeFinalizeWithdraw,
-  executeRequestWithdraw,
-  type Fr,
-} from "../services/l2/operations.js";
+import { executeRequestWithdraw, type Fr } from "../services/l2/operations.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
 import { storeWithdrawSecret } from "../services/secrets.js";
 import {
@@ -194,116 +189,6 @@ export class PartialWithdrawError extends Error {
 // =============================================================================
 // Helper Functions
 // =============================================================================
-
-/**
- * Wait for L1→L2 message to be available on L2.
- *
- * Uses the Aztec node's `getL1ToL2MessageBlock` API to poll for message availability
- * when a message leaf is provided. Otherwise falls back to time-based waiting.
- *
- * @param publicClient - L1 public client (for mining blocks to advance time)
- * @param node - Aztec node client
- * @param messageLeaf - Optional message leaf hash from the L1 L2MessageSent event
- * @param maxWaitMs - Maximum wait time in milliseconds (default: 180s)
- * @param pollIntervalMs - Polling interval (default: 3s)
- */
-async function waitForL1ToL2Message(
-  publicClient: PublicClient<Transport, Chain>,
-  node: AztecNodeClient,
-  messageLeaf?: Hex,
-  maxWaitMs = 180_000, // 3 minutes
-  pollIntervalMs = 3000 // 3 seconds between polls
-): Promise<void> {
-  logSection("L1→L2", "Waiting for message to be synced by archiver...");
-
-  const startTime = Date.now();
-
-  // Mine initial L1 blocks to trigger archiver sync
-  logInfo("Mining L1 blocks to trigger archiver sync...");
-  for (let i = 0; i < 3; i++) {
-    await mineL1Block(publicClient);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-
-  // If we have the message leaf, use the proper API to poll
-  if (messageLeaf) {
-    logInfo(`Message leaf: ${messageLeaf}`);
-    const { Fr } = await import("@aztec/aztec.js/fields");
-    const messageLeafFr = Fr.fromString(messageLeaf);
-
-    let pollCount = 0;
-    while (Date.now() - startTime < maxWaitMs) {
-      pollCount++;
-
-      try {
-        const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
-
-        if (messageBlockNumber !== undefined) {
-          const currentBlock = await node.getBlockNumber();
-          logInfo(
-            `Message available at L2 block ${messageBlockNumber}, current block: ${currentBlock}`
-          );
-
-          if (currentBlock >= messageBlockNumber) {
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-            logSuccess(`L1→L2 message ready for consumption (${elapsed}s, block ${currentBlock})`);
-            return;
-          }
-
-          logInfo(`Waiting for L2 block ${messageBlockNumber} (current: ${currentBlock})...`);
-        } else {
-          logInfo(`Poll ${pollCount}: Message not yet synced by archiver...`);
-        }
-
-        await mineL1Block(publicClient);
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-      } catch (error) {
-        logInfo(`Poll ${pollCount}: ${error instanceof Error ? error.message : "Error"}`);
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-      }
-    }
-
-    const elapsed = Math.round((Date.now() - startTime) / 1000);
-    logError(`Timeout after ${elapsed}s waiting for L1→L2 message`);
-    throw new Error(`L1→L2 message not available after ${elapsed}s. Message leaf: ${messageLeaf}`);
-  }
-
-  // Fallback: time-based waiting when no message leaf provided
-  logInfo("No message leaf provided, using time-based wait...");
-  const initialL2Block = await node.getBlockNumber();
-  let lastL2Block = initialL2Block;
-  let blocksAdvanced = 0;
-  const requiredBlockAdvance = 4;
-
-  while (Date.now() - startTime < maxWaitMs) {
-    try {
-      const currentL2Block = await node.getBlockNumber();
-
-      if (currentL2Block > lastL2Block) {
-        blocksAdvanced += currentL2Block - lastL2Block;
-        lastL2Block = currentL2Block;
-        logInfo(`L2 block ${currentL2Block} (+${blocksAdvanced} total)`);
-
-        if (blocksAdvanced >= requiredBlockAdvance) {
-          const elapsed = Math.round((Date.now() - startTime) / 1000);
-          logSuccess(
-            `L1→L2 message should be consumable (${elapsed}s, ${blocksAdvanced} L2 blocks)`
-          );
-          return;
-        }
-      }
-
-      await mineL1Block(publicClient);
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-    } catch (error) {
-      logInfo(`Polling... (${error instanceof Error ? error.message : ""})`);
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-    }
-  }
-
-  const elapsed = Math.round((Date.now() - startTime) / 1000);
-  logInfo(`Wait completed (${elapsed}s, ${blocksAdvanced} L2 blocks) - proceeding anyway`);
-}
 
 /**
  * Validate that withdrawal amount matches position (full withdrawal only).
@@ -687,50 +572,17 @@ export async function executeWithdrawFlow(
     }
 
     // =========================================================================
-    // Optional: Finalize on L2 (if L1→L2 messaging is available)
+    // Withdrawal L1 execution complete
     // =========================================================================
-    // Note: In devnet without real L1→L2 messaging, finalize may fail
-    // This step would complete the flow by consuming the L1→L2 message
+    // Token claiming via BridgedToken (claim_private) completes the withdrawal.
+    // The PendingWithdraw note remains on L2 for refund capability if needed.
+    // Position will be filtered out from UI once tokens are claimed.
 
-    console.log("=== OPTIONAL: FINALIZE WITHDRAW ON L2 ===");
-    try {
-      console.log("Waiting for L1→L2 message...");
-      await waitForL1ToL2Message(publicClient, node, l1MessageLeaf);
+    logInfo("L1 withdrawal complete. Claim tokens via 'Pending Bridge Claims' to finish.");
 
-      console.log("Executing finalize_withdraw...");
-      console.log(`  Using actualWithdrawnAmount: ${actualWithdrawnAmount}`);
-      console.log(`  Using messageLeafIndex: ${l1ToL2MessageIndex}`);
-      // IMPORTANT: L1 portal sends the confirmation message with secretHash = 0
-      // (see AztecAavePortalL1.sol line 372: sendL2Message(..., bytes32(0)))
-      // So we must use 0n as the secret for consume_l1_to_l2_message to succeed.
-      // The user's withdrawal secret is for token claiming, not for this L1→L2 message.
-      const { Fr } = await import("@aztec/aztec.js/fields");
-      const zeroSecret = Fr.ZERO;
-      const finalizeResult = await executeFinalizeWithdraw(
-        contract,
-        {
-          intentId,
-          assetId: assetId, // L1 token address as Field (must match L1 confirmation message)
-          amount: actualWithdrawnAmount, // Use actual amount from L1 (may include interest)
-          secret: zeroSecret, // L1 sends with secretHash=0, so secret must be preimage of 0
-          messageLeafIndex: l1ToL2MessageIndex,
-        },
-        wallet.address
-      );
-      txHashes.l2Finalize = finalizeResult.txHash;
-      console.log("=== FINALIZE_WITHDRAW SUCCESS ===");
-      console.log(`  txHash: ${finalizeResult.txHash}`);
-      logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
-    } catch (error) {
-      // In devnet without real L1→L2 messaging, finalize may fail
-      console.log("=== FINALIZE_WITHDRAW FAILED ===");
-      console.log(`  error: ${error instanceof Error ? error.message : "Unknown error"}`);
-      logSection("L2", "finalize_withdraw may fail without real L1→L2 message", "warning");
-      logInfo(error instanceof Error ? error.message.slice(0, 100) : "Unknown error");
-    }
-
-    // Remove position from store (full withdrawal consumes the position)
-    removePosition(position.depositIntentId.toString());
+    // Note: We do NOT remove the position here. It stays as PendingWithdraw until
+    // either tokens are claimed (success) or refund is claimed (deadline expired).
+    // The UI will filter out PendingWithdraw positions once tokens are claimed.
 
     // Mark operation as successful
     setOperationStatus("success");

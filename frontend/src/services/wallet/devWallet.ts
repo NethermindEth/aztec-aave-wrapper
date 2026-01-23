@@ -170,7 +170,7 @@ export async function connectDevWallet(): Promise<DevWalletConnection> {
 
     // Enable simulated simulations mode to avoid WASM execution in browser
     // This uses TypeScript emulation instead of running actual circuits
-    if (typeof (testWallet as any).enableSimulatedSimulations === 'function') {
+    if (typeof (testWallet as any).enableSimulatedSimulations === "function") {
       console.log("[DevWallet] Enabling simulated simulations mode (no WASM)");
       (testWallet as any).enableSimulatedSimulations();
     }
@@ -238,17 +238,25 @@ function createDevWalletWrapper(): DevWallet {
         throw new Error("Wallet not connected");
       }
       console.log("[DevWallet.registerContract] instance:", instance);
-      console.log("[DevWallet.registerContract] instance.address:", instance?.address?.toString?.());
+      console.log(
+        "[DevWallet.registerContract] instance.address:",
+        instance?.address?.toString?.()
+      );
       console.log("[DevWallet.registerContract] artifact name:", artifact?.name);
 
       // TestWallet has various methods - try to find the right one
       const tw = testWallet as any;
-      console.log("[DevWallet.registerContract] TestWallet methods:", Object.keys(tw).filter(k => typeof tw[k] === 'function'));
+      console.log(
+        "[DevWallet.registerContract] TestWallet methods:",
+        Object.keys(tw).filter((k) => typeof tw[k] === "function")
+      );
 
       try {
         // Try object form first (TestWallet pattern)
-        if (typeof tw.registerContract === 'function') {
-          console.log("[DevWallet.registerContract] Trying tw.registerContract({ instance, artifact })...");
+        if (typeof tw.registerContract === "function") {
+          console.log(
+            "[DevWallet.registerContract] Trying tw.registerContract({ instance, artifact })..."
+          );
           await tw.registerContract({ instance, artifact });
           console.log("[DevWallet.registerContract] Success with object form!");
           return;
@@ -257,7 +265,9 @@ function createDevWalletWrapper(): DevWallet {
         console.log("[DevWallet.registerContract] Object form failed:", err1);
         // Try two-argument form
         try {
-          console.log("[DevWallet.registerContract] Trying tw.registerContract(instance, artifact)...");
+          console.log(
+            "[DevWallet.registerContract] Trying tw.registerContract(instance, artifact)..."
+          );
           await tw.registerContract(instance, artifact);
           console.log("[DevWallet.registerContract] Success with two-arg form!");
           return;

@@ -216,7 +216,10 @@ export async function loadBridgedTokenWithDevWallet(
     logInfo("[DevWallet] Registering BridgedToken contract artifact with PXE...");
     console.log("[DevWallet] Contract instance to register:", contractInstance);
     console.log("[DevWallet] Contract instance type:", typeof contractInstance);
-    console.log("[DevWallet] Contract instance keys:", contractInstance ? Object.keys(contractInstance) : "null");
+    console.log(
+      "[DevWallet] Contract instance keys:",
+      contractInstance ? Object.keys(contractInstance) : "null"
+    );
     if (contractInstance?.address) {
       console.log("[DevWallet] Contract instance address:", contractInstance.address.toString());
     } else {
@@ -229,7 +232,10 @@ export async function loadBridgedTokenWithDevWallet(
     const underlyingWallet = wallet.getUnderlyingWallet();
     console.log("[DevWallet] Got underlying wallet, creating contract instance...");
     const contract = BridgedTokenContract.at(contractAddress, underlyingWallet);
-    console.log("[DevWallet] Contract created, address:", contract?.address?.toString?.() ?? "undefined");
+    console.log(
+      "[DevWallet] Contract created, address:",
+      contract?.address?.toString?.() ?? "undefined"
+    );
 
     logSuccess(`[DevWallet] BridgedToken contract loaded at ${contractAddressString}`);
 

@@ -32,10 +32,11 @@ make test-l2         # L2: cd aztec && aztec test
 cd eth && forge test --match-test test_executeDeposit -vvv
 
 # E2E tests (requires running devnet)
-make devnet-up       # Start Docker containers
+make devnet-up       # Start devnet (aztec start --local-network) + deploy contracts
 make devnet-health   # Check services are ready
 make e2e             # Run e2e tests: cd e2e && bun run test
-make devnet-down     # Stop containers
+make devnet-down     # Stop devnet (preserves state for fast restart)
+make devnet-clean    # Full reset (removes containers and state)
 
 # Formatting
 make fmt             # Format all code
@@ -61,6 +62,10 @@ make install         # bun install + forge install for l1
 **Tests**:
 - `e2e/src/e2e.test.ts` - Full deposit/withdraw flow tests
 - `aztec/aave_wrapper/src/test/*.nr` - Noir unit tests
+- `eth/test/*.t.sol` - Foundry unit tests for L1 portal
+
+**Demo**:
+- `cd e2e && bun run full-flow` - Complete deposit/withdraw demo with balance tracking
 
 ## Dependencies & Versions
 
@@ -72,10 +77,13 @@ make install         # bun install + forge install for l1
 
 ## Local Development Environment
 
-Docker Compose runs one service:
-- `aztec-sandbox`: Includes Aztec PXE (port 8080) and internal Anvil L1 (port 8545)
+The devnet uses `aztec start --local-network` which manages both L1 and L2:
+- **L1 Anvil**: Port 8545 - Ethereum L1 (internal, timing controlled by Aztec)
+- **L2 PXE**: Port 8080 - Aztec Private Execution Environment
 
-**Important**: L1 anvil must NOT have `--block-time` set - Aztec sandbox controls L1 timing.
+**State preservation**: `make devnet-down` stops but preserves container state. `make devnet-up` will resume with existing blockchain state. Use `make devnet-clean` for a full reset.
+
+**Automine**: The devnet runs an automine process that advances blocks every 5 seconds. View logs with `make automine-logs`.
 
 ## Cross-Chain Message Flow
 
@@ -111,13 +119,22 @@ Docker Compose runs one service:
 - **USDC-only**: MVP focuses on single asset support (multi-asset structure exists but not tested)
 - **L1 Aave only**: Direct deposit to Ethereum L1 Aave pool
 
+## Troubleshooting
+
+**Devnet won't start**: Check for port conflicts with `lsof -i :8545 -i :8080`. Run `make devnet-clean` for a full reset.
+
+**Tests timing out**: Ensure automine is running (`make automine-logs`). Manually advance blocks with `make advance-blocks N=5`.
+
+**L1→L2 message not consumed**: Cross-chain messages require block advancement on both layers. Use the automine process or manually advance.
+
+**Wallet "Block X not yet synced" error**: Browser wallets (Azguard) cache L2 block numbers. After `make devnet-clean`, L2 restarts at block 0 but the wallet expects higher blocks. **Solutions**: (1) Use `make devnet-down`/`make devnet-up` to preserve L2 state via `--data-directory`. (2) If you must clean, reinstall the wallet extension. Note: L1 (Anvil) always restarts fresh; only L2 state is persisted to `.aztec-data/`.
+
 ## Git Commits
 
 - Never mention Claude Code in commit messages
 - Never include the generated footer or Co-Authored-By trailer
 - Use imperative mood ("Add feature" not "Added feature")
 - Keep commits small and focused
-- Before committing update CHANGELOG.md based on the commit messages
 
 ## Code Quality
 

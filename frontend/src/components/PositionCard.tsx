@@ -172,6 +172,11 @@ export function PositionCard(props: PositionCardProps) {
             Withdraw
           </Button>
         </Show>
+        <Show when={props.position.status === IntentStatus.PendingWithdraw && !canClaimRefund()}>
+          <p class="mt-2 text-xs text-muted-foreground">
+            Tokens deposited to L2. Check "Pending Bridge Claims" to claim.
+          </p>
+        </Show>
         <Show when={canCancel()}>
           <Button variant="destructive" size="sm" class="mt-2" onClick={handleCancel}>
             Cancel Deposit

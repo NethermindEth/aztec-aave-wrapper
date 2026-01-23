@@ -730,3 +730,58 @@ export async function waitForTransaction(
     error: `Polling timed out after ${timeout}ms`,
   };
 }
+
+// =============================================================================
+// Withdrawal Bridge Lookup
+// =============================================================================
+
+/**
+ * Get the bridge messageKey for a withdrawn position by querying L1 events.
+ *
+ * This queries TokensDepositedToL2 events filtered by intentId to find
+ * the corresponding messageKey. This is needed to check if a withdrawal's
+ * tokens have been claimed (by checking if the secret still exists).
+ *
+ * @param publicClient - Viem public client
+ * @param portalAddress - Portal contract address
+ * @param intentId - The intent ID (position ID) to look up
+ * @param fromBlock - Starting block to scan (default: 0)
+ * @returns The messageKey if found, null otherwise
+ */
+export async function getWithdrawalBridgeMessageKey(
+  publicClient: PublicClient<Transport, Chain>,
+  portalAddress: Address,
+  intentId: Hex,
+  fromBlock: bigint = 0n
+): Promise<Hex | null> {
+  try {
+    const logs = await publicClient.getLogs({
+      address: portalAddress,
+      event: {
+        type: "event",
+        name: "TokensDepositedToL2",
+        inputs: [
+          { name: "intentId", type: "bytes32", indexed: true },
+          { name: "messageKey", type: "bytes32", indexed: false },
+          { name: "messageIndex", type: "uint256", indexed: false },
+        ],
+      },
+      args: {
+        intentId: intentId,
+      },
+      fromBlock,
+      toBlock: "latest",
+    });
+
+    if (logs.length > 0) {
+      // Return the most recent event's messageKey
+      const latestLog = logs[logs.length - 1];
+      return latestLog.args.messageKey as Hex;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn("[getWithdrawalBridgeMessageKey] Error querying events:", error);
+    return null;
+  }
+}

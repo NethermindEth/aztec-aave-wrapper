@@ -32,6 +32,7 @@ AZTEC_PID_FILE := .aztec.pid
 AZTEC_LOG_FILE := .aztec.log
 AUTOMINE_PID_FILE := .automine.pid
 AUTOMINE_LOG_FILE := .automine.log
+AZTEC_DATA_DIR := .aztec-data
 
 # Network ports
 export ANVIL_L1_PORT ?= 8545
@@ -194,16 +195,20 @@ devnet-up:
 		echo "Run 'make devnet-down' first to stop it."; \
 		exit 1; \
 	fi
-	@# Check for stopped containers that can be resumed
-	@STOPPED_CONTAINERS=$$(docker ps -aq --filter "name=aztec-start" --filter "status=exited" 2>/dev/null); \
-	if [ -n "$$STOPPED_CONTAINERS" ]; then \
-		echo "Resuming stopped devnet containers (preserving blockchain state)..."; \
-		echo ""; \
-		docker start $$STOPPED_CONTAINERS; \
+	@# Remove any stale containers from previous runs
+	@docker ps -aq --filter "name=aztec-start" | xargs -r docker rm -f 2>/dev/null || true
+	@# Check if we have existing state to resume
+	@if [ -d $(AZTEC_DATA_DIR) ] && [ -f .deployments.local.json ]; then \
+		echo "Resuming devnet with existing state from $(AZTEC_DATA_DIR)..."; \
 		echo ""; \
 		echo "Endpoints:"; \
 		echo "  - L1 Anvil:    http://localhost:$(ANVIL_L1_PORT)"; \
 		echo "  - L2 PXE:      http://localhost:$(PXE_PORT)"; \
+		echo ""; \
+		echo "Logs: $(AZTEC_LOG_FILE)"; \
+		echo ""; \
+		nohup aztec start --local-network --data-directory $(AZTEC_DATA_DIR) > $(AZTEC_LOG_FILE) 2>&1 & echo $$! > $(AZTEC_PID_FILE); \
+		echo "Started aztec (PID: $$(cat $(AZTEC_PID_FILE)))"; \
 		echo ""; \
 		echo "Waiting for services to be healthy..."; \
 		./scripts/wait-for-services.sh; \
@@ -212,7 +217,7 @@ devnet-up:
 		nohup bun run $(E2E_DIR)/scripts/automine.ts > $(AUTOMINE_LOG_FILE) 2>&1 & echo $$! > $(AUTOMINE_PID_FILE); \
 		echo "Started automine (PID: $$(cat $(AUTOMINE_PID_FILE)))"; \
 		echo ""; \
-		echo -e "$(GREEN)Devnet resumed! Contracts already deployed.$(NC)"; \
+		echo -e "$(GREEN)Devnet resumed with existing state!$(NC)"; \
 		echo "Run 'make devnet-logs' to view logs."; \
 		echo "Run 'make devnet-clean' to start fresh."; \
 	else \
@@ -225,7 +230,7 @@ devnet-up:
 		echo ""; \
 		echo "Logs: $(AZTEC_LOG_FILE)"; \
 		echo ""; \
-		nohup aztec start --local-network > $(AZTEC_LOG_FILE) 2>&1 & echo $$! > $(AZTEC_PID_FILE); \
+		nohup aztec start --local-network --data-directory $(AZTEC_DATA_DIR) > $(AZTEC_LOG_FILE) 2>&1 & echo $$! > $(AZTEC_PID_FILE); \
 		echo "Started aztec (PID: $$(cat $(AZTEC_PID_FILE)))"; \
 		echo ""; \
 		echo "Waiting for services to be healthy..."; \
@@ -264,8 +269,8 @@ devnet-down:
 		kill $$PID 2>/dev/null || true; \
 		rm -f $(AZTEC_PID_FILE); \
 	fi
-	@pkill -f "aztec-run" 2>/dev/null || true
-	@pkill -f "aztec start" 2>/dev/null || true
+	@# Kill aztec node processes (exclude make/grep from matching)
+	@ps aux | grep -E '[a]ztec.*(start|run)' | grep -v make | awk '{print $$2}' | xargs -r kill 2>/dev/null || true
 	@echo ""
 	@echo -e "$(GREEN)Devnet stopped.$(NC)"
 	@echo ""
@@ -315,6 +320,7 @@ devnet-clean:
 	@rm -f $(AUTOMINE_LOG_FILE) $(AUTOMINE_PID_FILE)
 	@rm -f .deployments.local.json
 	@rm -rf /tmp/aztec-world-state-*
+	@rm -rf $(AZTEC_DATA_DIR)
 	@echo ""
 	@echo -e "$(GREEN)Devnet cleaned. Next 'make devnet-up' will start fresh.$(NC)"
 	@echo ""

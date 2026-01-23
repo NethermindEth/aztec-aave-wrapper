@@ -356,23 +356,9 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         emit TokensDepositedToL2(intent.intentId, messageKey, messageIndex);
 
-        // Step 11: Send L1->L2 confirmation message
-        bytes32 messageContent = _computeWithdrawFinalizationMessage(
-            intent.intentId,
-            intent.ownerHash,
-            ConfirmationStatus.SUCCESS,
-            uint128(withdrawnAmount),
-            asset
-        );
-
-        // Construct L2 recipient and send message
-        DataStructures.L2Actor memory recipient =
-            DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion });
-        (bytes32 messageLeaf, uint256 confirmationMessageIndex) =
-            IAztecInbox(aztecInbox).sendL2Message(recipient, messageContent, bytes32(0));
-
-        emit WithdrawConfirmed(intent.intentId, withdrawnAmount, ConfirmationStatus.SUCCESS);
-        emit L2MessageSent(intent.intentId, messageLeaf, confirmationMessageIndex);
+        // Note: No L1->L2 confirmation message needed for withdrawals.
+        // Token claiming via BridgedToken completes the withdrawal flow.
+        // The PendingWithdraw note on L2 remains for refund capability if needed.
     }
 
     // ============ Internal Helper Functions ============
@@ -397,29 +383,6 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         // Asset address is padded to bytes32 for L2 Field compatibility
         return Hash.sha256ToField(
             abi.encodePacked(intentId, bytes32(uint256(uint160(asset))), bytes32(uint256(shares)))
-        );
-    }
-
-    /**
-     * @notice Compute the message content for withdraw finalization on L2
-     * @dev Uses sha256ToField to match Aztec's L1↔L2 message content hash pattern.
-     *      The encoding must exactly match the L2 Noir contract's hash computation.
-     * @param intentId The intent ID
-     * @param amount The amount withdrawn
-     * @param asset The asset address (converted to bytes32 for L2 compatibility)
-     * @return The message content hash (truncated to field element size)
-     */
-    function _computeWithdrawFinalizationMessage(
-        bytes32 intentId,
-        bytes32, // ownerHash - unused, kept for interface compatibility
-        ConfirmationStatus, // status - unused, kept for interface compatibility
-        uint128 amount,
-        address asset
-    ) internal pure returns (bytes32) {
-        // Match L2 encoding: sha256([intent_id, asset_id, amount])
-        // Asset address is padded to bytes32 for L2 Field compatibility
-        return Hash.sha256ToField(
-            abi.encodePacked(intentId, bytes32(uint256(uint160(asset))), bytes32(uint256(amount)))
         );
     }
 

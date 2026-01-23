@@ -52,12 +52,19 @@ export interface L2PositionsResult {
 
 /**
  * Position status values from L2 contract
- * These match PositionStatus in position_receipt.nr
+ * These match the status constants in main.nr:
+ *   STATUS_PENDING_DEPOSIT: Field = 1;
+ *   STATUS_CONFIRMED: Field = 2;
+ *   STATUS_CANCELLED: Field = 3;
+ *   STATUS_PENDING_WITHDRAW: Field = 4;
+ *   STATUS_WITHDRAWN: Field = 5;
  */
 export const L2PositionStatus = {
-  PendingDeposit: 0,
-  Active: 1,
-  PendingWithdraw: 2,
+  PendingDeposit: 1,
+  Active: 2, // CONFIRMED in Noir
+  Cancelled: 3,
+  PendingWithdraw: 4,
+  Withdrawn: 5,
 } as const;
 
 // =============================================================================

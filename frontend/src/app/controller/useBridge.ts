@@ -142,10 +142,15 @@ export function useBridge(): UseBridgeResult {
 
       addLog("Loading BridgedToken contract...");
       console.log("[handleClaimBridge] l2BridgedTokenAddress:", l2BridgedTokenAddress);
-      console.log("[handleClaimBridge] wallet type:", isDevWallet(wallet) ? "DevWallet" : "Azguard");
+      console.log(
+        "[handleClaimBridge] wallet type:",
+        isDevWallet(wallet) ? "DevWallet" : "Azguard"
+      );
 
       if (!l2BridgedTokenAddress) {
-        throw new Error("BridgedToken contract address not found in state. Ensure contracts are deployed.");
+        throw new Error(
+          "BridgedToken contract address not found in state. Ensure contracts are deployed."
+        );
       }
 
       const { contract: bridgedTokenContract } = isDevWallet(wallet)
@@ -153,7 +158,10 @@ export function useBridge(): UseBridgeResult {
         : await loadBridgedTokenWithAzguard(wallet, l2BridgedTokenAddress);
 
       console.log("[handleClaimBridge] bridgedTokenContract loaded:", !!bridgedTokenContract);
-      console.log("[handleClaimBridge] bridgedTokenContract.address:", bridgedTokenContract?.address?.toString?.());
+      console.log(
+        "[handleClaimBridge] bridgedTokenContract.address:",
+        bridgedTokenContract?.address?.toString?.()
+      );
 
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
 
@@ -167,7 +175,10 @@ export function useBridge(): UseBridgeResult {
         bridgedTokenContract,
       };
 
-      console.log("[handleClaimBridge] l2Context.wallet.address:", l2Context.wallet.address.toString());
+      console.log(
+        "[handleClaimBridge] l2Context.wallet.address:",
+        l2Context.wallet.address.toString()
+      );
 
       addLog("Executing claim...");
       const result = await executeBridgeClaim(l2Context, bridge);
