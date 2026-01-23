@@ -483,7 +483,7 @@ grep -q "position-card" frontend/src/index.css && echo "OK"
 
 ---
 
-### Step 22: Update PositionCard component layout
+### Step 22: Update PositionCard component layout **COMPLETE**
 
 #### Goal
 Refactor PositionCard to use new layout with token icon, formatted amounts, and APY display placeholder.
