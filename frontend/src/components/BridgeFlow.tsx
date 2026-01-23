@@ -288,7 +288,7 @@ export function BridgeFlow(props: BridgeFlowProps) {
         </Show>
       </CardContent>
       <CardFooter>
-        <Button class="w-full" disabled={!canBridge() || isProcessing()} onClick={handleBridge}>
+        <Button class="btn-cta" disabled={!canBridge() || isProcessing()} onClick={handleBridge}>
           <Switch fallback="Bridge to L2">
             <Match when={isProcessing()}>Processing...</Match>
             <Match when={!state.wallet.l1Address}>Connect ETH Wallet</Match>

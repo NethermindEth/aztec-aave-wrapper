@@ -355,7 +355,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
         </Show>
       </CardContent>
       <CardFooter>
-        <Button class="w-full" disabled={!canWithdraw() || isProcessing()} onClick={handleWithdraw}>
+        <Button class="btn-cta" disabled={!canWithdraw() || isProcessing()} onClick={handleWithdraw}>
           <Switch fallback="Withdraw">
             <Match when={isProcessing()}>Processing...</Match>
             <Match when={!state.wallet.l1Address}>Connect Wallet</Match>

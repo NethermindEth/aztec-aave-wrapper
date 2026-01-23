@@ -426,7 +426,7 @@ export function DepositFlow(props: DepositFlowProps) {
         </Show>
       </CardContent>
       <CardFooter>
-        <Button class="w-full" disabled={!canDeposit() || isProcessing()} onClick={handleDeposit}>
+        <Button class="btn-cta" disabled={!canDeposit() || isProcessing()} onClick={handleDeposit}>
           <Switch fallback="Deposit">
             <Match when={isProcessing()}>Processing...</Match>
             <Match when={!state.wallet.l1Address}>Connect ETH Wallet</Match>

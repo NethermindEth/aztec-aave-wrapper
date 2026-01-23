@@ -434,7 +434,7 @@ grep -q "btn-cta" frontend/src/index.css && echo "OK"
 
 ---
 
-### Step 20: Apply CTA button to primary actions
+### Step 20: Apply CTA button to primary actions **COMPLETE**
 
 #### Goal
 Update Bridge, Deposit, and Withdraw flows to use the `.btn-cta` class for primary action buttons.
