@@ -5,6 +5,7 @@
  * Orchestrates wallet connection, contract loading, and position refresh.
  */
 
+import { createEffect, on } from "solid-js";
 import type { Address } from "viem";
 import { LogLevel } from "../../components/LogViewer";
 import { usePositions } from "../../hooks/usePositions.js";
@@ -107,6 +108,71 @@ export function useL2Positions(): UseL2PositionsResult {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       addLog(`Failed to refresh positions: ${message}`, LogLevel.ERROR);
+    }
+  };
+
+  // Auto-load positions when wallet is connected and contracts are available
+  createEffect(
+    on(
+      () => [state.wallet.l2Address, state.contracts.l2Wrapper] as const,
+      ([l2Address, l2Wrapper]) => {
+        // Only auto-load if wallet connected and contracts deployed
+        if (l2Address && l2Wrapper && !positionHooks.isRefreshing()) {
+          // Silent auto-load
+          handleRefreshPositionsSilent();
+        }
+      },
+      { defer: true }
+    )
+  );
+
+  /**
+   * Silent refresh for auto-loading (no logging)
+   */
+  const handleRefreshPositionsSilent = async () => {
+    if (!state.contracts.l2Wrapper) {
+      return;
+    }
+
+    const l2WrapperAddress = state.contracts.l2Wrapper;
+    const l2BridgedTokenAddress = state.contracts.l2BridgedToken;
+
+    try {
+      const { wallet, address: walletAddress } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      await refreshFromL2(contract, wallet, walletAddress);
+
+      // Filter out PendingWithdraw positions where tokens were already claimed
+      const portalAddress = state.contracts.portal;
+      if (portalAddress) {
+        try {
+          const publicClient = createL1PublicClient();
+          await filterClaimedWithdrawals(publicClient, portalAddress as Address, walletAddress);
+        } catch {
+          // Non-critical
+        }
+      }
+
+      if (l2BridgedTokenAddress) {
+        try {
+          const { contract: bridgedTokenContract } = isDevWallet(wallet)
+            ? await loadBridgedTokenWithDevWallet(wallet, l2BridgedTokenAddress)
+            : await loadBridgedTokenWithAzguard(wallet, l2BridgedTokenAddress);
+          const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+          const l2Balance = await getBalance(
+            bridgedTokenContract,
+            AztecAddress.fromString(walletAddress)
+          );
+          setL2UsdcBalance(l2Balance.toString());
+        } catch {
+          // Non-critical
+        }
+      }
+    } catch (error) {
+      console.warn("[useL2Positions] Auto-load failed:", error);
     }
   };
 

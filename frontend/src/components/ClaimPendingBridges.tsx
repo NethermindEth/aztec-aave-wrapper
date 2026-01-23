@@ -94,19 +94,7 @@ export function ClaimPendingBridges(props: ClaimPendingBridgesProps) {
     <Show when={shouldShow()}>
       <Card class={props.class}>
         <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-lg">Pending Bridge Claims</CardTitle>
-            <Show when={props.onRefresh}>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={props.onRefresh}
-                disabled={props.isLoading}
-              >
-                {props.isLoading ? "Scanning..." : "Scan L1"}
-              </Button>
-            </Show>
-          </div>
+          <CardTitle class="text-lg">Pending Bridge Claims</CardTitle>
         </CardHeader>
         <CardContent class="space-y-3">
           {/* Error Alert */}
@@ -127,9 +115,6 @@ export function ClaimPendingBridges(props: ClaimPendingBridgesProps) {
           <Show when={!props.isLoading && !hasBridges()}>
             <div class="text-center text-muted-foreground py-4">
               <p>No pending bridges found.</p>
-              <p class="text-xs mt-1">
-                Click "Scan L1" to check for bridged tokens that need claiming.
-              </p>
             </div>
           </Show>
 

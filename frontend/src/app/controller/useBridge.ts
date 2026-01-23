@@ -5,7 +5,7 @@
  * Handles scanning for pending bridges and claiming L2 tokens.
  */
 
-import { createMemo } from "solid-js";
+import { createEffect, createMemo, on } from "solid-js";
 import { createStore } from "solid-js/store";
 import { LogLevel } from "../../components/LogViewer";
 import { type ClaimL2Context, executeBridgeClaim } from "../../flows/claim";
@@ -207,6 +207,52 @@ export function useBridge(): UseBridgeResult {
       setBridgeState("error", message);
     } finally {
       setBridgeState("claimingKey", null);
+    }
+  };
+
+  // Auto-load bridges when wallet is connected and contracts are available
+  createEffect(
+    on(
+      () => [state.wallet.l2Address, state.contracts.tokenPortal] as const,
+      ([l2Address, tokenPortal]) => {
+        // Only auto-load if wallet connected and contracts deployed
+        if (l2Address && tokenPortal && bridgeState.pendingBridges.length === 0 && !bridgeState.isLoading) {
+          // Silent auto-load (no logging)
+          handleRefreshBridgesSilent();
+        }
+      },
+      { defer: true }
+    )
+  );
+
+  /**
+   * Silent refresh for auto-loading (no logging)
+   */
+  const handleRefreshBridgesSilent = async () => {
+    setBridgeState("isLoading", true);
+    setBridgeState("error", null);
+
+    try {
+      const { address: walletAddress } = await connectWallet();
+      const node = await createL2NodeClient();
+      const publicClient = createL1PublicClient();
+
+      if (!state.contracts.tokenPortal) {
+        return;
+      }
+
+      const result = await scanPendingBridges(
+        publicClient,
+        state.contracts.tokenPortal as `0x${string}`,
+        walletAddress,
+        node
+      );
+
+      setBridgeState("pendingBridges", result.bridges);
+    } catch (error) {
+      console.warn("[useBridge] Auto-load failed:", error);
+    } finally {
+      setBridgeState("isLoading", false);
     }
   };
 
