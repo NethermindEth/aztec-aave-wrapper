@@ -418,23 +418,19 @@ export function TopBar() {
             <button
               type="button"
               onClick={() => (state.wallet.l1Address ? disconnectEthWallet() : connectEthWallet())}
-              class={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-                state.wallet.l1Address
-                  ? "hover:bg-zinc-800/50"
-                  : "bg-zinc-800 hover:bg-zinc-700 border border-zinc-700"
-              }`}
+              class={`btn-wallet ${state.wallet.l1Address ? "connected" : ""}`}
               title={state.wallet.l1Address || "Click to connect Ethereum wallet"}
             >
               <StatusIndicator status={ethWalletStatus()} />
               <Show
                 when={state.wallet.l1Address}
                 fallback={
-                  <span class="text-[10px] text-zinc-300">
+                  <span>
                     {ethWalletStatus() === "connecting" ? "Connecting..." : "Connect ETH"}
                   </span>
                 }
               >
-                <span class="font-mono text-[10px] text-zinc-300">
+                <span class="font-mono">
                   {truncateEthAddress(state.wallet.l1Address!)}
                 </span>
               </Show>
@@ -445,23 +441,19 @@ export function TopBar() {
               onClick={() =>
                 state.wallet.l2Address ? disconnectAztecWalletHandler() : connectAztecWalletAuto()
               }
-              class={`flex items-center gap-1.5 px-2 py-1 rounded transition-colors ${
-                state.wallet.l2Address
-                  ? "hover:bg-zinc-800/50"
-                  : "bg-zinc-800 hover:bg-zinc-700 border border-zinc-700"
-              }`}
+              class={`btn-wallet ${state.wallet.l2Address ? "connected" : ""}`}
               title={state.wallet.l2Address || "Click to connect Aztec wallet"}
             >
               <StatusIndicator status={aztecWalletStatus()} />
               <Show
                 when={state.wallet.l2Address}
                 fallback={
-                  <span class="text-[10px] text-zinc-300">
+                  <span>
                     {aztecWalletStatus() === "connecting" ? "Connecting..." : "Connect Aztec"}
                   </span>
                 }
               >
-                <span class="font-mono text-[10px] text-zinc-300">
+                <span class="font-mono">
                   {truncateAztecAddress(state.wallet.l2Address!)}
                 </span>
               </Show>

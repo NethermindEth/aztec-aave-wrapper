@@ -417,6 +417,45 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     WALLET BUTTONS
+     ────────────────────────────────────────────────────────────────────────── */
+  .btn-wallet {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.625rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-base);
+  }
+
+  .btn-wallet:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-active);
+    transform: translateY(-1px);
+  }
+
+  .btn-wallet:focus-visible {
+    outline: 2px solid var(--border-active);
+    outline-offset: 2px;
+  }
+
+  .btn-wallet.connected {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.1) 0%, rgba(0, 180, 216, 0.1) 100%);
+    border-color: rgba(0, 212, 170, 0.3);
+  }
+
+  .btn-wallet.connected:hover {
+    background: linear-gradient(135deg, rgba(0, 212, 170, 0.15) 0%, rgba(0, 180, 216, 0.15) 100%);
+    border-color: rgba(0, 212, 170, 0.5);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      CTA BUTTON
      ────────────────────────────────────────────────────────────────────────── */
   .btn-cta {
@@ -629,7 +668,8 @@
     }
 
     .glass-card:hover,
-    .btn-cta:hover {
+    .btn-cta:hover,
+    .btn-wallet:hover {
       transform: none;
     }
 

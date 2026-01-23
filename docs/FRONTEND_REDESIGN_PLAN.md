@@ -161,7 +161,7 @@ grep -q "class=\\\"header" frontend/src/components/TopBar.tsx && echo "OK"
 
 ---
 
-### Step 8: Restyle wallet connection buttons
+### Step 8: Restyle wallet connection buttons **COMPLETE**
 
 #### Goal
 Update wallet buttons to use the `.btn-wallet` and `.btn-wallet.connected` classes from the redesign spec.
