@@ -8,13 +8,37 @@ export interface AlertProps extends JSX.HTMLAttributes<HTMLDivElement> {
 }
 
 const alertVariants = {
-  base: "relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground",
+  base: [
+    "relative w-full rounded-lg border p-4",
+    "[&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px]",
+    "[&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4",
+    "backdrop-blur-sm transition-colors duration-200",
+  ].join(" "),
   variant: {
-    default: "bg-background text-foreground",
-    destructive:
-      "border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive",
-    success: "border-green-500/50 text-green-700 dark:text-green-400 [&>svg]:text-green-600",
-    warning: "border-yellow-500/50 text-yellow-700 dark:text-yellow-400 [&>svg]:text-yellow-600",
+    default: [
+      "bg-[var(--bg-glass)]",
+      "border-[var(--border-glass)]",
+      "text-foreground",
+      "[&>svg]:text-foreground",
+    ].join(" "),
+    destructive: [
+      "bg-[rgba(239,68,68,0.1)]",
+      "border-[rgba(239,68,68,0.5)]",
+      "text-[var(--status-error)]",
+      "[&>svg]:text-[var(--status-error)]",
+    ].join(" "),
+    success: [
+      "bg-[rgba(0,212,170,0.1)]",
+      "border-[rgba(0,212,170,0.5)]",
+      "text-[var(--status-success)]",
+      "[&>svg]:text-[var(--status-success)]",
+    ].join(" "),
+    warning: [
+      "bg-[rgba(245,158,11,0.1)]",
+      "border-[rgba(245,158,11,0.5)]",
+      "text-[var(--status-warning)]",
+      "[&>svg]:text-[var(--status-warning)]",
+    ].join(" "),
   },
 };
 
