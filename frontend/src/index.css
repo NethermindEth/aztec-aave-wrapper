@@ -684,6 +684,76 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     CONTRACT PILL COMPONENT
+     ────────────────────────────────────────────────────────────────────────── */
+  .contract-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-glass);
+    border-radius: var(--radius-full);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    max-width: 100%;
+    text-decoration: none;
+  }
+
+  .contract-pill:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-active);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .contract-pill:focus-visible {
+    outline: 2px solid var(--border-active);
+    outline-offset: 2px;
+  }
+
+  .contract-pill:active {
+    transform: scale(0.98);
+  }
+
+  .contract-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .contract-address {
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 8ch; /* Show approximately "0x1234..." */
+    direction: ltr; /* Ensure left-to-right truncation */
+  }
+
+  /* Expanded address on hover for better visibility */
+  .contract-pill:hover .contract-address {
+    max-width: 12ch; /* Show a bit more on hover */
+  }
+
+  /* Full address variant - no truncation */
+  .contract-address.full {
+    max-width: none;
+    overflow: visible;
+  }
+
+  /* Separator between name and address */
+  .contract-pill .contract-name + .contract-address::before {
+    content: '·';
+    margin-left: var(--space-xs);
+    margin-right: var(--space-xs);
+    color: var(--text-muted);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      REDUCED MOTION SUPPORT
      ────────────────────────────────────────────────────────────────────────── */
   @media (prefers-reduced-motion: reduce) {
@@ -695,7 +765,8 @@
 
     .glass-card:hover,
     .btn-cta:hover,
-    .btn-wallet:hover {
+    .btn-wallet:hover,
+    .contract-pill:active {
       transform: none;
     }
 
