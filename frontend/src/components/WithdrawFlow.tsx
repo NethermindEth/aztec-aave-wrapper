@@ -213,9 +213,16 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
           <Show
             when={hasPositions()}
             fallback={
-              <p class="text-sm text-muted-foreground py-2">
+              <div
+                class="input-wrapper"
+                style={{
+                  "justify-content": "center",
+                  color: "var(--text-secondary)",
+                  "font-size": "0.875rem",
+                }}
+              >
                 No positions available for withdrawal
-              </p>
+              </div>
             }
           >
             <Select
@@ -232,25 +239,47 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
         {/* Selected Position Details */}
         <Show when={selectedPositionData()}>
           {(position) => (
-            <div class="rounded-md border p-3 space-y-1">
-              <div class="flex justify-between text-sm">
+            <div class="input-wrapper" style={{ "flex-direction": "column", "align-items": "stretch", gap: "var(--space-sm)" }}>
+              <div class="flex justify-between text-sm" style={{ padding: "0 var(--space-sm)" }}>
                 <span class="text-muted-foreground">Amount</span>
                 <span class="font-medium">{position().sharesFormatted}</span>
               </div>
-              <div class="flex justify-between text-sm">
+              <div class="flex justify-between text-sm" style={{ padding: "0 var(--space-sm)" }}>
                 <span class="text-muted-foreground">Intent ID</span>
                 <span class="font-mono text-xs">{position().intentId.slice(0, 18)}...</span>
+              </div>
+              {/* Full Withdrawal Indicator */}
+              <div
+                class="flex items-center justify-center gap-2 text-xs"
+                style={{
+                  "border-top": "1px solid var(--border-glass)",
+                  padding: "var(--space-sm)",
+                  background: "var(--bg-glass)",
+                  "margin-top": "var(--space-xs)",
+                  "border-radius": "0 0 var(--radius-md) var(--radius-md)",
+                  color: "var(--text-accent)",
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>Full withdrawal — entire position will be withdrawn</span>
               </div>
             </div>
           )}
         </Show>
-
-        {/* Full Withdrawal Notice */}
-        <Alert>
-          <AlertDescription>
-            Full withdrawal only. The entire position will be withdrawn.
-          </AlertDescription>
-        </Alert>
 
         {/* Step Progress */}
         <Show when={isOperationActive()}>
@@ -272,15 +301,37 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
 
         {/* Pending Claims Section */}
         <Show when={hasPendingClaims()}>
-          <div class="space-y-2 pt-4 border-t">
-            <h4 class="text-sm font-medium">Pending Claims</h4>
+          <div
+            class="space-y-3"
+            style={{
+              "padding-top": "var(--space-md)",
+              "border-top": "1px solid var(--border-glass)",
+            }}
+          >
+            <div class="flex items-center gap-2">
+              <div
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  "border-radius": "50%",
+                  background: "var(--status-success)",
+                  animation: "pulse 2s infinite",
+                }}
+              />
+              <h4 class="text-sm font-medium">Pending Claims</h4>
+            </div>
             <p class="text-xs text-muted-foreground">
               These withdrawals have completed on L1 and are ready to claim on L2.
             </p>
             <For each={pendingClaims()}>
               {(position) => (
-                <div class="flex items-center justify-between rounded-md border p-3">
-                  <div class="space-y-1">
+                <div
+                  class="input-wrapper"
+                  style={{
+                    "justify-content": "space-between",
+                  }}
+                >
+                  <div class="space-y-1" style={{ padding: "0 var(--space-sm)" }}>
                     <p class="text-sm font-medium">{position.sharesFormatted}</p>
                     <p class="text-xs text-muted-foreground font-mono">
                       {position.intentId.slice(0, 14)}...
@@ -291,6 +342,7 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
                     variant="outline"
                     disabled={isProcessing()}
                     onClick={() => handleClaim(position.intentId)}
+                    style={{ "margin-right": "var(--space-sm)" }}
                   >
                     <Show when={isClaimActive()} fallback="Claim tokens">
                       Claiming...

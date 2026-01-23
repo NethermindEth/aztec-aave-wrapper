@@ -387,7 +387,7 @@ grep -q "input-wrapper" frontend/src/components/DepositFlow.tsx && echo "OK"
 
 ---
 
-### Step 18: Update WithdrawFlow styling
+### Step 18: Update WithdrawFlow styling **COMPLETE**
 
 #### Goal
 Apply consistent input styling to WithdrawFlow and add visual distinction for withdrawal-specific elements.
