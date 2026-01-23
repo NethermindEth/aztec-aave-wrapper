@@ -61,11 +61,7 @@ export function TabsList(props: TabsListProps) {
   const [local, others] = splitProps(props, ["class", "children"]);
 
   return (
-    <div
-      role="tablist"
-      class={cn("tab-navigation", local.class)}
-      {...others}
-    >
+    <div role="tablist" class={cn("tab-navigation", local.class)} {...others}>
       {local.children}
     </div>
   );

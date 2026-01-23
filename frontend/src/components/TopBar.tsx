@@ -39,6 +39,40 @@ import { formatUSDCFromString } from "../types/state.js";
 const BLOCK_POLL_INTERVAL = 4000;
 
 /**
+ * LocalStorage keys for wallet connection persistence
+ */
+const STORAGE_KEYS = {
+  ETH_WALLET_CONNECTED: "aztec-aave:eth-wallet-connected",
+  AZTEC_WALLET_CONNECTED: "aztec-aave:aztec-wallet-connected",
+} as const;
+
+/**
+ * Check if wallet was previously connected
+ */
+function wasWalletConnected(key: string): boolean {
+  try {
+    return localStorage.getItem(key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Save wallet connection state
+ */
+function saveWalletConnection(key: string, connected: boolean): void {
+  try {
+    if (connected) {
+      localStorage.setItem(key, "true");
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+/**
  * Truncate Ethereum address for display
  */
 function truncateEthAddress(address: string): string {
@@ -265,6 +299,7 @@ export function TopBar() {
       }
 
       setEthWalletStatus("connected");
+      saveWalletConnection(STORAGE_KEYS.ETH_WALLET_CONNECTED, true);
 
       // Event listeners
       cleanupAccountsChanged = onAccountsChanged((accounts) => {
@@ -282,6 +317,7 @@ export function TopBar() {
       });
     } catch {
       setEthWalletStatus("error");
+      saveWalletConnection(STORAGE_KEYS.ETH_WALLET_CONNECTED, false);
     }
   };
 
@@ -296,6 +332,7 @@ export function TopBar() {
     cleanupChainChanged = null;
     setWrongChain(false);
     setEthWalletStatus("disconnected");
+    saveWalletConnection(STORAGE_KEYS.ETH_WALLET_CONNECTED, false);
     actions.setWallet({
       l1Address: null,
       ethBalance: "0",
@@ -316,13 +353,16 @@ export function TopBar() {
       connection.wallet.onDisconnected.addHandler(() => {
         aztecConnection = null;
         setAztecWalletStatus("disconnected");
+        saveWalletConnection(STORAGE_KEYS.AZTEC_WALLET_CONNECTED, false);
         actions.setWallet({ l2Address: null });
       });
 
       actions.setWallet({ l2Address: connection.address as `0x${string}` });
       setAztecWalletStatus("connected");
+      saveWalletConnection(STORAGE_KEYS.AZTEC_WALLET_CONNECTED, true);
     } catch {
       setAztecWalletStatus("error");
+      saveWalletConnection(STORAGE_KEYS.AZTEC_WALLET_CONNECTED, false);
     }
   };
 
@@ -335,6 +375,7 @@ export function TopBar() {
     }
     aztecConnection = null;
     setAztecWalletStatus("disconnected");
+    saveWalletConnection(STORAGE_KEYS.AZTEC_WALLET_CONNECTED, false);
     actions.setWallet({ l2Address: null });
   };
 
@@ -362,10 +403,19 @@ export function TopBar() {
     )
   );
 
-  // Auto-connect networks on mount (not wallets - user should click to connect)
+  // Auto-connect networks and wallets on mount
   onMount(() => {
+    // Always connect to networks
     connectL1();
     connectL2();
+
+    // Auto-reconnect wallets if previously connected
+    if (wasWalletConnected(STORAGE_KEYS.ETH_WALLET_CONNECTED)) {
+      connectEthWallet();
+    }
+    if (wasWalletConnected(STORAGE_KEYS.AZTEC_WALLET_CONNECTED)) {
+      connectAztecWalletAuto();
+    }
   });
 
   // Derived state
@@ -379,7 +429,14 @@ export function TopBar() {
         <div class="logo">
           <div class="logo-icon">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              <path
+                d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
             </svg>
           </div>
           <span class="logo-text">Aztec Aave</span>
@@ -430,9 +487,7 @@ export function TopBar() {
                   </span>
                 }
               >
-                <span class="font-mono">
-                  {truncateEthAddress(state.wallet.l1Address!)}
-                </span>
+                <span class="font-mono">{truncateEthAddress(state.wallet.l1Address!)}</span>
               </Show>
             </button>
 
@@ -453,9 +508,7 @@ export function TopBar() {
                   </span>
                 }
               >
-                <span class="font-mono">
-                  {truncateAztecAddress(state.wallet.l2Address!)}
-                </span>
+                <span class="font-mono">{truncateAztecAddress(state.wallet.l2Address!)}</span>
               </Show>
             </button>
           </div>

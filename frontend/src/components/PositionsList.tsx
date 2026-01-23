@@ -54,41 +54,9 @@ export function PositionsList(props: PositionsListProps) {
 
   return (
     <div class={props.class}>
-      {/* Header with title and refresh button */}
+      {/* Header */}
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-semibold text-zinc-100">Your Positions</h2>
-        <Show when={props.onRefresh}>
-          <button
-            type="button"
-            onClick={props.onRefresh}
-            disabled={props.isRefreshing}
-            class="px-3 py-1.5 text-sm font-medium rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-          >
-            <Show when={props.isRefreshing} fallback={<span>Refresh from L2</span>}>
-              <svg
-                class="animate-spin h-4 w-4"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                />
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              <span>Refreshing...</span>
-            </Show>
-          </button>
-        </Show>
       </div>
 
       <Show when={props.loading}>
@@ -126,11 +94,6 @@ export function PositionsList(props: PositionsListProps) {
               <div class="empty-state-description">
                 Deposit USDC to create your first privacy-preserving Aave position
               </div>
-              <Show when={props.onRefresh}>
-                <div class="empty-state-hint">
-                  Or click "Refresh from L2" to sync existing positions
-                </div>
-              </Show>
             </div>
           }
         >

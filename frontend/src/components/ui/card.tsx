@@ -33,11 +33,7 @@ export function Card(props: CardProps) {
 
   return (
     <div
-      class={cn(
-        cardVariants.base,
-        cardVariants.variant[local.variant ?? "default"],
-        local.class
-      )}
+      class={cn(cardVariants.base, cardVariants.variant[local.variant ?? "default"], local.class)}
       {...others}
     >
       {local.children}

@@ -163,9 +163,19 @@ export function PositionCard(props: PositionCardProps) {
       <div class="position-info">
         <div class="position-token-icon usdc" aria-label="USDC token">
           {/* USDC logo inline SVG - avoids external asset dependency */}
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 32 32"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-hidden="true"
+          >
             <circle cx="16" cy="16" r="16" fill="#2775CA" />
-            <path d="M20.5 18.5C20.5 20.43 18.89 22 16.5 22.32V24H15V22.31C12.9 22.03 11.5 20.7 11.5 18.8H13.5C13.5 19.8 14.35 20.5 15.75 20.5C17.08 20.5 18 19.85 18 18.85C18 17.95 17.4 17.5 15.92 17.13L14.92 16.88C12.77 16.35 11.5 15.22 11.5 13.45C11.5 11.55 13.05 10.08 15 9.72V8H16.5V9.73C18.45 10.05 19.87 11.38 19.87 13.2H17.87C17.87 12.2 17.08 11.5 15.75 11.5C14.5 11.5 13.67 12.1 13.67 13.05C13.67 13.88 14.27 14.37 15.67 14.72L16.67 14.97C19.05 15.55 20.5 16.6 20.5 18.5Z" fill="white" />
+            <path
+              d="M20.5 18.5C20.5 20.43 18.89 22 16.5 22.32V24H15V22.31C12.9 22.03 11.5 20.7 11.5 18.8H13.5C13.5 19.8 14.35 20.5 15.75 20.5C17.08 20.5 18 19.85 18 18.85C18 17.95 17.4 17.5 15.92 17.13L14.92 16.88C12.77 16.35 11.5 15.22 11.5 13.45C11.5 11.55 13.05 10.08 15 9.72V8H16.5V9.73C18.45 10.05 19.87 11.38 19.87 13.2H17.87C17.87 12.2 17.08 11.5 15.75 11.5C14.5 11.5 13.67 12.1 13.67 13.05C13.67 13.88 14.27 14.37 15.67 14.72L16.67 14.97C19.05 15.55 20.5 16.6 20.5 18.5Z"
+              fill="white"
+            />
           </svg>
         </div>
         <div class="position-amount">
@@ -188,16 +198,11 @@ export function PositionCard(props: PositionCardProps) {
 
       {/* Action buttons */}
       <Show
-        when={
-          props.position.status === IntentStatus.Confirmed || canCancel() || canClaimRefund()
-        }
+        when={props.position.status === IntentStatus.Confirmed || canCancel() || canClaimRefund()}
       >
         <div class="position-actions">
           <Show when={props.position.status === IntentStatus.Confirmed}>
-            <Button
-              class="btn-cta"
-              onClick={() => props.onWithdraw(props.position.intentId)}
-            >
+            <Button class="btn-cta" onClick={() => props.onWithdraw(props.position.intentId)}>
               Withdraw
             </Button>
           </Show>

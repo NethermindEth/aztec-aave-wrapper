@@ -239,7 +239,14 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
         {/* Selected Position Details */}
         <Show when={selectedPositionData()}>
           {(position) => (
-            <div class="input-wrapper" style={{ "flex-direction": "column", "align-items": "stretch", gap: "var(--space-sm)" }}>
+            <div
+              class="input-wrapper"
+              style={{
+                "flex-direction": "column",
+                "align-items": "stretch",
+                gap: "var(--space-sm)",
+              }}
+            >
               <div class="flex justify-between text-sm" style={{ padding: "0 var(--space-sm)" }}>
                 <span class="text-muted-foreground">Amount</span>
                 <span class="font-medium">{position().sharesFormatted}</span>
@@ -355,7 +362,11 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
         </Show>
       </CardContent>
       <CardFooter>
-        <Button class="btn-cta" disabled={!canWithdraw() || isProcessing()} onClick={handleWithdraw}>
+        <Button
+          class="btn-cta"
+          disabled={!canWithdraw() || isProcessing()}
+          onClick={handleWithdraw}
+        >
           <Switch fallback="Withdraw">
             <Match when={isProcessing()}>Processing...</Match>
             <Match when={!state.wallet.l1Address}>Connect Wallet</Match>

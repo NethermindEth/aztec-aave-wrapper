@@ -26,7 +26,13 @@ function truncateAddress(address: string): string {
  */
 function L1Icon() {
   return (
-    <svg class="contract-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      class="contract-pill-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <path d="M12 2L2 12l10 10 10-10L12 2z" />
       <path d="M12 8v8" />
       <path d="M8 12h8" />
@@ -39,7 +45,13 @@ function L1Icon() {
  */
 function L2Icon() {
   return (
-    <svg class="contract-pill-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg
+      class="contract-pill-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
       <path d="M2 17l10 5 10-5" />
       <path d="M2 12l10 5 10-5" />
