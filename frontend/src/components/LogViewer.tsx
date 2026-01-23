@@ -64,18 +64,25 @@ function formatTimestamp(timestamp: number): string {
 }
 
 /**
- * Get CSS classes for log level styling
+ * Get CSS class for log type badge based on level
  */
-function getLogLevelClasses(level: LogLevel): string {
+function getLogTypeBadgeClass(level: LogLevel): string {
+  return `log-type ${level}`;
+}
+
+/**
+ * Get display label for log level badge
+ */
+function getLogLevelLabel(level: LogLevel): string {
   switch (level) {
     case LogLevel.SUCCESS:
-      return "text-green-600 dark:text-green-400";
+      return "OK";
     case LogLevel.WARNING:
-      return "text-yellow-600 dark:text-yellow-400";
+      return "WARN";
     case LogLevel.ERROR:
-      return "text-red-600 dark:text-red-400";
+      return "ERR";
     default:
-      return "text-foreground";
+      return "INFO";
   }
 }
 
@@ -168,22 +175,25 @@ export function LogViewer(props: LogViewerProps) {
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          class="overflow-y-auto rounded border bg-muted/50 p-2 font-mono text-xs"
+          class="logs-container"
           style={{ "max-height": `${maxHeight()}px` }}
         >
           <Show
             when={props.logs.length > 0}
-            fallback={<div class="py-4 text-center text-muted-foreground">No logs yet</div>}
+            fallback={
+              <div class="empty-state" style={{ padding: "var(--space-lg)", "min-height": "auto" }}>
+                <div class="empty-state-description">No logs yet</div>
+              </div>
+            }
           >
             <For each={props.logs}>
               {(log) => (
-                <div class="flex flex-wrap items-start gap-2 py-0.5">
-                  <span class="shrink-0 text-muted-foreground">
-                    [{formatTimestamp(log.timestamp)}]
-                  </span>
-                  <span class={getLogLevelClasses(log.level)}>{log.message}</span>
+                <div class="log-entry">
+                  <span class="log-time">[{formatTimestamp(log.timestamp)}]</span>
+                  <span class={getLogTypeBadgeClass(log.level)}>{getLogLevelLabel(log.level)}</span>
+                  <span class="log-message">{log.message}</span>
                   <Show when={log.txHash}>
-                    <span class="shrink-0 text-muted-foreground">
+                    <span class="log-time">
                       tx: <TransactionLink txHash={log.txHash!} chainId={log.chainId} truncate />
                     </span>
                   </Show>

@@ -596,7 +596,7 @@ grep -q "log-entry" frontend/src/index.css && echo "OK"
 
 ---
 
-### Step 27: Update LogViewer component layout
+### Step 27: Update LogViewer component layout **COMPLETE**
 
 #### Goal
 Apply new log styling to LogViewer component with colored type badges and formatted entries.
@@ -668,7 +668,7 @@ Verify all components integrate correctly and build succeeds.
 
 ### Phase Validation
 ```bash
-cd frontend && bun run build && npm run typecheck && bun run check && echo "Phase 12 complete - Redesign finished"
+cd frontend && npm run build && npm run typecheck && npm run lint && echo "Phase 12 complete - Redesign finished"
 ```
 
 ### Step 30: Update Card primitive with glass variant
