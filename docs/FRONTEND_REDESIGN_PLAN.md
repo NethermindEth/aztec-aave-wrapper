@@ -208,7 +208,7 @@ grep -q "hero-title" frontend/src/components/dashboard/Hero.tsx && grep -q "Priv
 
 ---
 
-### Step 10: Keep hero layout aligned with the redesign spec
+### Step 10: Keep hero layout aligned with the redesign spec **COMPLETE**
 
 #### Goal
 Keep the hero as a standalone section (no glass card wrapper) unless the spec is updated.
