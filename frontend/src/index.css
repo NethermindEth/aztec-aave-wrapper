@@ -101,12 +101,22 @@
 
   body {
     @apply bg-zinc-950 text-zinc-100;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
+  }
+
+  /* Subtle radial gradient background for depth */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(102, 126, 234, 0.08), transparent);
+    pointer-events: none;
+    z-index: -1;
   }
 
   /* Monospace for code/addresses */
   .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-family: var(--font-mono);
     font-feature-settings: "liga" 0;
   }
 

@@ -36,7 +36,7 @@ grep -q "primary-gradient" frontend/src/index.css && grep -q "bg-glass" frontend
 
 ---
 
-### Step 2: Add base styles and font loading
+### Step 2: Add base styles and font loading **COMPLETE**
 
 #### Goal
 Add base/reset styles and ensure fonts referenced by the redesign spec are available (self-host or import).
