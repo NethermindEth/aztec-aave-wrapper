@@ -35,7 +35,7 @@ const App: Component = () => {
 
       {/* Main content with top padding for fixed header */}
       <main class="pt-12 pb-8 min-h-screen bg-zinc-950">
-        <div class="container mx-auto max-w-4xl px-4 space-y-6">
+        <div class="main-container space-y-6">
           {/* Hero section with portfolio stats */}
           <Hero
             totalValueLocked={controller.derived.totalValueLocked()}

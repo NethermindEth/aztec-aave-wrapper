@@ -1237,6 +1237,74 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     MAIN CONTAINER LAYOUT
+     ────────────────────────────────────────────────────────────────────────── */
+  .main-container {
+    width: 100%;
+    max-width: 896px; /* 4xl = 56rem */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     RESPONSIVE BREAKPOINTS - MAIN CONTENT (tablet)
+     ────────────────────────────────────────────────────────────────────────── */
+  @media (max-width: 1024px) {
+    .main-container {
+      max-width: 720px;
+      padding-left: var(--space-lg);
+      padding-right: var(--space-lg);
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
+     RESPONSIVE BREAKPOINTS - MAIN CONTENT (mobile)
+     ────────────────────────────────────────────────────────────────────────── */
+  @media (max-width: 640px) {
+    .main-container {
+      max-width: 100%;
+      padding-left: var(--space-md);
+      padding-right: var(--space-md);
+    }
+
+    /* Reduced card padding on mobile for better space utilization */
+    .glass-card {
+      padding: var(--space-md);
+    }
+
+    .position-card {
+      padding: var(--space-md);
+    }
+
+    .empty-state {
+      padding: var(--space-xl) var(--space-md);
+    }
+
+    /* Ensure adequate touch targets (minimum 44px) */
+    .tab-button {
+      min-height: 44px;
+      padding: var(--space-sm) var(--space-md);
+    }
+
+    .btn-cta {
+      min-height: 48px;
+      padding: var(--space-md);
+    }
+
+    .btn-max {
+      min-height: 44px;
+      padding: var(--space-sm) var(--space-md);
+    }
+
+    /* Input wrapper touch target */
+    .input-wrapper {
+      min-height: 52px;
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      RESPONSIVE BREAKPOINTS - HEADER (768px)
      ────────────────────────────────────────────────────────────────────────── */
   @media (max-width: 768px) {

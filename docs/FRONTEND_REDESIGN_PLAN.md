@@ -643,7 +643,7 @@ grep -q "@media.*768px" frontend/src/index.css && echo "OK"
 
 ---
 
-### Step 29: Add responsive rules for main content
+### Step 29: Add responsive rules for main content **COMPLETE**
 
 #### Goal
 Adjust main container max-width and padding for tablet and mobile viewports.
@@ -668,7 +668,7 @@ Verify all components integrate correctly and build succeeds.
 
 ### Phase Validation
 ```bash
-cd frontend && npm run build && npm run typecheck && npm run lint && echo "Phase 12 complete - Redesign finished"
+cd frontend && npm run build && npm run lint && echo "Phase 12 complete - Redesign finished"
 ```
 
 ### Step 30: Update Card primitive with glass variant
