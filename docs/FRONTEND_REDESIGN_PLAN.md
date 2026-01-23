@@ -330,7 +330,7 @@ Redesign form inputs with token icons, max buttons, and enhanced focus states.
 grep -q "input-wrapper\|btn-max" frontend/src/components/BridgeFlow.tsx && echo "Phase 6 complete"
 ```
 
-### Step 15: Create enhanced input wrapper component
+### Step 15: Create enhanced input wrapper component **COMPLETE**
 
 #### Goal
 Add reusable input wrapper styling with token icon slot, input field, and max button support.
