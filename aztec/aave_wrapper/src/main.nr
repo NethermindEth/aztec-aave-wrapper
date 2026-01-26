@@ -773,6 +773,9 @@ pub(crate) contract AaveWrapper {
         // Get the caller's address (must be the owner of the note)
         let owner = self.msg_sender().unwrap();
 
+        // Validate deadline is non-zero (detailed bounds enforced on L1)
+        assert(deadline > 0, "Deadline must be greater than zero");
+
         // Use pop_notes with a selector to find the note by nonce
         // The nonce field is at index 1 in the serialized note (after owner)
         // pop_notes() retrieves and nullifies notes in one operation
@@ -857,6 +860,9 @@ pub(crate) contract AaveWrapper {
     /// * `deadline` - The deadline timestamp for the withdrawal request
     #[external("public")]
     fn _request_withdraw_public(intent_id: Field, owner: AztecAddress, deadline: u64) {
+        // Validate deadline is non-zero (detailed bounds enforced on L1)
+        assert(deadline > 0, "Deadline must be greater than zero");
+
         // Verify the intent is in CONFIRMED status (successful deposit must precede withdrawal)
         let status = self.storage.intent_status.at(intent_id).read();
         assert(status == IntentStatus::CONFIRMED, "Intent not in confirmed state");
