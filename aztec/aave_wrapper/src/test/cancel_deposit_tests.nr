@@ -338,8 +338,5 @@ unconstrained fn test_cancel_deposit_ownership_verification() {
     );
 
     // Wrong caller should fail ownership check
-    assert(
-        caller_wrong.to_field() != owner.to_field(),
-        "Wrong caller should fail ownership check",
-    );
+    assert(caller_wrong.to_field() != owner.to_field(), "Wrong caller should fail ownership check");
 }

@@ -36,7 +36,7 @@ cd aztec && aztec test && rg -n "request_withdraw\\(|_request_withdraw_public" a
 
 ---
 
-### Step 2: Add test coverage for deadline=0 rejection via a minimal harness
+### Step 2: Add test coverage for deadline=0 rejection via a minimal harness **COMPLETE**
 
 #### Goal
 Create a minimal test harness that calls `request_withdraw` and `_request_withdraw_public` with `deadline=0` and asserts failure. If adding a harness is out of scope, document that the contract-call path is untested in Noir and leave a TODO.

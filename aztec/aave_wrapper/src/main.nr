@@ -1266,6 +1266,9 @@ pub(crate) contract AaveWrapper {
     /// * `(u128, u128, u128)` - Tuple of (fee_basis_points, basis_points_denominator, min_deposit_amount)
     #[external("utility")]
     unconstrained fn get_fee_config() -> pub (u128, u128, u128) {
-        (FeeConfig::FEE_BASIS_POINTS, FeeConfig::BASIS_POINTS_DENOMINATOR, FeeConfig::MIN_DEPOSIT_AMOUNT)
+        (
+            FeeConfig::FEE_BASIS_POINTS, FeeConfig::BASIS_POINTS_DENOMINATOR,
+            FeeConfig::MIN_DEPOSIT_AMOUNT,
+        )
     }
 }

@@ -429,3 +429,68 @@ unconstrained fn test_withdraw_intent_id_matches_deposit() {
         "Withdrawal intent_id should match deposit intent_id",
     );
 }
+
+// ============================================================================
+// Deadline Validation Tests
+// ============================================================================
+
+/// Test that deadline=0 is a valid value for WithdrawIntent struct creation.
+///
+/// NOTE: The WithdrawIntent struct itself allows deadline=0 as it's just a data container.
+/// The actual deadline > 0 validation happens in the contract functions:
+/// - `request_withdraw` (main.nr:777): assert(deadline > 0, "Deadline must be greater than zero")
+/// - `_request_withdraw_public` (main.nr:864): assert(deadline > 0, "Deadline must be greater than zero")
+///
+/// TODO: Testing the contract function rejection of deadline=0 requires either:
+/// 1. TXE (Test Execution Environment) for Noir contract testing, or
+/// 2. E2E tests with aztec.js (see e2e/src/*.test.ts)
+///
+/// The CONTRACT_ERRORS.DEADLINE_ZERO constant in e2e/src/helpers/assertions.ts
+/// is defined but not yet exercised by any integration test.
+///
+/// This test verifies that the struct can hold deadline=0, which is important
+/// because the validation is intentionally deferred to the contract layer.
+#[test]
+unconstrained fn test_withdraw_intent_zero_deadline_struct_creation() {
+    // WithdrawIntent::new accepts deadline=0 at the struct level
+    // The contract functions (request_withdraw, _request_withdraw_public) enforce deadline > 0
+    let intent = WithdrawIntent::new(
+        0x1234567890abcdef, // intent_id
+        0xabcd1234, // owner_hash
+        1000000, // amount
+        0, // deadline = 0 (allowed in struct, rejected by contract)
+    );
+
+    // Struct creation succeeds with deadline=0
+    assert(intent.deadline == 0, "Struct should accept zero deadline");
+    assert(intent.intent_id == 0x1234567890abcdef, "Intent ID should be correctly stored");
+    assert(intent.owner_hash == 0xabcd1234, "Owner hash should be correctly stored");
+    assert(intent.amount == 1000000, "Amount should be correctly stored");
+
+    // Verify the hash computation still works (deadline=0 is a valid Field value)
+    let secret_hash: Field = 0xdeadbeef;
+    let asset_id: Field = 1;
+    let hash = compute_withdraw_message_content(intent, asset_id, secret_hash);
+    assert(hash != 0, "Hash should be computed successfully even with deadline=0");
+}
+
+/// Test that deadline=0 produces a different hash than deadline=1.
+///
+/// This ensures that even though deadline=0 would be rejected at the contract level,
+/// the hash computation correctly distinguishes between different deadline values.
+#[test]
+unconstrained fn test_withdraw_intent_zero_vs_nonzero_deadline_hash_differs() {
+    let secret_hash: Field = 0xdeadbeef;
+    let asset_id: Field = 1;
+
+    // Intent with deadline=0 (would be rejected by contract)
+    let intent_zero = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 0);
+
+    // Intent with deadline=1 (minimum valid deadline at contract level)
+    let intent_one = WithdrawIntent::new(0x123, 0xabcd1234, 1000000, 1);
+
+    let hash_zero = compute_withdraw_message_content(intent_zero, asset_id, secret_hash);
+    let hash_one = compute_withdraw_message_content(intent_one, asset_id, secret_hash);
+
+    assert(hash_zero != hash_one, "Different deadlines should produce different hashes");
+}

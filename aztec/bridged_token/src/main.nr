@@ -9,13 +9,13 @@ pub contract BridgedToken {
             constants::MAX_NOTES_PER_PAGE, note_getter_options::NoteGetterOptions,
             note_interface::NoteProperties, note_viewer_options::NoteViewerOptions,
         },
-        utils::comparison::Comparator,
         protocol_types::{
             address::{AztecAddress, EthAddress},
             hash::{poseidon2_hash, sha256_to_field},
             traits::{Deserialize, FromField, Packable, Serialize, ToField},
         },
         state_vars::{Map, Owned, PrivateSet, PublicImmutable, PublicMutable},
+        utils::comparison::Comparator,
     };
 
     /// A private balance note representing token ownership.
@@ -392,13 +392,7 @@ pub contract BridgedToken {
         let owner = self.msg_sender().unwrap();
 
         // Create a pending claim note
-        let note = PendingClaimNote {
-            owner,
-            message_key,
-            amount,
-            secret_hash,
-            l1_block_number,
-        };
+        let note = PendingClaimNote { owner, message_key, amount, secret_hash, l1_block_number };
 
         // Insert the note into the caller's pending claims set
         self.storage.pending_claims.at(owner).at(owner).insert(note).deliver(
@@ -924,7 +918,8 @@ pub contract BridgedToken {
     /// * `u32` - The number of pending bridge claims
     #[external("utility")]
     unconstrained fn get_pending_bridge_count(owner: AztecAddress) -> pub u32 {
-        let notes = self.storage.pending_claims.at(owner).at(owner).view_notes(NoteViewerOptions::new());
+        let notes =
+            self.storage.pending_claims.at(owner).at(owner).view_notes(NoteViewerOptions::new());
         notes.len()
     }
 }
