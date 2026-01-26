@@ -56,7 +56,7 @@ cd aztec && aztec test
 
 ---
 
-## Phase 2: Enhancement - Per-Intent Owner Hash
+## Phase 2: Enhancement - Per-Intent Owner Hash **COMPLETE**
 
 Modify owner hash computation to include a guaranteed-unique input (intent_id), reducing cross-intent linkability. Using `salt` alone is insufficient because it depends on `secret_hash`, which may be reused.
 
@@ -161,7 +161,7 @@ cd aztec && aztec test --match "owner_hash_unique"
 
 ---
 
-## Phase 3: Code Cleanup - Dead Code Annotation
+## Phase 3: Code Cleanup - Dead Code Annotation **COMPLETE**
 
 Annotate unused `compute_withdraw_confirmation_content` function to clarify its purpose.
 
@@ -170,7 +170,7 @@ Annotate unused `compute_withdraw_confirmation_content` function to clarify its 
 cd aztec && aztec compile && aztec test
 ```
 
-### Step 8: Add comment to compute_withdraw_confirmation_content
+### Step 8: Add comment to compute_withdraw_confirmation_content **COMPLETE**
 
 #### Goal
 Add a short comment that the function is currently unused in production and exercised by tests.

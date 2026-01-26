@@ -183,6 +183,7 @@ pub fn compute_deposit_confirmation_content(
 ///
 /// # Returns
 /// * `Field` - The message content hash for L1->L2 verification
+// NOTE: Unused in production; exercised in tests.
 pub fn compute_withdraw_confirmation_content(
     intent_id: Field,
     asset_id: Field,
