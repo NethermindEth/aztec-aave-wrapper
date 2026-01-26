@@ -236,7 +236,7 @@ cd eth && forge test -vv
 
 ---
 
-### Step 11: Build all contracts
+### Step 11: Build all contracts **COMPLETE**
 
 #### Goal
 Verify both L1 and L2 contracts compile successfully.
