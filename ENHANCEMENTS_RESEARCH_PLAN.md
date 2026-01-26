@@ -217,7 +217,7 @@ cd aztec && aztec test
 
 ---
 
-### Step 10: Run L1 test suite
+### Step 10: Run L1 test suite **COMPLETE**
 
 #### Goal
 Verify L1 Solidity tests still pass (L1 receives owner_hash as value, doesn't recompute it, so no L1 changes needed).
