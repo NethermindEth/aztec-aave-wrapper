@@ -214,6 +214,29 @@ pub fn compute_withdraw_confirmation_content(
     sha256_to_field(data)
 }
 
+/// Computes a privacy-preserving owner hash from the owner address and intent ID.
+///
+/// This function derives a unique owner_hash for each intent, preventing L1 observers
+/// from linking multiple deposits/withdrawals to the same user. By including the
+/// intent_id in the hash, the same owner will have different owner_hash values for
+/// each intent they create.
+///
+/// # Privacy Model
+/// - The owner's L2 address is never revealed on L1
+/// - Each intent has a unique owner_hash even for the same owner
+/// - L1 relayers can execute intents without learning user identity
+/// - The intent_id -> owner mapping is stored privately on L2 for finalization
+///
+/// # Arguments
+/// * `owner` - The L2 address of the user creating the intent
+/// * `intent_id` - The unique identifier for this specific intent
+///
+/// # Returns
+/// * `Field` - The computed owner_hash (poseidon2 hash of [owner, intent_id])
+pub fn compute_owner_hash(owner: AztecAddress, intent_id: Field) -> Field {
+    poseidon2_hash([owner.to_field(), intent_id])
+}
+
 use crate::types::WithdrawIntent;
 
 /// Computes the message content hash for L2 to L1 withdrawal messages.
@@ -302,7 +325,7 @@ pub(crate) contract AaveWrapper {
 
     use crate::{
         compute_deposit_confirmation_content, compute_deposit_message_content, compute_intent_id,
-        compute_withdraw_confirmation_content, compute_withdraw_message_content,
+        compute_owner_hash, compute_withdraw_confirmation_content, compute_withdraw_message_content,
     };
     use crate::types::{DepositIntent, PositionReceiptNote, PositionStatus, WithdrawIntent};
     use bridged_token::BridgedToken;
@@ -528,7 +551,7 @@ pub(crate) contract AaveWrapper {
         // Compute hash of owner for privacy (derived from caller AND intent_id)
         // Using intent_id in the hash makes owner_hash unique per-intent, preventing
         // L1 observers from linking multiple deposits to the same user
-        let owner_hash = poseidon2_hash([caller.to_field(), intent_id]);
+        let owner_hash = compute_owner_hash(caller, intent_id);
 
         // Create the deposit intent struct for L2 to L1 message
         // Note: The intent uses net_amount (after fee deduction)
@@ -826,7 +849,7 @@ pub(crate) contract AaveWrapper {
         // Compute hash of owner for privacy (derived from owner AND intent_id)
         // Using intent_id in the hash makes owner_hash unique per-intent, preventing
         // L1 observers from linking multiple withdrawals to the same user
-        let owner_hash = poseidon2_hash([owner.to_field(), intent_id]);
+        let owner_hash = compute_owner_hash(owner, intent_id);
 
         // Create the withdraw intent for L2 to L1 message
         let intent = WithdrawIntent::new(intent_id, owner_hash, amount, deadline);

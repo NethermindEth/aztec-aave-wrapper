@@ -14,7 +14,7 @@
 /// The updated functions use secret_hash instead of owner addresses to preserve
 /// user privacy. The owner is never revealed in public hashes or L1 messages.
 
-use crate::{compute_withdraw_confirmation_content, compute_withdraw_message_content};
+use crate::{compute_owner_hash, compute_withdraw_confirmation_content, compute_withdraw_message_content};
 use crate::types::{PositionReceiptNote, PositionStatus, WithdrawIntent};
 use dep::aztec::protocol_types::{address::AztecAddress, traits::FromField};
 
@@ -493,4 +493,97 @@ unconstrained fn test_withdraw_intent_zero_vs_nonzero_deadline_hash_differs() {
     let hash_one = compute_withdraw_message_content(intent_one, asset_id, secret_hash);
 
     assert(hash_zero != hash_one, "Different deadlines should produce different hashes");
+}
+
+// ============================================================================
+// compute_owner_hash Tests for Withdrawal (Privacy: Per-Intent Unlinkability)
+// ============================================================================
+
+/// Test that the same user gets different owner_hash values for different withdrawal intents.
+///
+/// This is critical for privacy in the withdrawal flow: if the same user withdraws
+/// multiple positions, L1 observers should NOT be able to link those withdrawals
+/// to the same user. By including intent_id in the owner_hash computation,
+/// each withdrawal intent gets a unique owner_hash even for the same owner.
+///
+/// # Privacy Guarantee
+/// - Alice withdraws position A (intent_id_1) -> owner_hash_1
+/// - Alice withdraws position B (intent_id_2) -> owner_hash_2
+/// - owner_hash_1 != owner_hash_2 (L1 cannot link them)
+#[test]
+unconstrained fn test_withdraw_owner_hash_unique_per_intent() {
+    // Same user withdrawing multiple positions
+    let alice = AztecAddress::from_field(0xdeadbeef);
+
+    // Different intent IDs (from different positions/deposits)
+    let intent_id_1: Field = 0xaaaa111111111111;
+    let intent_id_2: Field = 0xbbbb222222222222;
+    let intent_id_3: Field = 0xcccc333333333333;
+
+    // Compute owner_hash for each withdrawal intent
+    let owner_hash_1 = compute_owner_hash(alice, intent_id_1);
+    let owner_hash_2 = compute_owner_hash(alice, intent_id_2);
+    let owner_hash_3 = compute_owner_hash(alice, intent_id_3);
+
+    // All owner_hashes should be different for the same user
+    assert(
+        owner_hash_1 != owner_hash_2,
+        "Same user withdrawing different positions must have different owner_hash",
+    );
+    assert(
+        owner_hash_2 != owner_hash_3,
+        "Same user withdrawing different positions must have different owner_hash",
+    );
+    assert(
+        owner_hash_1 != owner_hash_3,
+        "Same user withdrawing different positions must have different owner_hash",
+    );
+
+    // Verify owner_hash is deterministic (same inputs -> same output)
+    let owner_hash_1_again = compute_owner_hash(alice, intent_id_1);
+    assert(owner_hash_1 == owner_hash_1_again, "owner_hash must be deterministic");
+}
+
+/// Test owner_hash uniqueness in a realistic withdrawal scenario.
+///
+/// Simulates a user who has made multiple deposits and then withdraws them
+/// at different times. Each withdrawal should have a unique owner_hash.
+#[test]
+unconstrained fn test_withdraw_owner_hash_realistic_multiple_positions() {
+    let user = AztecAddress::from_field(0x123456789abcdef0);
+
+    // User deposited at three different times (different intent_ids)
+    // Now they're withdrawing - each withdrawal uses the original deposit's intent_id
+    let deposit_1_intent_id: Field = 0x1000000000000001;
+    let deposit_2_intent_id: Field = 0x2000000000000002;
+    let deposit_3_intent_id: Field = 0x3000000000000003;
+
+    // When user withdraws, they use the same intent_id as the original deposit
+    // But they still get unique owner_hashes due to per-intent derivation
+    let withdraw_owner_hash_1 = compute_owner_hash(user, deposit_1_intent_id);
+    let withdraw_owner_hash_2 = compute_owner_hash(user, deposit_2_intent_id);
+    let withdraw_owner_hash_3 = compute_owner_hash(user, deposit_3_intent_id);
+
+    // L1 observers cannot link these three withdrawal operations
+    assert(withdraw_owner_hash_1 != withdraw_owner_hash_2, "Withdrawals must be unlinkable");
+    assert(withdraw_owner_hash_2 != withdraw_owner_hash_3, "Withdrawals must be unlinkable");
+    assert(withdraw_owner_hash_1 != withdraw_owner_hash_3, "Withdrawals must be unlinkable");
+
+    // Create WithdrawIntent structs with the computed owner_hashes
+    let amount: u128 = 100_000_000;
+    let deadline: u64 = 1700000000;
+
+    let intent_1 = WithdrawIntent::new(deposit_1_intent_id, withdraw_owner_hash_1, amount, deadline);
+    let intent_2 = WithdrawIntent::new(deposit_2_intent_id, withdraw_owner_hash_2, amount, deadline);
+
+    // Verify the intents have different owner_hashes
+    assert(intent_1.owner_hash != intent_2.owner_hash, "Intent owner_hashes must differ");
+
+    // Verify withdraw message content is different for each
+    let secret_hash: Field = 0xfedcba9876543210;
+    let asset_id: Field = 1;
+    let hash_1 = compute_withdraw_message_content(intent_1, asset_id, secret_hash);
+    let hash_2 = compute_withdraw_message_content(intent_2, asset_id, secret_hash);
+
+    assert(hash_1 != hash_2, "Withdrawal messages must have unique content hashes");
 }

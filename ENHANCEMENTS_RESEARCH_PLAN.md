@@ -141,7 +141,7 @@ grep -A2 "Compute hash of owner for privacy" aztec/aave_wrapper/src/main.nr | gr
 
 ---
 
-### Step 7: Add unit test for owner_hash uniqueness across intents (or add helper)
+### Step 7: Add unit test for owner_hash uniqueness across intents (or add helper) **COMPLETE**
 
 #### Goal
 Create tests verifying that the same user gets different owner_hash values for different intents. If contract-call tests are unavailable, add a pure helper function (e.g., `compute_owner_hash(owner, intent_id)`) and test that directly.
