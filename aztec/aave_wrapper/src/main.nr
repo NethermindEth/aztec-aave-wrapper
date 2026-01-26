@@ -514,9 +514,6 @@ pub(crate) contract AaveWrapper {
         // Validate net_amount is greater than zero (should always pass given MIN_DEPOSIT_AMOUNT)
         assert(net_amount > 0, "Net amount after fee must be greater than zero");
 
-        // Compute hash of owner for privacy
-        let owner_hash = poseidon2_hash([caller.to_field()]);
-
         // Generate salt from a hash of caller + secret_hash for uniqueness without revealing caller
         // This ensures different users with same parameters get different intent_ids
         let salt = poseidon2_hash([caller.to_field(), secret_hash]);
@@ -527,6 +524,11 @@ pub(crate) contract AaveWrapper {
         // poseidon2 is one-way, the caller cannot be recovered from intent_id
         let intent_id =
             compute_intent_id(caller, asset, net_amount, original_decimals, deadline, salt);
+
+        // Compute hash of owner for privacy (derived from caller AND intent_id)
+        // Using intent_id in the hash makes owner_hash unique per-intent, preventing
+        // L1 observers from linking multiple deposits to the same user
+        let owner_hash = poseidon2_hash([caller.to_field(), intent_id]);
 
         // Create the deposit intent struct for L2 to L1 message
         // Note: The intent uses net_amount (after fee deduction)
@@ -821,8 +823,10 @@ pub(crate) contract AaveWrapper {
             MessageDelivery.CONSTRAINED_ONCHAIN,
         );
 
-        // Compute hash of owner for privacy
-        let owner_hash = poseidon2_hash([owner.to_field()]);
+        // Compute hash of owner for privacy (derived from owner AND intent_id)
+        // Using intent_id in the hash makes owner_hash unique per-intent, preventing
+        // L1 observers from linking multiple withdrawals to the same user
+        let owner_hash = poseidon2_hash([owner.to_field(), intent_id]);
 
         // Create the withdraw intent for L2 to L1 message
         let intent = WithdrawIntent::new(intent_id, owner_hash, amount, deadline);

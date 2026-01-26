@@ -7,7 +7,7 @@ Plan grounded in code locations and current behavior.
 3. **Owner Hash Computation**: `owner_hash` is currently `poseidon2_hash([owner/caller])` in both flows. Making it per-intent requires a guaranteed-unique input (e.g., `intent_id`), not just `salt` which is derived from `secret_hash` and may be reused.
 `─────────────────────────────────────────────────`
 
-## Phase 1: Bug Fix - Missing Deadline Validation
+## Phase 1: Bug Fix - Missing Deadline Validation **COMPLETE**
 
 Add deadline validation to both `request_withdraw` and `_request_withdraw_public` to prevent zero-deadline intents from being stored or bypassing the private check.
 
@@ -65,7 +65,7 @@ Modify owner hash computation to include a guaranteed-unique input (intent_id), 
 cd aztec && aztec compile && aztec test
 ```
 
-### Step 3: Derive owner_hash from intent_id in request_deposit
+### Step 3: Derive owner_hash from intent_id in request_deposit **COMPLETE**
 
 #### Goal
 Compute `intent_id` first, then set `owner_hash = poseidon2_hash([caller.to_field(), intent_id])` (or equivalent) so owner_hash is per-intent.
@@ -84,7 +84,7 @@ cd aztec && aztec compile && rg -n "intent_id" aave_wrapper/src/main.nr && rg -n
 
 ---
 
-### Step 4: Update owner_hash computation in request_deposit to use intent_id
+### Step 4: Update owner_hash computation in request_deposit to use intent_id **COMPLETE**
 
 #### Goal
 Change `owner_hash = poseidon2_hash([caller.to_field()])` to `poseidon2_hash([caller.to_field(), intent_id])` for per-intent unlinkability.
@@ -103,7 +103,7 @@ cd aztec && aztec compile && rg -n "owner_hash = poseidon2_hash\\(\\[caller.to_f
 
 ---
 
-### Step 5: Update owner_hash computation in request_withdraw to use intent_id
+### Step 5: Update owner_hash computation in request_withdraw to use intent_id **COMPLETE**
 
 #### Goal
 Change `owner_hash = poseidon2_hash([owner.to_field()])` to `poseidon2_hash([owner.to_field(), intent_id])` for per-intent unlinkability.
@@ -122,7 +122,7 @@ cd aztec && aztec compile && grep "owner_hash = poseidon2_hash" aave_wrapper/src
 
 ---
 
-### Step 6: Update comments for owner_hash computation
+### Step 6: Update comments for owner_hash computation **COMPLETE**
 
 #### Goal
 Update code comments to document that owner_hash is derived from intent_id for per-intent unlinkability.
