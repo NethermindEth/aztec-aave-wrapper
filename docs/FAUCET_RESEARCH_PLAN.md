@@ -68,7 +68,7 @@ cd eth && forge test --match-contract TokenFaucetTest -vv
 
 ---
 
-## Phase 2: Deployment Integration
+## Phase 2: Deployment Integration **COMPLETE**
 
 ### Step 3: Add faucet to deployment addresses **COMPLETE**
 
@@ -94,7 +94,7 @@ test -f .deployments.local.json && grep -q "faucet" .deployments.local.json
 
 ## Phase 3: Frontend Service Layer
 
-### Step 6: Add faucet service
+### Step 6: Add faucet service **COMPLETE**
 
 Files:
 - `frontend/src/services/l1/faucet.ts` (new)
