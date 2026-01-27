@@ -118,7 +118,7 @@ Files:
 Files:
 - `frontend/src/types/state.ts`
 
-### Step 10: Create FaucetCard component
+### Step 10: Create FaucetCard component **COMPLETE**
 
 Files:
 - `frontend/src/components/FaucetCard.tsx` (new)
