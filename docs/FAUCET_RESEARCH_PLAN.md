@@ -10,7 +10,7 @@
 
 ---
 
-## Phase 0: Fix the Token Contract Mismatch (Required)
+## Phase 0: Fix the Token Contract Mismatch (Required) **COMPLETE**
 
 ### Step 0.1: Decide the canonical mock token contract **COMPLETE**
 
@@ -40,7 +40,7 @@ Failure modes:
 
 ## Phase 1: TokenFaucet Contract
 
-### Step 1: Create TokenFaucet.sol
+### Step 1: Create TokenFaucet.sol **COMPLETE**
 
 Goal: Implement a rate-limited faucet wrapper around the mock token’s `mint()`.
 
