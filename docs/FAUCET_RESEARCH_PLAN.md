@@ -80,7 +80,7 @@ Files:
 Files:
 - `scripts/deploy-local.ts` (deploy `TokenFaucet` after USDC/mock token)
 
-### Step 5: Persist faucet address
+### Step 5: Persist faucet address **COMPLETE**
 
 Files:
 - `scripts/deploy-local.ts` (ensure faucet address is saved into `.deployments.local.json`)
