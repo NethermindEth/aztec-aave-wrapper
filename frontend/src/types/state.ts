@@ -168,6 +168,8 @@ export interface L1Addresses {
   mockUsdc: Address | null;
   /** Mock Aave lending pool address */
   mockLendingPool: Address | null;
+  /** Token faucet contract address for claiming test tokens */
+  faucet: Address | null;
 }
 
 /**
@@ -267,6 +269,7 @@ export function createInitialAppState(): AppState {
       tokenPortal: null,
       mockUsdc: null,
       mockLendingPool: null,
+      faucet: null,
       l2BridgedToken: null,
       l2Wrapper: null,
     },

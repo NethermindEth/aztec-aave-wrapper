@@ -92,7 +92,7 @@ test -f .deployments.local.json && grep -q "faucet" .deployments.local.json
 
 ---
 
-## Phase 3: Frontend Service Layer
+## Phase 3: Frontend Service Layer **COMPLETE**
 
 ### Step 6: Add faucet service **COMPLETE**
 
@@ -108,7 +108,7 @@ Files:
 
 ## Phase 4: Frontend State + UI
 
-### Step 8: Add faucet address to state types
+### Step 8: Add faucet address to state types **COMPLETE**
 
 Files:
 - `frontend/src/types/state.ts`
