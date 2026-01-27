@@ -18,7 +18,7 @@ Choose one of:
 - **Option A (recommended):** Rename/restore a `MockERC20` contract with `(name, symbol, decimals)` and unrestricted `mint`/`burn` to match existing tests and deploy scripts.
 - **Option B:** Update tests and deploy scripts to use `USDC` with `(defaultAdmin, minter)` and role-based minting.
 
-### Step 0.2: Apply the chosen fix
+### Step 0.2: Apply the chosen fix **COMPLETE**
 
 Files affected (depending on option):
 - `eth/contracts/mocks/MockERC20.sol`
