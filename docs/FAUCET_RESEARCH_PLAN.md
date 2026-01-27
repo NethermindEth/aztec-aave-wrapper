@@ -75,7 +75,7 @@ cd eth && forge test --match-contract TokenFaucetTest -vv
 Files:
 - `scripts/deploy-local.ts` (extend `DeploymentAddresses.l1` with `faucet`)
 
-### Step 4: Deploy TokenFaucet after mock token
+### Step 4: Deploy TokenFaucet after mock token **COMPLETE**
 
 Files:
 - `scripts/deploy-local.ts` (deploy `TokenFaucet` after USDC/mock token)

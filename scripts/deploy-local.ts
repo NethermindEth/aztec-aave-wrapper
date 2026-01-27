@@ -476,6 +476,18 @@ async function main() {
   // Mint initial USDC to deployer account
   mintTokens(addresses.l1.mockUsdc, DEPLOYER_ADDRESS, INITIAL_USDC_MINT, L1_RPC);
 
+  // Deploy TokenFaucet for distributing test tokens
+  // Drip amount: 1000 USDC (6 decimals = 1000 * 10^6)
+  // Cooldown: 1 hour (3600 seconds)
+  const FAUCET_DRIP_AMOUNT = "1000000000"; // 1000 USDC
+  const FAUCET_COOLDOWN = "3600"; // 1 hour
+  addresses.l1.faucet = deployWithForge(
+    "contracts/mocks/TokenFaucet.sol:TokenFaucet",
+    [addresses.l1.mockUsdc, FAUCET_DRIP_AMOUNT, FAUCET_COOLDOWN],
+    L1_RPC,
+    "eth"
+  );
+
   // Deploy MockLendingPool
   addresses.l1.mockLendingPool = deployWithForge(
     "contracts/mocks/MockLendingPool.sol:MockLendingPool",
@@ -648,6 +660,7 @@ async function main() {
 
   console.log("\nL1 Contracts (Anvil :8545):");
   console.log(`  MockUSDC:              ${addresses.l1.mockUsdc}`);
+  console.log(`  TokenFaucet:           ${addresses.l1.faucet}`);
   console.log(`  MockLendingPool:       ${addresses.l1.mockLendingPool}`);
   console.log(`  TokenPortal:           ${addresses.l1.tokenPortal}`);
   console.log(`  AztecAavePortal:       ${addresses.l1.portal}`);
