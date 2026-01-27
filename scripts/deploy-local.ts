@@ -55,6 +55,8 @@ interface DeploymentAddresses {
     aztecOutbox: string;
     /** Real Aztec inbox address from sandbox for L1→L2 messages */
     aztecInbox: string;
+    /** TokenFaucet for distributing test tokens */
+    faucet: string;
   };
   l2: {
     bridgedToken: string;
@@ -446,6 +448,7 @@ async function main() {
       portal: "",
       aztecOutbox: "",
       aztecInbox: "",
+      faucet: "",
     },
     l2: {
       aaveWrapper: "",

@@ -38,7 +38,7 @@ Failure modes:
 
 ---
 
-## Phase 1: TokenFaucet Contract
+## Phase 1: TokenFaucet Contract **COMPLETE**
 
 ### Step 1: Create TokenFaucet.sol **COMPLETE**
 
@@ -70,7 +70,7 @@ cd eth && forge test --match-contract TokenFaucetTest -vv
 
 ## Phase 2: Deployment Integration
 
-### Step 3: Add faucet to deployment addresses
+### Step 3: Add faucet to deployment addresses **COMPLETE**
 
 Files:
 - `scripts/deploy-local.ts` (extend `DeploymentAddresses.l1` with `faucet`)
