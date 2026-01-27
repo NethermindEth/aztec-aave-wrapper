@@ -106,7 +106,7 @@ Files:
 
 ---
 
-## Phase 4: Frontend State + UI
+## Phase 4: Frontend State + UI **COMPLETE**
 
 ### Step 8: Add faucet address to state types **COMPLETE**
 
@@ -127,7 +127,7 @@ Files:
 
 ## Phase 5: Integration + Verification
 
-### Step 11: Wire FaucetCard into App
+### Step 11: Wire FaucetCard into App **COMPLETE**
 
 Files:
 - `frontend/src/App.tsx`

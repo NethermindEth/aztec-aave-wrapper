@@ -8,25 +8,92 @@
  * lives in useAppController, making App purely a layout/wiring layer.
  */
 
-import type { Component } from "solid-js";
+import { createEffect, createSignal, on, type Component } from "solid-js";
+import type { Account, Chain, PublicClient, Transport, WalletClient } from "viem";
 import { useAppController } from "./app/controller/useAppController";
 import { ClaimPendingBridges } from "./components/ClaimPendingBridges";
 import { ContractDeployment } from "./components/ContractDeployment";
 import { Hero } from "./components/dashboard/Hero";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { FaucetCard } from "./components/FaucetCard";
 import { LogViewer } from "./components/LogViewer";
 import { OperationTabs } from "./components/OperationTabs";
 import { PositionsList } from "./components/PositionsList";
 import { RecoverDeposit } from "./components/RecoverDeposit";
 import { TopBar } from "./components/TopBar";
+import { createL1PublicClient } from "./services/l1/client";
+import { balanceOf } from "./services/l1/tokens";
+import { connectEthereumWallet, type EthereumWalletConnection } from "./services/wallet/ethereum";
 import { useApp } from "./store/hooks";
 
 /**
  * Main application component
  */
 const App: Component = () => {
-  const { state } = useApp();
+  const { state, actions } = useApp();
   const controller = useAppController();
+
+  // L1 clients for FaucetCard
+  const [publicClient, setPublicClient] = createSignal<PublicClient<Transport, Chain> | null>(null);
+  const [walletClient, setWalletClient] = createSignal<WalletClient<
+    Transport,
+    Chain,
+    Account
+  > | null>(null);
+  const [ethConnection, setEthConnection] = createSignal<EthereumWalletConnection | null>(null);
+
+  // Initialize L1 public client when L1 is connected
+  createEffect(
+    on(
+      () => state.l1.connected,
+      (connected) => {
+        if (connected) {
+          setPublicClient(createL1PublicClient());
+        } else {
+          setPublicClient(null);
+        }
+      }
+    )
+  );
+
+  // Connect wallet when L1 address is available (wallet connected in TopBar)
+  createEffect(
+    on(
+      () => state.wallet.l1Address,
+      async (address) => {
+        if (address && !ethConnection()) {
+          try {
+            const connection = await connectEthereumWallet();
+            setEthConnection(connection);
+            setWalletClient(connection.walletClient as WalletClient<Transport, Chain, Account>);
+          } catch (err) {
+            console.warn("Failed to get wallet client for faucet:", err);
+          }
+        } else if (!address) {
+          setEthConnection(null);
+          setWalletClient(null);
+        }
+      }
+    )
+  );
+
+  /**
+   * Refresh L1 USDC balance after faucet claim
+   */
+  const handleFaucetClaimSuccess = async () => {
+    const client = publicClient();
+    const userAddress = state.wallet.l1Address;
+    const mockUsdc = state.contracts.mockUsdc;
+
+    if (client && userAddress && mockUsdc) {
+      try {
+        const usdcBalance = await balanceOf(client, mockUsdc, userAddress);
+        actions.setUsdcBalance(usdcBalance.toString());
+      } catch (err) {
+        console.warn("Failed to refresh USDC balance after faucet claim:", err);
+      }
+    }
+  };
 
   return (
     <>
@@ -46,6 +113,17 @@ const App: Component = () => {
           {/* Contract Deployment */}
           <ErrorBoundary>
             <ContractDeployment />
+          </ErrorBoundary>
+
+          {/* Token Faucet - Get test tokens */}
+          <ErrorBoundary>
+            <FaucetCard
+              faucetAddress={state.contracts.faucet}
+              userAddress={state.wallet.l1Address}
+              publicClient={publicClient()}
+              walletClient={walletClient()}
+              onClaimSuccess={handleFaucetClaimSuccess}
+            />
           </ErrorBoundary>
 
           {/* Main Operations */}
