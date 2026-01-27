@@ -226,7 +226,7 @@ pub fn compute_withdraw_confirmation_content(
 /// - The owner's L2 address is never revealed on L1
 /// - Each intent has a unique owner_hash even for the same owner
 /// - L1 relayers can execute intents without learning user identity
-/// - The intent_id -> owner mapping is stored privately on L2 for finalization
+/// - The intent_id -> owner mapping is stored in public state on L2 for routing
 ///
 /// # Arguments
 /// * `owner` - The L2 address of the user creating the intent
@@ -888,6 +888,14 @@ pub(crate) contract AaveWrapper {
     /// * `deadline` - The deadline timestamp for the withdrawal request
     #[external("public")]
     fn _request_withdraw_public(intent_id: Field, owner: AztecAddress, deadline: u64) {
+        // Only allow internal enqueued calls from this contract
+        let caller = self.msg_sender().unwrap();
+        let contract_address = self.context.this_address();
+        assert(
+            caller.to_field() == contract_address.to_field(),
+            "Unauthorized public entrypoint",
+        );
+
         // Validate deadline is non-zero (detailed bounds enforced on L1)
         assert(deadline > 0, "Deadline must be greater than zero");
 

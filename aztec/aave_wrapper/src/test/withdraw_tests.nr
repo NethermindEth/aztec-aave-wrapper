@@ -438,15 +438,11 @@ unconstrained fn test_withdraw_intent_id_matches_deposit() {
 ///
 /// NOTE: The WithdrawIntent struct itself allows deadline=0 as it's just a data container.
 /// The actual deadline > 0 validation happens in the contract functions:
-/// - `request_withdraw` (main.nr:777): assert(deadline > 0, "Deadline must be greater than zero")
-/// - `_request_withdraw_public` (main.nr:864): assert(deadline > 0, "Deadline must be greater than zero")
+/// - `request_withdraw`: assert(deadline > 0, "Deadline must be greater than zero")
+/// - `_request_withdraw_public`: assert(deadline > 0, "Deadline must be greater than zero")
 ///
-/// TODO: Testing the contract function rejection of deadline=0 requires either:
-/// 1. TXE (Test Execution Environment) for Noir contract testing, or
-/// 2. E2E tests with aztec.js (see e2e/src/*.test.ts)
-///
-/// The CONTRACT_ERRORS.DEADLINE_ZERO constant in e2e/src/helpers/assertions.ts
-/// is defined but not yet exercised by any integration test.
+/// NOTE: Contract-level rejection of deadline=0 is covered in E2E tests
+/// (see e2e/src/e2e.test.ts).
 ///
 /// This test verifies that the struct can hold deadline=0, which is important
 /// because the validation is intentionally deferred to the contract layer.
