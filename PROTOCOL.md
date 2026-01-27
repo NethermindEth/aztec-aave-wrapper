@@ -414,10 +414,8 @@ The L1 portal inherits OpenZeppelin's `Pausable`. In emergency:
 
 ### Potential Enhancements (Privacy-Focused)
 
-1. **Bind withdraw confirmations to the secret** - Use the same `secretHash` from `request_withdraw` when sending the L1→L2 confirmation and enforce it in `finalize_withdraw`.
-2. **Per-intent owner hash** - Replace `ownerHash = poseidon2(owner)` with `poseidon2(owner, intent_id or salt)` to reduce linkability across intents.
-3. **Amount obfuscation** - Allow optional rounding/padding (or split flows) to reduce amount fingerprinting.
-4. **Execution delay/batching** - Introduce delayed relaying or batching to reduce timing correlation.
+1. **Amount obfuscation** - Allow optional rounding/padding (or split flows) to reduce amount fingerprinting.
+2. **Execution delay/batching** - Introduce delayed relaying or batching to reduce timing correlation.
 
 ### Potential Enhancements (General)
 
