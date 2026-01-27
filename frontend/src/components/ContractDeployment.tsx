@@ -164,6 +164,7 @@ export function ContractDeployment() {
         tokenPortal: deployments.l1.tokenPortal,
         mockUsdc: deployments.l1.mockUsdc,
         mockLendingPool: deployments.l1.mockLendingPool,
+        faucet: deployments.l1.faucet,
         l2BridgedToken: deployments.l2.bridgedToken,
         l2Wrapper: deployments.l2.aaveWrapper,
       });

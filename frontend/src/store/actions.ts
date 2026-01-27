@@ -163,6 +163,9 @@ export function setContracts(contracts: Partial<ContractsState>): void {
   if (contracts.mockLendingPool !== undefined) {
     setState("contracts", "mockLendingPool", contracts.mockLendingPool);
   }
+  if (contracts.faucet !== undefined) {
+    setState("contracts", "faucet", contracts.faucet);
+  }
   if (contracts.l2BridgedToken !== undefined) {
     setState("contracts", "l2BridgedToken", contracts.l2BridgedToken);
   }
