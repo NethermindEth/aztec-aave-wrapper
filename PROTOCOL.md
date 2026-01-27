@@ -1,14 +1,14 @@
 # Aztec Aave Wrapper Protocol
 
-**Version:** 1.0.0-mvp
+**Version:** 1.0.0 (MVP)
 **Last Updated:** January 2026
-**Status:** Development (Devnet)
+**Status:** MVP (Internal Testing)
 
 ---
 
 ## Abstract
 
-Aztec Aave Wrapper is a privacy-preserving protocol that enables users to earn yield on Aave V3 (Ethereum L1) while keeping their identity completely private. Users interact exclusively through Aztec L2, where their addresses are never revealed on L1. The protocol uses cross-chain messaging with cryptographic commitments to decouple user identity from DeFi positions.
+Aztec Aave Wrapper is a privacy-preserving protocol that enables users to earn yield on Aave V3 (Ethereum L1) while keeping their L2 identity private from L1 observers. Users interact through Aztec L2, where their addresses are not revealed on L1; instead, L1 sees cryptographic commitments and intent metadata. The protocol uses cross-chain messaging with cryptographic commitments to decouple user identity from DeFi positions.
 
 ---
 
@@ -51,8 +51,8 @@ flowchart LR
 
 | Property | Guarantee |
 |----------|-----------|
-| **Identity Privacy** | L1 never sees user's L2 address; it sees `ownerHash = poseidon2(owner)` |
-| **Position Privacy** | Encrypted notes - only owner can view balances |
+| **Identity Privacy** | L1 does not see user's L2 address; it sees `ownerHash = poseidon2(owner, intentId)` |
+| **Position Privacy** | Encrypted notes - only the owner can decrypt balances |
 | **Execution Privacy** | Anyone can execute L1 txs - no wallet linkage |
 | **Censorship Resistance** | Permissionless relay model |
 
@@ -65,7 +65,7 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph L2["AZTEC L2"]
-        AW["AaveWrapper (Noir)<br/>─────────────────<br/>• request_deposit()<br/>• finalize_deposit()<br/>• request_withdraw()<br/>• finalize_withdraw()<br/>• cancel_deposit()<br/>• claim_refund()"]
+        AW["AaveWrapper (Noir)<br/>─────────────────<br/>• request_deposit()<br/>• finalize_deposit()<br/>• request_withdraw()<br/>• cancel_deposit()<br/>• claim_refund()"]
         BT["BridgedToken (Noir)<br/>─────────────────<br/>• mint / burn / transfer"]
     end
 
@@ -96,7 +96,7 @@ flowchart TB
 
 ### How Privacy Works
 
-The protocol achieves privacy through **identity decoupling**: the L2 user address is never transmitted to L1. Instead, a one-way cryptographic commitment is used.
+The protocol achieves privacy through **identity decoupling**: the L2 user address is not transmitted to L1. Instead, a one-way cryptographic commitment is used: `ownerHash = poseidon2(owner, intentId)`.
 
 ```mermaid
 flowchart LR
@@ -119,7 +119,7 @@ flowchart LR
     style OH fill:#C62828,color:#fff
 ```
 
-> **Security**: Given `ownerHash`, an attacker cannot recover the original address. `poseidon2` is a ZK-friendly hash function.
+> **Security**: Given `ownerHash`, an attacker cannot recover the original address without additional information. `poseidon2` is a ZK-friendly hash function.
 
 ### What is Hidden vs Revealed
 
@@ -127,12 +127,12 @@ flowchart LR
 
 | Data Point | Visible? | What is Revealed |
 |------------|----------|------------------|
-| User L2 address | **NO** | Only `ownerHash = poseidon2(owner)` appears (linkable across intents) |
+| User L2 address | **NO** | Only `ownerHash = poseidon2(owner, intentId)` appears (not linkable across intents) |
 | User L1 wallet | **NO** | Relayer executes, not user |
-| `intentId` | Yes | Opaque identifier, but linkable to `ownerHash` and lifecycle events |
+| `intentId` | Yes | Opaque identifier, linkable to lifecycle events for the same intent |
 | `amount` | Yes | Deposit/withdraw amount |
 | `deadline` | Yes | Expiration timestamp |
-| `asset` | Yes | Token address (MVP deployment uses USDC) |
+| `asset` | Yes | Token address (current deployment uses USDC) |
 | `shares` | Yes | aToken shares from Aave |
 
 #### On L2 (Aztec) - PRIVATE NOTES + PUBLIC METADATA
@@ -160,7 +160,7 @@ flowchart TB
     subgraph P2["PHASE 2: DEPOSIT (L2→L1→L2)"]
         direction LR
         P2L["🔒 HIGH PRIVACY"]
-        P2D["REVEALED: ownerHash, amount<br/>HIDDEN: User L2 address, L1 wallet (ownerHash is linkable)"]
+        P2D["REVEALED: ownerHash, amount<br/>HIDDEN: User L2 address, L1 wallet (ownerHash not linkable across intents)"]
     end
 
     subgraph P3["PHASE 3: HOLDING POSITION"]
@@ -172,7 +172,7 @@ flowchart TB
     subgraph P4["PHASE 4: WITHDRAW (L2→L1→L2)"]
         direction LR
         P4L["🔒 HIGH PRIVACY"]
-        P4D["REVEALED: ownerHash, amount<br/>HIDDEN: User identity (ownerHash links deposits)"]
+        P4D["REVEALED: ownerHash, amount<br/>HIDDEN: User identity (ownerHash not linkable across intents)"]
     end
 
     subgraph P5["PHASE 5: UNBRIDGE (L2→L1)"]
@@ -194,18 +194,18 @@ flowchart TB
 
 | Message | Direction | Content | Privacy Impact |
 |---------|-----------|---------|----------------|
-| Deposit intent | L2 → L1 | `ownerHash`, amount, deadline | Address hidden via hash; intents linkable by ownerHash |
+| Deposit intent | L2 → L1 | `ownerHash`, amount, deadline | Address hidden via hash; per-intent ownerHash not linkable across intents |
 | Deposit confirm | L1 → L2 | `intentId`, shares | No user data |
-| Withdraw intent | L2 → L1 | `ownerHash`, amount, deadline | Address hidden via hash; intents linkable by ownerHash |
-| Withdraw confirm | L1 → L2 | `intentId`, amount | No user data; currently not secret-bound |
+| Withdraw intent | L2 → L1 | `ownerHash`, amount, deadline | Address hidden via hash; per-intent ownerHash not linkable across intents |
+| Withdraw completion | L1 → L2 | TokenPortal deposit with `secretHash` | Claim is secret-bound via BridgedToken |
 
 ### Threat Model
 
 | Threat | Protected? | Mechanism |
 |--------|------------|-----------|
-| L1 observer identifying depositor | **Yes** | `ownerHash` is one-way; cannot reverse |
-| L1 observer linking multiple deposits | **Yes** | Stable `ownerHash` links intents |
-| L1 observer linking deposit to withdrawal | **Yes** | `ownerHash` and `intentId` are visible |
+| L1 observer identifying depositor | **Limited** | `ownerHash` is one-way; correlation still possible via timing/amounts |
+| L1 observer linking multiple deposits | **Limited** | `ownerHash` is unique per intent; correlation still possible via timing/amounts |
+| L1 observer linking deposit to withdrawal | **Partial** | `intentId` is reused for the position lifecycle |
 | Relayer learning user identity | **Yes** | No authentication needed to execute |
 | L2 observer seeing position sizes | **Yes** | Encrypted PositionReceiptNote |
 | Correlating bridge with deposit | **Partial** | Timing/amounts may correlate |
@@ -221,7 +221,10 @@ flowchart TB
 3. **Timing correlation**: Immediate bridge→deposit links operations
    - *Mitigation*: Wait between operations, batch with other users
 
-4. **Anonymity set size**: Privacy strength depends on number of users
+4. **Lifecycle linkage**: `intentId` reuse links deposit and withdrawal for the same position
+   - *Mitigation*: Acceptable for MVP; can be redesigned with intent rotation in future versions
+
+5. **Anonymity set size**: Privacy strength depends on number of users
    - *Mitigation*: Protocol adoption increases privacy for all users
 
 ---
@@ -287,17 +290,14 @@ sequenceDiagram
     Note over Portal: Consume message
     Portal->>Aave: withdraw(shares)
     Aave-->>Portal: USDC
-    Portal->>Portal: Deposit to TokenPortal
-    Portal->>Bridge: L1→L2 confirmation
-
-    Bridge-->>AW: Message available
-
-    User->>AW: finalize_withdraw()
-    Note over AW: Consume confirmation<br/>Nullify PENDING note
+    Portal->>Portal: Deposit to TokenPortal (secretHash)
+    Portal->>Bridge: L1→L2 message to BridgedToken
 
     User->>BT: claim_private()
     Note over BT: Mint L2 tokens to user
 ```
+
+**Note:** Withdrawals complete via TokenPortal deposit and BridgedToken claim; there is no L1→L2 confirmation message or `finalize_withdraw()` in the MVP flow.
 
 ### 5.3 Refund Mechanisms
 
@@ -399,8 +399,8 @@ The L1 portal inherits OpenZeppelin's `Pausable`. In emergency:
 
 | Limitation | Impact |
 |------------|--------|
-| **Withdraw confirmation not secret-bound** | The L1→L2 withdraw confirmation currently uses an empty `secretHash`, so finalization is not authenticated by the user’s secret; privacy relies only on note ownership. |
-| **Owner hash is stable** | `ownerHash = poseidon2(owner)` is deterministic, so L1 observers can cluster all intents by ownerHash. |
+| **Withdraw confirmation removed** | Withdrawals complete via TokenPortal deposit + BridgedToken claim; there is no L1→L2 confirmation message. |
+| **Owner hash is per-intent** | `ownerHash = poseidon2(owner, intentId)` is unique per intent, so L1 observers cannot cluster intents by ownerHash. |
 | **Public intent metadata** | L2 stores `intent_owners` and `intent_status` publicly for routing and lifecycle tracking. |
 
 ### MVP Constraints
@@ -434,7 +434,7 @@ The L1 portal inherits OpenZeppelin's `Pausable`. In emergency:
 ```rust
 sha256_to_field([
     intent_id         : Field,    // Unique intent identifier
-    owner_hash        : Field,    // poseidon2(L2_owner_address)
+    owner_hash        : Field,    // poseidon2(L2_owner_address, intent_id)
     asset             : Field,    // L1 token address as Field
     amount            : u128,     // Net amount after fee
     original_decimals : u8,       // Token decimals (6 for USDC)
@@ -485,8 +485,6 @@ fn cancel_deposit(intent_id: Field, current_time: u64, net_amount: u128)
 // Withdrawal operations
 fn request_withdraw(nonce: Field, amount: u128, deadline: u64,
                     secret_hash: Field) -> Field
-fn finalize_withdraw(intent_id: Field, asset_id: Field, amount: u128,
-                     secret: Field, message_leaf_index: Field)
 fn claim_refund(nonce: Field, current_time: u64)
 ```
 

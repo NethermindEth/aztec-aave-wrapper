@@ -4,10 +4,10 @@ use dep::aztec::protocol_types::traits::{Deserialize, Serialize};
 ///
 /// This message is serialized and sent from Aztec L2 to L1 via the cross-chain
 /// messaging system. The relayer picks up this intent and executes the deposit
-/// on the target chain (e.g., Arbitrum) through the TargetChainExecutor contract.
+/// on L1 through the AztecAavePortalL1 contract.
 ///
-/// Privacy: Uses hash(ownerL2) instead of plain owner address to preserve privacy.
-/// The L2 contract stores intentId -> owner mapping privately for finalization.
+/// Privacy: Uses hash(ownerL2, intentId) instead of plain owner address to preserve privacy.
+/// The L2 contract stores intentId -> owner mapping in public state for routing.
 ///
 /// Fields are ordered for efficient ABI encoding:
 /// - Field types (32 bytes each): intent_id, owner_hash, asset
@@ -19,7 +19,7 @@ use dep::aztec::protocol_types::traits::{Deserialize, Serialize};
 pub struct DepositIntent {
     /// Unique identifier for this intent (derived from user address + nonce)
     pub intent_id: Field,
-    /// Hash of the L2 owner address for privacy (hash(ownerL2))
+    /// Hash of the L2 owner address for privacy (hash(ownerL2, intentId))
     pub owner_hash: Field,
     /// Token address on target chain (stored as Field, cast to address on L1/Target)
     pub asset: Field,
@@ -39,12 +39,12 @@ pub struct DepositIntent {
 /// deposited assets. The relayer executes the withdrawal and bridges assets
 /// back to L2.
 ///
-/// Privacy: Uses hash(ownerL2) for consistency. Full withdrawal only in MVP.
+/// Privacy: Uses hash(ownerL2, intentId) for consistency. Full withdrawal only in MVP.
 #[derive(Deserialize, Eq, Serialize)]
 pub struct WithdrawIntent {
     /// Unique identifier for this intent (must match the original deposit intent)
     pub intent_id: Field,
-    /// Hash of the L2 owner address for privacy (hash(ownerL2))
+    /// Hash of the L2 owner address for privacy (hash(ownerL2, intentId))
     pub owner_hash: Field,
     /// Amount of aTokens/shares to withdraw (must be full amount for MVP)
     pub amount: u128,
