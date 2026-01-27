@@ -16,6 +16,7 @@ interface DeploymentsFile {
     mockLendingPool: string;
     tokenPortal: string;
     portal: string;
+    faucet: string;
   };
   l2: {
     bridgedToken: string;
@@ -36,6 +37,7 @@ export interface DeploymentAddresses {
     tokenPortal: Address;
     mockUsdc: Address;
     mockLendingPool: Address;
+    faucet: Address;
   };
   l2: {
     bridgedToken: AztecAddress;
@@ -70,6 +72,7 @@ export async function fetchDeploymentAddresses(): Promise<DeploymentAddresses> {
       tokenPortal: data.l1.tokenPortal as Address,
       mockUsdc: data.l1.mockUsdc as Address,
       mockLendingPool: data.l1.mockLendingPool as Address,
+      faucet: data.l1.faucet as Address,
     },
     l2: {
       bridgedToken: data.l2.bridgedToken as AztecAddress,

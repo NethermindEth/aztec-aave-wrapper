@@ -99,7 +99,7 @@ test -f .deployments.local.json && grep -q "faucet" .deployments.local.json
 Files:
 - `frontend/src/services/l1/faucet.ts` (new)
 
-### Step 7: Load faucet address in frontend
+### Step 7: Load faucet address in frontend **COMPLETE**
 
 Files:
 - `frontend/src/services/deployments.ts`
