@@ -56,7 +56,7 @@ Failure modes:
 - Wrong token interface
 - Missing access control (if using USDC + MINTER_ROLE)
 
-### Step 2: Add TokenFaucet unit tests
+### Step 2: Add TokenFaucet unit tests **COMPLETE**
 
 Files:
 - `eth/test/TokenFaucet.t.sol` (new)
