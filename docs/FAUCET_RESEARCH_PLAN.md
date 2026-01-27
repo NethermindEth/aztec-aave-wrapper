@@ -132,7 +132,7 @@ Files:
 Files:
 - `frontend/src/App.tsx`
 
-### Step 12: Build + verify
+### Step 12: Build + verify **COMPLETE**
 
 Validation:
 ```bash
