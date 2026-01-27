@@ -178,6 +178,7 @@ export const CONTRACT_ERRORS = {
   INTENT_ALREADY_CONSUMED: "Intent ID already consumed",
   INTENT_NOT_PENDING_DEPOSIT: "Intent not in pending deposit state",
   INTENT_NOT_PENDING_WITHDRAW: "Intent not in pending withdraw state",
+  INTENT_NOT_CONFIRMED: "Intent not in confirmed state",
 
   // Balance validation errors
   WITHDRAWAL_EXCEEDS_SHARES: "Withdrawal amount exceeds available shares",
@@ -192,6 +193,9 @@ export const CONTRACT_ERRORS = {
 
   // Status errors
   INVALID_STATUS_TRANSITION: "Invalid status transition",
+
+  // Internal entrypoint errors
+  UNAUTHORIZED_PUBLIC_ENTRYPOINT: "Unauthorized public entrypoint",
 } as const;
 
 /**

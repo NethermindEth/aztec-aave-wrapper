@@ -401,7 +401,17 @@ check-devnet-running:
 		-H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
 		>/dev/null 2>&1 || \
-		(echo -e "$(RED)Error: Devnet is not running. Start it with 'make devnet-up'$(NC)" && exit 1)
+		curl -sf http://127.0.0.1:$(ANVIL_L1_PORT) -X POST \
+		-H "Content-Type: application/json" \
+		-d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+		>/dev/null 2>&1 || \
+		( \
+			if command -v docker >/dev/null 2>&1; then \
+				docker ps --format '{{.Image}} {{.Names}} {{.Ports}}' | grep -q 'aztecprotocol/aztec' && \
+				(echo "Devnet is running (docker) but L1 RPC not reachable from localhost." && exit 0); \
+			fi; \
+			echo -e "$(RED)Error: Devnet is not running. Start it with 'make devnet-up'$(NC)" && exit 1; \
+		)
 	@echo "Devnet is running."
 
 # ==============================================================================

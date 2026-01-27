@@ -511,6 +511,11 @@ export class TestHarness {
       const adminWallet = this._accounts.admin.wallet;
       const adminAddress = this._accounts.admin.address;
 
+      // Use mock addresses for testing
+      const portalAddress = EthAddress.fromString("0x1234567890123456789012345678901234567890");
+      // Use admin address as mock fee treasury for testing
+      const mockFeeTreasury = adminAddress;
+
       // Deploy BridgedToken first
       console.log("Deploying BridgedToken contract...");
       // Convert name and symbol to Field elements (short strings encoded as BigInt)
@@ -531,6 +536,7 @@ export class TestHarness {
       const deployedBridgedToken = await BridgedTokenContract.deploy(
         adminWallet as any,
         adminAddress,
+        portalAddress,
         tokenName,
         tokenSymbol,
         tokenDecimals
@@ -554,11 +560,6 @@ export class TestHarness {
           BridgedTokenContractArtifact
         );
       }
-
-      // Use mock addresses for testing
-      const portalAddress = EthAddress.fromString("0x1234567890123456789012345678901234567890");
-      // Use admin address as mock fee treasury for testing
-      const mockFeeTreasury = adminAddress;
 
       console.log("Deploying AaveWrapper contract...");
 

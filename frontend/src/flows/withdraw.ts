@@ -283,11 +283,8 @@ export async function executeWithdrawFlow(
     logInfo(`Deadline: ${deadline} (L1 timestamp + ${deadlineOffset}s)`);
     logInfo(`Amount: ${formatUSDC(withdrawAmount)} USDC (full position)`);
 
-    // Compute owner hash for privacy
-    const ownerHashFr = await computeOwnerHash(wallet.address);
-    const ownerHash = ownerHashFr.toBigInt();
-
-    logSection("Privacy", `Owner hash computed: ${ownerHash.toString(16).slice(0, 16)}...`);
+    // NOTE: Owner hash is computed AFTER getting intent_id from L2 (see step 2)
+    // because owner_hash = poseidon2_hash([owner, intent_id]) for per-intent privacy
 
     // Check if withdrawal was already executed on L1 (from a previous attempt)
     // This prevents wasting the L2 request_withdraw call if L1 already processed it
@@ -380,6 +377,12 @@ export async function executeWithdrawFlow(
     }
 
     const intentIdStr = intentId.toString();
+
+    // Compute owner hash for privacy (AFTER getting intent_id)
+    // owner_hash = poseidon2_hash([owner, intent_id]) for per-intent unlinkability
+    const ownerHashFr = await computeOwnerHash(wallet.address, BigInt(intentIdStr));
+    const ownerHash = ownerHashFr.toBigInt();
+    logSection("Privacy", `Owner hash computed: ${ownerHash.toString(16).slice(0, 16)}...`);
 
     // =========================================================================
     // Step 3: Prepare L1 execution (message proof will be fetched in step 4)

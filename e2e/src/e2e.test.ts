@@ -17,7 +17,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { getConfig } from "./config";
 import { verifyRelayerPrivacy } from "./flows/deposit";
 import { verifyWithdrawRelayerPrivacy } from "./flows/withdraw";
-import { assertDeadlineInFuture, assertIntentIdNonZero } from "./helpers/assertions";
+import { assertContractError, assertDeadlineInFuture, assertIntentIdNonZero } from "./helpers/assertions";
 import { logger } from "./helpers/logger";
 // Import test utilities
 import { type ChainClient, TestHarness } from "./setup";
@@ -752,6 +752,37 @@ describe("Aztec Aave Wrapper E2E", () => {
     });
 
     /**
+     * Test that _request_withdraw_public cannot be called directly by users.
+     *
+     * Validates:
+     * - Direct public call without confirmed intent is rejected
+     */
+    it("should reject direct calls to _request_withdraw_public", async (ctx) => {
+      if (!aztecAvailable || !harness?.isFullE2EReady()) {
+        logger.skip("Full E2E infrastructure not available");
+        ctx.skip();
+        return;
+      }
+
+      const userContract = aaveWrapper.withWallet(userWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const methods = userContract.methods as any;
+
+      const intentId = Fr.random();
+      const deadline = deadlineFromOffset(TEST_CONFIG.deadlineOffset);
+
+      await assertContractError(
+        async () =>
+          methods
+            ._request_withdraw_public(intentId, userAddress!, deadline)
+            .send({ from: userAddress! })
+            .wait(),
+        "INTENT_NOT_CONFIRMED",
+        "_request_withdraw_public should require confirmed intent"
+      );
+    });
+
+    /**
      * Test that withdrawal preserves privacy via relayer model.
      *
      * Validates:
@@ -819,6 +850,38 @@ describe("Aztec Aave Wrapper E2E", () => {
       //
       // See WITHDRAW_TRANSACTION_FLOW.md for full flow details.
       logger.info("Test skipped - requires real L1→L2 message infrastructure");
+    });
+
+    /**
+     * Test withdrawal with zero deadline.
+     * Should verify L2 contract rejects deadline=0.
+     */
+    it("should reject withdrawal with zero deadline", async (ctx) => {
+      if (!aztecAvailable || !harness?.status.contractsDeployed) {
+        logger.skip("Contracts not deployed");
+        ctx.skip();
+        return;
+      }
+
+      const { computeSecretHash } = await import("@aztec/stdlib/hash");
+      const secret = Fr.random();
+      const secretHash = await computeSecretHash(secret);
+
+      const userContract = aaveWrapper.withWallet(userWallet);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const methods = userContract.methods as any;
+
+      const mockNonce = Fr.random();
+
+      await assertContractError(
+        async () =>
+          methods
+            .request_withdraw(mockNonce, TEST_CONFIG.withdrawAmount, 0n, secretHash)
+            .send({ from: userAddress! })
+            .wait(),
+        "DEADLINE_ZERO",
+        "request_withdraw should reject zero deadline"
+      );
     });
 
     /**

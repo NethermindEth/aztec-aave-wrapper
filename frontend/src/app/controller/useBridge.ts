@@ -216,7 +216,12 @@ export function useBridge(): UseBridgeResult {
       () => [state.wallet.l2Address, state.contracts.tokenPortal] as const,
       ([l2Address, tokenPortal]) => {
         // Only auto-load if wallet connected and contracts deployed
-        if (l2Address && tokenPortal && bridgeState.pendingBridges.length === 0 && !bridgeState.isLoading) {
+        if (
+          l2Address &&
+          tokenPortal &&
+          bridgeState.pendingBridges.length === 0 &&
+          !bridgeState.isLoading
+        ) {
           // Silent auto-load (no logging)
           handleRefreshBridgesSilent();
         }

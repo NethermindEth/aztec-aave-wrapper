@@ -359,11 +359,8 @@ export async function executeDepositFlow(
     logInfo(`Deadline: ${deadline} (L1 timestamp + ${config.deadlineOffset}s)`);
     logInfo(`Amount: ${formatUSDC(config.amount)} USDC`);
 
-    // Compute owner hash for privacy
-    const ownerHashFr = await computeOwnerHash(wallet.address);
-    const ownerHash = ownerHashFr.toBigInt();
-
-    logSection("Privacy", `Owner hash computed: ${ownerHash.toString(16).slice(0, 16)}...`);
+    // NOTE: Owner hash is computed AFTER getting intent_id from L2 (see step 3)
+    // because owner_hash = poseidon2_hash([caller, intent_id]) for per-intent privacy
 
     // =========================================================================
     // Step 2: Call request_deposit on L2
@@ -395,6 +392,12 @@ export async function executeDepositFlow(
     setOperationIntentId(intentIdStr);
     logSuccess(`Intent ID: ${intentIdStr.slice(0, 16)}...`);
     logSuccess(`L2 tx: ${depositResult.txHash}`);
+
+    // Compute owner hash for privacy (AFTER getting intent_id)
+    // owner_hash = poseidon2_hash([caller, intent_id]) for per-intent unlinkability
+    const ownerHashFr = await computeOwnerHash(wallet.address, BigInt(intentIdStr));
+    const ownerHash = ownerHashFr.toBigInt();
+    logSection("Privacy", `Owner hash computed: ${ownerHash.toString(16).slice(0, 16)}...`);
 
     // CRITICAL: Store secret immediately after request_deposit succeeds
     // This ensures we can retry finalize_deposit if it fails later

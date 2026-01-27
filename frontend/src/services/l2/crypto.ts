@@ -128,26 +128,31 @@ export async function computeSecretHashFromValue(secret: Fr | bigint): Promise<F
 /**
  * Compute the owner hash for privacy-preserving cross-chain messages.
  *
- * This matches main.nr:363:
+ * This matches main.nr compute_owner_hash function:
  * ```noir
- * let owner_hash = poseidon2_hash([caller.to_field()]);
+ * pub fn compute_owner_hash(owner: AztecAddress, intent_id: Field) -> Field {
+ *     poseidon2_hash([owner.to_field(), intent_id])
+ * }
  * ```
  *
- * The owner_hash is used instead of the raw L2 address in L2→L1 messages,
- * ensuring the user's identity is never revealed on L1.
+ * The owner_hash is derived from both the owner address AND the intent_id,
+ * making each intent have a unique owner_hash even for the same user.
+ * This prevents L1 observers from linking multiple deposits/withdrawals
+ * to the same user.
  *
  * @param owner - The Aztec address of the owner
+ * @param intentId - The intent ID (unique per operation)
  * @returns The computed owner hash as Fr
  *
  * @example
  * ```ts
- * const ownerHash = await computeOwnerHash(userAddress);
- * // ownerHash can be safely included in L1 transactions
+ * const ownerHash = await computeOwnerHash(userAddress, intentId);
+ * // ownerHash is unique per intent, preserving privacy
  * ```
  */
-export async function computeOwnerHash(owner: AztecAddress): Promise<Fr> {
+export async function computeOwnerHash(owner: AztecAddress, intentId: bigint): Promise<Fr> {
   const { poseidon2Hash } = await loadAztecModules();
-  return poseidon2Hash([owner.toBigInt()]);
+  return poseidon2Hash([owner.toBigInt(), intentId]);
 }
 
 /**
@@ -156,17 +161,21 @@ export async function computeOwnerHash(owner: AztecAddress): Promise<Fr> {
  * Useful when working with raw field values rather than AztecAddress objects.
  *
  * @param ownerBigInt - The owner address as bigint
+ * @param intentId - The intent ID (unique per operation)
  * @returns The computed owner hash as Fr
  *
  * @example
  * ```ts
  * const ownerBigInt = userAddress.toBigInt();
- * const ownerHash = await computeOwnerHashFromBigInt(ownerBigInt);
+ * const ownerHash = await computeOwnerHashFromBigInt(ownerBigInt, intentId);
  * ```
  */
-export async function computeOwnerHashFromBigInt(ownerBigInt: bigint): Promise<Fr> {
+export async function computeOwnerHashFromBigInt(
+  ownerBigInt: bigint,
+  intentId: bigint
+): Promise<Fr> {
   const { poseidon2Hash } = await loadAztecModules();
-  return poseidon2Hash([ownerBigInt]);
+  return poseidon2Hash([ownerBigInt, intentId]);
 }
 
 // =============================================================================

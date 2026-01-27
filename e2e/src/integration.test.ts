@@ -43,7 +43,7 @@ const TEST_CONFIG = {
   /** PXE URL for local devnet */
   pxeUrl: process.env.PXE_URL || "http://localhost:8080",
   /** Test amounts */
-  depositAmount: 1000n,
+  depositAmount: 1_000_000n,
   withdrawAmount: 500n,
   /** Original token decimals (e.g., USDC = 6) */
   originalDecimals: 6,
@@ -219,7 +219,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
     if (!aztecAvailable || !pxeAvailable || !adminWallet) return;
 
     // 1. Deploy BridgedToken contract first
-    // Constructor: (admin, name, symbol, decimals)
+    // Constructor: (admin, portal_address, name, symbol, decimals)
     // Name and symbol are stored as Field elements (short string encoding)
     const tokenName = Fr.fromString("0x555344432e65"); // "USDC.e" encoded as hex
     const tokenSymbol = Fr.fromString("0x555344432e65"); // "USDC.e" encoded as hex
@@ -228,6 +228,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
     const deployedBridgedToken = await BridgedTokenContract.deploy(
       adminWallet,
       adminAddress, // initial admin
+      portalAddress, // L1 TokenPortal address
       tokenName, // name as Field
       tokenSymbol, // symbol as Field
       tokenDecimals // decimals
@@ -520,7 +521,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
      */
     it.todo("should prevent double withdrawal request");
 
-    it("should prevent finalizing non-pending withdrawal", async () => {
+    it("should prevent refund for non-pending withdrawal intent", async () => {
       if (!aztecAvailable || !pxeAvailable) {
         console.warn("Skipping test - aztec.js or PXE not available");
         return;
@@ -533,7 +534,7 @@ describe("AaveWrapper Integration Tests - Priority 1: Critical Security", () => 
 
       await expect(
         userAContract.methods
-          ._finalize_withdraw_public(fakeIntentId)
+          ._claim_refund_public(fakeIntentId, 1n)
           .send({ from: userAAddress })
           .wait()
       ).rejects.toThrow(/Intent not in pending withdraw state|app_logic_reverted/);
