@@ -5,15 +5,7 @@
  * Wraps the claim() and canClaim() functions for frontend consumption.
  */
 
-import type {
-  Account,
-  Address,
-  Chain,
-  Hex,
-  PublicClient,
-  Transport,
-  WalletClient,
-} from "viem";
+import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClient } from "viem";
 import { logInfo, logSuccess, logWarning } from "../../store/logger.js";
 
 // =============================================================================

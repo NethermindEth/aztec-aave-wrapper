@@ -6,19 +6,19 @@
  */
 
 import { createEffect, createSignal, onCleanup, Show } from "solid-js";
-import type { Address, Chain, PublicClient, Transport, WalletClient, Account } from "viem";
+import type { Account, Address, Chain, PublicClient, Transport, WalletClient } from "viem";
+import {
+  type ClaimStatus,
+  claim,
+  type FaucetConfig,
+  formatCooldown,
+  getClaimStatus,
+  getFaucetConfig,
+} from "../services/l1/faucet.js";
 import { formatBalance } from "./BalanceDisplay.js";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import {
-  claim,
-  formatCooldown,
-  getClaimStatus,
-  getFaucetConfig,
-  type ClaimStatus,
-  type FaucetConfig,
-} from "../services/l1/faucet.js";
 
 /**
  * Props for FaucetCard component
@@ -59,18 +59,13 @@ export function FaucetCard(props: FaucetCardProps) {
 
   // Check if faucet is available
   const isAvailable = () =>
-    props.faucetAddress !== null &&
-    props.userAddress !== null &&
-    props.publicClient !== null;
+    props.faucetAddress !== null && props.userAddress !== null && props.publicClient !== null;
 
   // Check if user can claim
   const canClaim = () => {
     const status = claimStatus();
     return (
-      isAvailable() &&
-      props.walletClient !== null &&
-      status?.claimable === true &&
-      !isClaiming()
+      isAvailable() && props.walletClient !== null && status?.claimable === true && !isClaiming()
     );
   };
 
@@ -230,11 +225,7 @@ export function FaucetCard(props: FaucetCardProps) {
 
               {/* Claim Button */}
               <Show when={props.userAddress}>
-                <Button
-                  class="w-full"
-                  onClick={handleClaim}
-                  disabled={!canClaim() || isClaiming()}
-                >
+                <Button class="w-full" onClick={handleClaim} disabled={!canClaim() || isClaiming()}>
                   {isClaiming()
                     ? "Claiming..."
                     : claimStatus()?.claimable

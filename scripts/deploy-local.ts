@@ -38,9 +38,6 @@ const DEPLOYER_ADDRESS = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 // Native chain IDs
 const L1_CHAIN_ID = 31337;
 
-// Initial mint amount: 10,000 USDC (6 decimals)
-const INITIAL_USDC_MINT = "10000000000";
-
 // =============================================================================
 // Types
 // =============================================================================
@@ -473,9 +470,6 @@ async function main() {
     "eth"
   );
 
-  // Mint initial USDC to deployer account
-  mintTokens(addresses.l1.mockUsdc, DEPLOYER_ADDRESS, INITIAL_USDC_MINT, L1_RPC);
-
   // Deploy TokenFaucet for distributing test tokens
   // Drip amount: 1000 USDC (6 decimals = 1000 * 10^6)
   // Cooldown: 1 hour (3600 seconds)
@@ -668,10 +662,6 @@ async function main() {
   console.log("\nL2 Contracts (Aztec :8080):");
   console.log(`  BridgedToken (USDC): ${addresses.l2.bridgedToken || "(not deployed)"}`);
   console.log(`  AaveWrapper:         ${addresses.l2.aaveWrapper || "(not deployed)"}`);
-
-  console.log("\nTest Tokens:");
-  console.log(`  Deployer (${DEPLOYER_ADDRESS}):`);
-  console.log(`    USDC: ${Number(INITIAL_USDC_MINT) / 1_000_000} USDC`);
 
   console.log("\nNext steps:");
   console.log("  1. Run E2E tests: make e2e");

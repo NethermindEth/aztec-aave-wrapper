@@ -8,7 +8,7 @@
  * lives in useAppController, making App purely a layout/wiring layer.
  */
 
-import { createEffect, createSignal, on, type Component } from "solid-js";
+import { type Component, createEffect, createSignal, on } from "solid-js";
 import type { Account, Chain, PublicClient, Transport, WalletClient } from "viem";
 import { useAppController } from "./app/controller/useAppController";
 import { ClaimPendingBridges } from "./components/ClaimPendingBridges";
