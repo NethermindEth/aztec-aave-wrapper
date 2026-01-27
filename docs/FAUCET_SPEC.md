@@ -1,16 +1,62 @@
 # Token Faucet Specification
 
-> Enable users to easily acquire test tokens and try the Aztec Aave Wrapper protocol on local devnet.
+> Enable users to easily acquire test USDC and try the Aztec Aave Wrapper protocol on testnets.
 
 ## Overview
 
-Add a token faucet system that allows users to mint test USDC tokens on the local devnet. This removes friction for new users trying the protocol by eliminating the need for manual token minting via CLI commands.
+Add a token faucet for testnet deployments that allows users to obtain test USDC with rate limiting. This simulates the real-world workflow where users need USDC to deposit into Aave.
 
 ## Current State
 
-- **MockERC20** (`eth/contracts/mocks/MockERC20.sol`) has an unrestricted `mint()` function
-- Users currently need to use CLI (`cast send`) to mint tokens
-- Frontend has no way to obtain tokens without external tooling
+### Mock Contracts Architecture
+
+The protocol uses **MockERC20** to simulate both real tokens on testnets:
+
+| Contract Instance | Simulates | Purpose |
+|-------------------|-----------|---------|
+| MockERC20 (USDC) | USDC stablecoin | User deposits, bridging to L2 |
+| MockERC20 (aUSDC) | Aave aToken | Lending pool liquidity tokens, yield accrual |
+
+Both are deployed via `scripts/deploy-local.ts`:
+- **USDC**: `MockERC20("Mock USDC", "USDC", 6)` - stored as `mockUsdc`
+- **aUSDC**: `MockERC20("Mock aUSDC", "aUSDC", 6)` - used by MockLendingPool
+
+### MockERC20 Contract
+
+```solidity
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.33;
+
+contract MockERC20 is ERC20 {
+    uint8 private immutable _decimals;
+
+    constructor(string memory name_, string memory symbol_, uint8 decimals_) ERC20(name_, symbol_) {
+        _decimals = decimals_;
+    }
+
+    function decimals() public view override returns (uint8) {
+        return _decimals;
+    }
+
+    // Unrestricted mint - used by:
+    // 1. TokenFaucet (rate-limited user distribution)
+    // 2. MockLendingPool (aToken minting on supply)
+    // 3. Test scripts (initial token setup)
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function burn(address from, uint256 amount) external {
+        _burn(from, amount);
+    }
+}
+```
+
+### Current Gap
+
+- No user-facing faucet for obtaining test USDC
+- Users must use CLI (`cast send`) or receive tokens from deployer
+- Frontend cannot help users get started
 
 ## Requirements
 
@@ -41,41 +87,53 @@ Add a token faucet system that allows users to mint test USDC tokens on the loca
 │                           Frontend (SolidJS)                        │
 │  ┌─────────────────┐                                                │
 │  │   FaucetCard    │◄──────── New component in App.tsx              │
-│  │  - Amount input │                                                │
 │  │  - Mint button  │                                                │
 │  │  - Cooldown UI  │                                                │
 │  └────────┬────────┘                                                │
 │           │                                                         │
-│  ┌────────▼────────┐                                                │
-│  │ services/l1/    │                                                │
-│  │   faucet.ts     │◄──────── New service module                    │
-│  └────────┬────────┘                                                │
-└───────────┼─────────────────────────────────────────────────────────┘
-            │ viem writeContract
+│  ┌────────▼────────┐      ┌─────────────────────┐                   │
+│  │ services/l1/    │      │ .deployments.local  │                   │
+│  │   faucet.ts     │◄─────│   .json             │                   │
+│  └────────┬────────┘      │ (l1.faucet address) │                   │
+└───────────┼───────────────└─────────────────────┘───────────────────┘
+            │ viem writeContract (drip)
             ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                         L1 (Anvil)                                  │
+│                    L1 (Anvil / Testnet)                             │
+│                                                                     │
 │  ┌─────────────────┐         ┌─────────────────┐                    │
 │  │  TokenFaucet    │────────►│   MockERC20     │                    │
 │  │  - drip()       │  mint() │   (USDC)        │                    │
 │  │  - cooldowns    │         │                 │                    │
-│  └─────────────────┘         └─────────────────┘                    │
+│  │  - dripAmount   │         │  unrestricted   │                    │
+│  └─────────────────┘         └────────┬────────┘                    │
+│                                       │                             │
+│                              ┌────────▼────────┐                    │
+│                              │   MockERC20     │                    │
+│                              │   (aUSDC)       │                    │
+│                              │                 │                    │
+│                              │  used by        │                    │
+│                              │  MockLendingPool│                    │
+│                              └─────────────────┘                    │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+**Key**: TokenFaucet calls MockERC20's unrestricted `mint()` with rate limiting for user distribution.
 
 ### Contract Design
 
 **Option A: Wrapper Faucet Contract** (Recommended)
 - New `TokenFaucet.sol` contract wraps `MockERC20.mint()`
-- Adds rate limiting logic
+- Adds rate limiting logic (cooldown per address)
 - Deployed alongside other mock contracts
+- No permission changes needed - MockERC20 has unrestricted mint
 
 **Option B: Modify MockERC20**
-- Add rate limiting directly to MockERC20
-- Simpler but modifies existing mock
-- May break tests expecting unrestricted minting
+- Add rate limiting directly to MockERC20 contract
+- Would break MockLendingPool's aToken minting
+- Would break test scripts that need unrestricted minting
 
-**Decision: Option A** - Keeps MockERC20 simple for unit tests while providing user-friendly faucet.
+**Decision: Option A** - Keeps MockERC20 unrestricted for protocol use (aTokens, tests) while providing rate-limited user distribution via TokenFaucet.
 
 ## Contract Specification
 
@@ -92,7 +150,7 @@ interface IMintable {
 /**
  * @title TokenFaucet
  * @notice Rate-limited faucet for test token distribution
- * @dev Wraps MockERC20 with cooldown-based rate limiting
+ * @dev Wraps MockERC20.mint() with cooldown-based rate limiting for user distribution.
  */
 contract TokenFaucet {
     // ==========================================================================
@@ -117,8 +175,8 @@ contract TokenFaucet {
     // ==========================================================================
 
     /**
-     * @param _token Address of the mintable token (MockERC20)
-     * @param _dripAmount Amount to mint per drip (in token base units)
+     * @param _token Address of the MockERC20 token (USDC)
+     * @param _dripAmount Amount to mint per drip (in base units, 6 decimals for USDC)
      * @param _cooldownSeconds Seconds between drips per address
      */
     constructor(
@@ -187,33 +245,39 @@ contract TokenFaucet {
 
 ### Changes to `scripts/deploy-local.ts`
 
-1. Add faucet address to `DeploymentAddresses` type
-2. Deploy `TokenFaucet` after `MockERC20`
-3. Include in saved deployment JSON
+1. Add `faucet` to `DeploymentAddresses.l1` type
+2. Deploy `TokenFaucet` after `MockERC20` (USDC)
+3. Save faucet address to `.deployments.local.json`
 
 ```typescript
-// In DeploymentAddresses.l1
+// In DeploymentAddresses.l1 interface
 faucet: string;
 
-// After MockERC20 deployment
-const FAUCET_DRIP_AMOUNT = "1000000000"; // 1,000 USDC
+// Configuration
+const FAUCET_DRIP_AMOUNT = "1000000000"; // 1,000 USDC (6 decimals)
 const FAUCET_COOLDOWN = "60"; // 60 seconds
 
+// Deploy TokenFaucet after MockERC20 (USDC) deployment
+// No role grants needed - MockERC20 has unrestricted mint()
 addresses.l1.faucet = deployWithForge(
   "contracts/mocks/TokenFaucet.sol:TokenFaucet",
   [addresses.l1.mockUsdc, FAUCET_DRIP_AMOUNT, FAUCET_COOLDOWN],
   L1_RPC,
   "eth"
 );
+console.log(`    ✓ Faucet deployed, drips ${Number(FAUCET_DRIP_AMOUNT) / 1_000_000} USDC per request`);
 ```
 
 ### Deployment Output
+
+Addresses are saved to `.deployments.local.json`:
 
 ```json
 {
   "l1": {
     "mockUsdc": "0x...",
     "faucet": "0x...",
+    "mockLendingPool": "0x...",
     ...
   }
 }
@@ -558,24 +622,27 @@ faucet: {
 | Re-entrancy | No external calls after state update |
 | Integer overflow | Solidity 0.8+ default checks |
 
-**Note**: This faucet is for **local devnet only**. Production deployments should NOT include the faucet or MockERC20 contracts.
+**Note**: This faucet is for **testnet deployments only**. Production deployments should NOT include the faucet or MockERC20 contracts - use real USDC and Aave pools on mainnet.
 
 ## Open Questions
 
-1. **Should faucet be disabled on non-local networks?**
-   - Recommendation: Only deploy on chainId 31337 (Anvil)
+1. **Should faucet be deployed on public testnets?**
+   - Recommendation: Yes, deploy on Sepolia/Goerli for public testing
+   - Consider longer cooldown (e.g., 300s) for public testnets
 
-2. **Should we show faucet in UI for non-local networks?**
-   - Recommendation: Hide `FaucetCard` when `chainId !== 31337`
+2. **Should we show faucet in UI for mainnet?**
+   - Recommendation: Hide `FaucetCard` when not on testnet (check chainId)
 
-3. **Alternative: Direct MockERC20.mint() call?**
-   - Pro: Simpler, no new contract
-   - Con: No rate limiting, worse UX (user types amount)
-   - Decision: Use wrapper for better UX
+3. **Alternative: Direct MockERC20.mint() from frontend?**
+   - Pro: Simpler, no new contract needed
+   - Con: No rate limiting, users could spam mint, worse UX (user must enter amount)
+   - Decision: Use TokenFaucet wrapper for better UX and rate limiting
 
 ## References
 
-- Existing MockERC20: `eth/contracts/mocks/MockERC20.sol`
+- MockERC20 (USDC/aUSDC): `eth/contracts/mocks/MockERC20.sol`
+- MockLendingPool: `eth/contracts/mocks/MockLendingPool.sol`
 - Deploy script: `scripts/deploy-local.ts`
+- Deployment output: `.deployments.local.json`
 - Frontend services pattern: `frontend/src/services/l1/tokens.ts`
 - UI component pattern: `frontend/src/components/BridgeFlow.tsx`
