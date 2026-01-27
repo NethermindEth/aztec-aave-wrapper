@@ -113,7 +113,7 @@ Files:
 Files:
 - `frontend/src/types/state.ts`
 
-### Step 9: Initialize faucet state
+### Step 9: Initialize faucet state **COMPLETE**
 
 Files:
 - `frontend/src/types/state.ts`
