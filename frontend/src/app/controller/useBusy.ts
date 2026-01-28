@@ -14,6 +14,7 @@ export interface BusyState {
   depositing: boolean;
   withdrawing: boolean;
   cancelling: boolean;
+  finalizing: boolean;
   claimingRefund: boolean;
 }
 
@@ -57,6 +58,7 @@ export function useBusy(): UseBusyResult {
     depositing: false,
     withdrawing: false,
     cancelling: false,
+    finalizing: false,
     claimingRefund: false,
   });
 

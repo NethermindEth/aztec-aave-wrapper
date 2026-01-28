@@ -96,28 +96,17 @@ export async function loadBridgedTokenWithAzguard(
   contractAddressString: string
 ): Promise<BridgedTokenLoadResult> {
   logInfo(`Loading BridgedToken contract at ${contractAddressString.slice(0, 16)}...`);
-  console.log("[loadBridgedTokenWithAzguard] START");
 
   try {
-    // Dynamically import the generated contract and AztecAddress
-    console.log("[loadBridgedTokenWithAzguard] Importing BridgedTokenContract...");
     const { BridgedTokenContract, BridgedTokenContractArtifact } = await import(
       "@generated/BridgedToken"
     );
-    console.log("[loadBridgedTokenWithAzguard] Importing AztecAddress...");
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
 
-    // Parse the contract address string
-    console.log("[loadBridgedTokenWithAzguard] Parsing address...");
     const contractAddress = AztecAddress.fromString(contractAddressString);
-
-    // Register the contract artifact with the wallet
     logInfo("Registering BridgedToken contract artifact with wallet...");
-    console.log("[loadBridgedTokenWithAzguard] Calling getContractMetadata...");
 
-    // Fetch the actual contract instance from the network via the wallet
     const contractMetadata = await wallet.getContractMetadata(contractAddress);
-    console.log("[loadBridgedTokenWithAzguard] Got contractMetadata:", !!contractMetadata);
 
     if (!contractMetadata.contractInstance) {
       throw new Error(
@@ -125,9 +114,6 @@ export async function loadBridgedTokenWithAzguard(
       );
     }
 
-    // Register with wallet: instance first, then artifact
-    // Use a timeout to prevent hanging if the wallet is slow
-    console.log("[loadBridgedTokenWithAzguard] Calling registerContract...");
     try {
       const registerPromise = wallet.registerContract(
         contractMetadata.contractInstance,
@@ -137,23 +123,16 @@ export async function loadBridgedTokenWithAzguard(
         setTimeout(() => reject(new Error("registerContract timed out after 5s")), 5000)
       );
       await Promise.race([registerPromise, timeoutPromise]);
-      console.log("[loadBridgedTokenWithAzguard] registerContract done");
-    } catch (regError) {
-      // If registration fails/times out, try to continue anyway
-      // The contract might already be registered from a previous operation
-      console.warn("[loadBridgedTokenWithAzguard] registerContract failed/timed out:", regError);
-      console.log("[loadBridgedTokenWithAzguard] Continuing without registration...");
+    } catch {
+      // Continue anyway - contract might already be registered
     }
 
-    // Load the contract with Azguard wallet
-    console.log("[loadBridgedTokenWithAzguard] Creating contract instance...");
     const contract = BridgedTokenContract.at(
       contractAddress,
       wallet as unknown as Parameters<typeof BridgedTokenContract.at>[1]
     );
 
     logSuccess(`BridgedToken contract loaded at ${contractAddress.toString()}`);
-    console.log("[loadBridgedTokenWithAzguard] SUCCESS");
 
     return {
       contract,
@@ -191,18 +170,15 @@ export async function loadBridgedTokenWithDevWallet(
 
     const contractAddress = AztecAddress.fromString(contractAddressString);
 
-    // First try to get contract metadata from PXE (in case already registered)
     logInfo("[DevWallet] Checking if BridgedToken is registered with PXE...");
     const contractMetadata = await wallet.getContractMetadata(contractAddress);
 
     let contractInstance = contractMetadata.contractInstance;
 
-    // If not found in PXE, fetch from node directly
     if (!contractInstance) {
       logInfo("[DevWallet] BridgedToken not in PXE, fetching from node...");
       const node = createAztecNodeClient("http://localhost:8080");
       const fetchedInstance = await node.getContract(contractAddress);
-      console.log("[DevWallet] Node getContract result:", fetchedInstance);
 
       if (!fetchedInstance) {
         throw new Error(
@@ -212,30 +188,11 @@ export async function loadBridgedTokenWithDevWallet(
       contractInstance = fetchedInstance;
     }
 
-    // Register contract with PXE
     logInfo("[DevWallet] Registering BridgedToken contract artifact with PXE...");
-    console.log("[DevWallet] Contract instance to register:", contractInstance);
-    console.log("[DevWallet] Contract instance type:", typeof contractInstance);
-    console.log(
-      "[DevWallet] Contract instance keys:",
-      contractInstance ? Object.keys(contractInstance) : "null"
-    );
-    if (contractInstance?.address) {
-      console.log("[DevWallet] Contract instance address:", contractInstance.address.toString());
-    } else {
-      console.log("[DevWallet] Contract instance has no address property!");
-    }
-
     await wallet.registerContract(contractInstance, BridgedTokenContractArtifact);
 
-    // Use the underlying AccountWallet for Contract.at()
     const underlyingWallet = wallet.getUnderlyingWallet();
-    console.log("[DevWallet] Got underlying wallet, creating contract instance...");
     const contract = BridgedTokenContract.at(contractAddress, underlyingWallet);
-    console.log(
-      "[DevWallet] Contract created, address:",
-      contract?.address?.toString?.() ?? "undefined"
-    );
 
     logSuccess(`[DevWallet] BridgedToken contract loaded at ${contractAddressString}`);
 
@@ -286,106 +243,13 @@ export async function claimPrivate(
   logInfo(`  amount: ${params.amount}`);
   logInfo(`  messageLeafIndex: ${params.messageLeafIndex}`);
 
-  // Detailed debug logging
-  console.log("[claimPrivate DEBUG] Parameters:");
-  console.log("[claimPrivate DEBUG]   amount:", params.amount?.toString());
-  console.log("[claimPrivate DEBUG]   secret (type):", typeof params.secret);
-  console.log("[claimPrivate DEBUG]   secret (hex):", `0x${params.secret?.toString(16)}`);
-  console.log("[claimPrivate DEBUG]   messageLeafIndex:", params.messageLeafIndex?.toString());
-  console.log("[claimPrivate DEBUG]   from:", from?.toString());
-  console.log(
-    "[claimPrivate DEBUG]   contract address (BridgedToken):",
-    contract?.address?.toString()
-  );
-
-  // Verify secret hash computation using the same function as bridge.ts
-  try {
-    const { computeSecretHashFromValue } = await import("./crypto.js");
-    const computedHash = await computeSecretHashFromValue(params.secret);
-    console.log(
-      "[claimPrivate DEBUG] Computed secretHash from poseidon2Hash([secret]):",
-      computedHash.toString()
-    );
-    console.log(
-      "[claimPrivate DEBUG] Expected: Should match what was sent to L1 in DepositToAztecPrivate event"
-    );
-  } catch (e) {
-    console.log("[claimPrivate DEBUG] Could not compute secretHash for verification:", e);
-  }
-
-  // Query the portal_address stored in BridgedToken
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const methods = contract.methods as any;
-    if (typeof methods.portal_address === "function") {
-      const portalAddress = await methods.portal_address().simulate();
-      console.log("[claimPrivate DEBUG] BridgedToken.portal_address():", portalAddress?.toString());
-      console.log(
-        "[claimPrivate DEBUG] IMPORTANT: This must match the L1 TokenPortal address that sent the deposit!"
-      );
-    } else {
-      console.log("[claimPrivate DEBUG] portal_address() method not found on contract");
-    }
-  } catch (e) {
-    console.log("[claimPrivate DEBUG] Could not query portal_address:", e);
-  }
-
-  // Compute what the content hash should be (to match L1)
-  try {
-    const { computeSecretHashFromValue } = await import("./crypto.js");
-    const secretHash = await computeSecretHashFromValue(params.secret);
-
-    // Replicate L2's content hash computation:
-    // sha256_to_field(amount as 32 bytes || secretHash as 32 bytes)
-    console.log("[claimPrivate DEBUG] Computing expected content hash...");
-    console.log("[claimPrivate DEBUG]   amount for content:", params.amount?.toString());
-    console.log("[claimPrivate DEBUG]   secretHash for content:", secretHash.toString());
-
-    // Compute the exact bytes that L1 and L2 would use
-    // L1: abi.encodePacked(uint256 amount, bytes32 secretHash) = 64 bytes
-    const amountHex = params.amount.toString(16).padStart(64, "0");
-    const secretHashHex = secretHash.toString().slice(2).padStart(64, "0"); // remove 0x prefix
-    const combinedHex = amountHex + secretHashHex;
-    console.log("[claimPrivate DEBUG]   amount as 32 bytes (hex):", `0x${amountHex}`);
-    console.log("[claimPrivate DEBUG]   secretHash as 32 bytes (hex):", `0x${secretHashHex}`);
-    console.log("[claimPrivate DEBUG]   combined 64 bytes (hex):", `0x${combinedHex}`);
-
-    // Compute sha256 of the combined bytes
-    const combinedBytes = new Uint8Array(64);
-    for (let i = 0; i < 64; i++) {
-      combinedBytes[i] = parseInt(combinedHex.slice(i * 2, i * 2 + 2), 16);
-    }
-    const hashBuffer = await crypto.subtle.digest("SHA-256", combinedBytes);
-    const hashArray = new Uint8Array(hashBuffer);
-    const sha256Hex = Array.from(hashArray)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-    console.log("[claimPrivate DEBUG]   sha256(combined):", `0x${sha256Hex}`);
-
-    // sha256ToField truncates to 31 bytes and prepends 0x00
-    const sha256ToFieldHex = `00${sha256Hex.slice(0, 62)}`;
-    console.log("[claimPrivate DEBUG]   sha256ToField (L1):", `0x${sha256ToFieldHex}`);
-    console.log("[claimPrivate DEBUG]   (This is the expected content hash)");
-  } catch (e) {
-    console.log("[claimPrivate DEBUG] Could not compute content hash preview:", e);
-  }
-
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
-    console.log("[claimPrivate DEBUG] Calling claim_private with:");
-    console.log("[claimPrivate DEBUG]   - amount:", params.amount);
-    console.log("[claimPrivate DEBUG]   - secret:", params.secret);
-    console.log("[claimPrivate DEBUG]   - messageLeafIndex:", params.messageLeafIndex);
-
-    // Call claim_private which consumes the L1->L2 message and mints tokens
     const call = methods.claim_private(params.amount, params.secret, params.messageLeafIndex);
-
-    // Get the sponsored fee payment method
     const paymentMethod = await getSponsoredFeePaymentMethod();
 
-    // Execute the transaction
     logInfo("Sending claim transaction to wallet for approval...");
     const tx = await call.send({ from, fee: { paymentMethod } }).wait();
 
@@ -422,42 +286,27 @@ export async function getBalance(
   owner: AztecAddress
 ): Promise<bigint> {
   logInfo(`Getting private balance for ${owner?.toString?.().slice(0, 16)}...`);
-  console.log("[getBalance] Starting balance query for:", owner?.toString?.());
-  console.log("[getBalance] Contract address:", contract?.address?.toString?.());
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
 
-    console.log("[getBalance] Calling balance_of_private...");
-
-    // balance_of_private is an unconstrained (view) function
-    // Try calling without options first, then with empty options if that fails
     let balance: unknown;
     try {
       balance = await methods.balance_of_private(owner).simulate();
-    } catch (simError) {
-      console.log("[getBalance] simulate() failed, trying with empty options:", simError);
-      // Try with explicit empty options
+    } catch {
       balance = await methods.balance_of_private(owner).simulate({});
     }
 
-    console.log("[getBalance] Raw balance result:", balance);
-
-    // Convert to bigint (result may be Fr or number)
     const balanceStr =
       (balance as { toString?: () => string })?.toString?.() ?? String(balance ?? 0);
     const balanceBigInt = BigInt(balanceStr);
 
-    console.log("[getBalance] Converted balance:", balanceBigInt.toString());
     logInfo(`Balance: ${balanceBigInt}`);
-
     return balanceBigInt;
   } catch (error) {
-    console.error("[getBalance] FAILED with error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     logError(`Failed to get balance: ${errorMessage}`);
-    // Return 0 on error (common for empty/new accounts)
     return 0n;
   }
 }

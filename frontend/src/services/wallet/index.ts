@@ -78,7 +78,6 @@ export async function connectWallet(): Promise<AnyWalletConnection> {
   // }
 
   const { connectAztecWallet } = await import("./aztec.js");
-  console.log("[Wallet] Using Azguard wallet");
   return connectAztecWallet();
 }
 

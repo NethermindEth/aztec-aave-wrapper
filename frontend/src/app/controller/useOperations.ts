@@ -21,6 +21,7 @@ import {
   type DepositL2Context,
   executeDepositFlow,
 } from "../../flows/deposit";
+import { executeFinalizeDepositFlow, type FinalizeL2Context } from "../../flows/finalize";
 import { executeClaimRefundFlow, type RefundL2Context } from "../../flows/refund";
 import {
   executeWithdrawFlow,
@@ -62,6 +63,8 @@ export interface UseOperationsResult {
   handleWithdraw: (intentId: string) => Promise<void>;
   /** Cancel a pending deposit */
   handleCancelDeposit: (intentId: string, deadline: bigint, netAmount: bigint) => Promise<void>;
+  /** Finalize a pending deposit (create position receipt) */
+  handleFinalizeDeposit: (intentId: string) => Promise<void>;
   /** Claim refund for failed withdrawal */
   handleClaimRefund: (
     intentId: string,
@@ -461,11 +464,66 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // Finalize Deposit Handler
+  // ---------------------------------------------------------------------------
+  const handleFinalizeDeposit = async (intentId: string) => {
+    await withBusy("finalizing", async () => {
+      if (!state.contracts.l2Wrapper || !state.contracts.portal || !state.contracts.mockUsdc) {
+        addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+        return;
+      }
+
+      const l2WrapperAddress = state.contracts.l2Wrapper;
+      const portal = state.contracts.portal;
+      const mockUsdc = state.contracts.mockUsdc;
+
+      addLog(`Initiating finalization for deposit: ${intentId.slice(0, 16)}...`);
+
+      const publicClient = createL1PublicClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectWallet();
+
+      addLog("Loading AaveWrapper contract...");
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const l2Context: FinalizeL2Context = {
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        contract,
+      };
+
+      addLog("Executing finalize deposit flow...");
+      const result = await executeFinalizeDepositFlow(
+        publicClient,
+        portal as `0x${string}`,
+        mockUsdc as `0x${string}`,
+        l2Context,
+        { intentId, walletAddress }
+      );
+
+      // Update position status to Confirmed
+      updatePositionStatus(intentId, IntentStatus.Confirmed);
+      addLog(`Finalize complete! TX: ${result.txHash.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Position created with ${formatAmount(result.shares)} shares`, LogLevel.SUCCESS);
+
+      await refreshBalances(
+        publicClient,
+        walletAddress as `0x${string}`,
+        mockUsdc as `0x${string}`
+      );
+    });
+  };
+
   return {
     handleBridge,
     handleDeposit,
     handleWithdraw,
     handleCancelDeposit,
+    handleFinalizeDeposit,
     handleClaimRefund,
   };
 }

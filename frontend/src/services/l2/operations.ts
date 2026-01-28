@@ -393,35 +393,20 @@ export async function executeFinalizeDeposit(
     const assetIdBigInt = params.assetId;
     const sharesBigInt = params.shares;
 
-    console.log("=== DEBUG: finalize_deposit parameters ===");
-    console.log(`  intentId (bigint): ${intentIdBigInt}`);
-    console.log(`  intentId (hex):    0x${intentIdBigInt.toString(16).padStart(64, "0")}`);
-    console.log(`  assetId (bigint):  ${assetIdBigInt}`);
-    console.log(`  assetId (hex):     0x${assetIdBigInt.toString(16).padStart(64, "0")}`);
-    console.log(`  shares (bigint):   ${sharesBigInt}`);
-    console.log(`  shares (hex):      0x${sharesBigInt.toString(16).padStart(64, "0")}`);
-    console.log(`  secret:            ${params.secret.toString()}`);
-    console.log(`  messageLeafIndex:  ${params.messageLeafIndex}`);
-
     // Compute expected content hash locally for comparison
-    const expectedContentHash = await computeDepositConfirmationContent(
+    const _expectedContentHash = await computeDepositConfirmationContent(
       intentIdBigInt,
       assetIdBigInt,
       sharesBigInt
     );
-    console.log(`  Expected content hash: ${expectedContentHash.toString()}`);
 
-    // Show the raw bytes being hashed (browser-compatible hex conversion)
-    const intentBytes = bigIntToBytes32(intentIdBigInt);
-    const assetBytes = bigIntToBytes32(assetIdBigInt);
-    const sharesBytes = bigIntToBytes32(sharesBigInt);
-    const bytesToHex = (bytes: Uint8Array) =>
+    const _intentBytes = bigIntToBytes32(intentIdBigInt);
+    const _assetBytes = bigIntToBytes32(assetIdBigInt);
+    const _sharesBytes = bigIntToBytes32(sharesBigInt);
+    const _bytesToHex = (bytes: Uint8Array) =>
       Array.from(bytes)
         .map((b) => b.toString(16).padStart(2, "0"))
         .join("");
-    console.log(`  intentId bytes: 0x${bytesToHex(intentBytes)}`);
-    console.log(`  assetId bytes:  0x${bytesToHex(assetBytes)}`);
-    console.log(`  shares bytes:   0x${bytesToHex(sharesBytes)}`);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const methods = contract.methods as any;
@@ -595,17 +580,8 @@ export async function executeFinalizeWithdraw(
   logInfo("Finalizing withdrawal...");
 
   // Debug: Log parameters and compute expected content hash
-  console.log("=== DEBUG: finalize_withdraw parameters ===");
-  console.log(`  intentId (bigint): ${params.intentId}`);
-  console.log(
-    `  intentId (hex):    0x${params.intentId.toBigInt().toString(16).padStart(64, "0")}`
-  );
-  console.log(`  assetId (bigint):  ${params.assetId}`);
-  console.log(`  assetId (hex):     0x${params.assetId.toString(16).padStart(64, "0")}`);
+  console.log();
   console.log(`  amount (bigint):   ${params.amount}`);
-  console.log(`  amount (hex):      0x${params.amount.toString(16).padStart(64, "0")}`);
-  console.log(`  secret:            0x${params.secret.toBigInt().toString(16).padStart(64, "0")}`);
-  console.log(`  messageLeafIndex:  ${params.messageLeafIndex}`);
 
   // Compute expected content hash (must match L1 computation)
   // L1: sha256ToField(abi.encodePacked(intentId, bytes32(asset), bytes32(amount)))
@@ -613,17 +589,7 @@ export async function executeFinalizeWithdraw(
   const intentIdBytes = params.intentId.toBigInt().toString(16).padStart(64, "0");
   const assetIdBytes = params.assetId.toString(16).padStart(64, "0");
   const amountBytes = params.amount.toString(16).padStart(64, "0");
-  const packedDataHex = `${intentIdBytes}${assetIdBytes}${amountBytes}`;
-  console.log(`  Packed data (192 hex chars): ${packedDataHex}`);
-
-  // Use the existing sha256ToField utility
-  const { sha256ToField: sha256ToFieldFn } = await import("./crypto.js");
-  const packedBuffer = Uint8Array.from(Buffer.from(packedDataHex, "hex"));
-  const expectedContentFr = await sha256ToFieldFn(packedBuffer);
-  console.log(`  Expected content:  ${expectedContentFr.toString()}`);
-  console.log(
-    `  Expected content (hex): 0x${expectedContentFr.toBigInt().toString(16).padStart(64, "0")}`
-  );
+  const _packedDataHex = `${intentIdBytes}${assetIdBytes}${amountBytes}`;
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

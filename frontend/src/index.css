@@ -330,6 +330,17 @@
     }
   }
 
+  /* Shimmer animation for loading states */
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
+
   /* ──────────────────────────────────────────────────────────────────────────
      HERO SECTION
      ────────────────────────────────────────────────────────────────────────── */
@@ -1573,7 +1584,8 @@
     .contract-pill[data-copied="true"]::after,
     .main-container,
     .hero-icon,
-    .hero-icon::after {
+    .hero-icon::after,
+    .animate-shimmer {
       animation: none;
     }
 

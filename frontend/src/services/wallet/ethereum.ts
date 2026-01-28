@@ -1,7 +1,7 @@
 /**
  * Ethereum Wallet Connection Service
  *
- * Connects to browser extension wallets (MetaMask, etc.) using viem.
+ * Connects to browser extension wallets (MetaMask, etc.) using direct provider access.
  * Targets local Anvil devnet (chainId: 31337).
  */
 
@@ -20,6 +20,9 @@ import {
   type WalletClient,
 } from "viem";
 import { foundry } from "viem/chains";
+
+// Track if a connection attempt is in progress to prevent duplicate requests
+let connectionInProgress = false;
 
 // Extend Window interface for ethereum provider
 declare global {
@@ -69,37 +72,103 @@ function getProvider(): EthereumProvider {
 }
 
 /**
- * Connect to an injected Ethereum wallet (MetaMask, etc.)
+ * Connect to Ethereum wallet using direct injected provider (MetaMask)
  *
  * @returns Wallet connection with address, clients, and chain info
- * @throws Error if no wallet is available or user rejects connection
+ * @throws Error if user cancels or connection fails
  */
 export async function connectEthereumWallet(): Promise<EthereumWalletConnection> {
-  const provider = getProvider();
-
-  // Request account access
-  const accounts = (await provider.request({
-    method: "eth_requestAccounts",
-  })) as Address[];
-
-  if (!accounts || accounts.length === 0) {
-    throw new Error("No accounts found. Please unlock your wallet.");
+  // Guard against multiple simultaneous connection attempts
+  if (connectionInProgress) {
+    throw new Error(
+      "Connection already in progress. Please wait or close any pending wallet dialogs."
+    );
   }
 
-  const address = accounts[0];
+  if (!hasInjectedProvider()) {
+    throw new Error("No Ethereum wallet detected. Please install MetaMask.");
+  }
 
-  // Get current chain ID
-  const chainIdHex = (await provider.request({ method: "eth_chainId" })) as string;
-  const chainId = parseInt(chainIdHex, 16);
+  connectionInProgress = true;
 
-  // Create wallet client with injected provider
+  try {
+    const provider = getProvider();
+
+    // Request account access - this triggers the MetaMask popup
+    const accounts = (await provider.request({
+      method: "eth_requestAccounts",
+    })) as Address[];
+
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts returned from wallet");
+    }
+
+    const address = accounts[0];
+
+    // Get chain ID
+    const chainIdHex = (await provider.request({
+      method: "eth_chainId",
+    })) as string;
+    const chainId = parseInt(chainIdHex, 16);
+
+    // Create viem clients
+    const walletClient = createWalletClient({
+      account: address,
+      chain: foundry,
+      transport: custom(provider),
+    });
+
+    const publicClient = createPublicClient({
+      chain: foundry,
+      transport: http(LOCAL_RPC_URLS.L1),
+    });
+
+    connectionInProgress = false;
+
+    return {
+      address,
+      chainId,
+      walletClient,
+      publicClient,
+    };
+  } catch (err) {
+    connectionInProgress = false;
+    throw err;
+  }
+}
+
+/**
+ * Disconnect the Ethereum wallet
+ * Note: MetaMask doesn't have a true "disconnect" - we just clear our state
+ * The user must manually disconnect from MetaMask's UI if needed
+ */
+export async function disconnectEthereumWallet(): Promise<void> {
+  // MetaMask doesn't support programmatic disconnect
+  // We just reset our connection state
+  connectionInProgress = false;
+}
+
+/**
+ * Create a wallet connection for a specific address without prompting MetaMask
+ * Used when the account changes and we need to refresh the connection
+ *
+ * @param address - The new account address
+ * @returns Wallet connection with updated clients
+ */
+export function createConnectionForAddress(address: Address): EthereumWalletConnection {
+  if (!hasInjectedProvider()) {
+    throw new Error("No Ethereum wallet detected. Please install MetaMask.");
+  }
+
+  const provider = getProvider();
+
+  // Create viem clients with the new address
   const walletClient = createWalletClient({
     account: address,
     chain: foundry,
     transport: custom(provider),
   });
 
-  // Create public client for read operations (use HTTP for reliability)
   const publicClient = createPublicClient({
     chain: foundry,
     transport: http(LOCAL_RPC_URLS.L1),
@@ -107,7 +176,7 @@ export async function connectEthereumWallet(): Promise<EthereumWalletConnection>
 
   return {
     address,
-    chainId,
+    chainId: CHAIN_IDS.ANVIL_L1,
     walletClient,
     publicClient,
   };
@@ -181,6 +250,68 @@ export async function switchToAnvil(): Promise<void> {
 export type AccountsChangedHandler = (accounts: Address[]) => void;
 export type ChainChangedHandler = (chainId: string) => void;
 export type DisconnectHandler = () => void;
+
+/**
+ * Watch for account changes (compatible interface with previous Web3Modal version)
+ * Returns an unsubscribe function
+ */
+export function watchAccountChanges(
+  callback: (account: { address?: Address; isConnected: boolean; chainId?: number }) => void
+): () => void {
+  if (!hasInjectedProvider()) {
+    return () => {};
+  }
+
+  const provider = getProvider();
+
+  const handleAccountsChanged = async (accounts: unknown) => {
+    const accountList = accounts as Address[];
+    if (accountList.length === 0) {
+      callback({ isConnected: false });
+    } else {
+      // Get current chain ID
+      try {
+        const chainIdHex = (await provider.request({ method: "eth_chainId" })) as string;
+        const chainId = parseInt(chainIdHex, 16);
+        callback({
+          address: accountList[0],
+          isConnected: true,
+          chainId,
+        });
+      } catch {
+        callback({
+          address: accountList[0],
+          isConnected: true,
+        });
+      }
+    }
+  };
+
+  const handleChainChanged = async (chainIdHex: unknown) => {
+    const chainId = parseInt(chainIdHex as string, 16);
+    // Get current accounts
+    try {
+      const accounts = (await provider.request({ method: "eth_accounts" })) as Address[];
+      if (accounts.length > 0) {
+        callback({
+          address: accounts[0],
+          isConnected: true,
+          chainId,
+        });
+      }
+    } catch {
+      // Ignore errors, account change will handle it
+    }
+  };
+
+  provider.on("accountsChanged", handleAccountsChanged);
+  provider.on("chainChanged", handleChainChanged);
+
+  return () => {
+    provider.removeListener("accountsChanged", handleAccountsChanged);
+    provider.removeListener("chainChanged", handleChainChanged);
+  };
+}
 
 /**
  * Subscribe to wallet account changes

@@ -58,7 +58,23 @@ export interface L2PositionsResult {
  *   STATUS_CANCELLED: Field = 3;
  *   STATUS_PENDING_WITHDRAW: Field = 4;
  *   STATUS_WITHDRAWN: Field = 5;
+ *
+ * BUT the PositionReceiptNote (private note) uses PositionStatus:
+ *   PENDING_DEPOSIT: u8 = 0
+ *   ACTIVE: u8 = 1
+ *   PENDING_WITHDRAW: u8 = 2
+ *
+ * The get_positions function returns notes with PositionStatus values!
  */
+
+// These match PositionStatus in the Noir note (used by get_positions)
+export const NotePositionStatus = {
+  PendingDeposit: 0,
+  Active: 1,
+  PendingWithdraw: 2,
+} as const;
+
+// These match IntentStatus in public storage (used by intent_status map)
 export const L2PositionStatus = {
   PendingDeposit: 1,
   Active: 2, // CONFIRMED in Noir
@@ -97,51 +113,26 @@ export async function queryL2Positions(
   _wallet: AnyAztecWallet,
   ownerAddress: string
 ): Promise<L2PositionsResult> {
-  console.log("[queryL2Positions] Starting query for owner:", ownerAddress);
   try {
-    // Import AztecAddress for type conversion
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
     const owner = AztecAddress.fromString(ownerAddress);
-    console.log("[queryL2Positions] Calling get_positions on contract...");
 
-    // Call the get_positions utility function
-    // Utility functions are simulated (not sent as transactions)
-    // Note: Pass empty options object to avoid "authWitnesses" error in SDK
     const result = await (contract.methods as any).get_positions(owner).simulate({});
-    console.log("[queryL2Positions] Raw result:", result);
 
-    // Parse the BoundedVec result into Position array
-    // BoundedVec has { storage: Note[], len: number } structure
     const positions: L2Position[] = [];
-
-    // Handle the result based on its structure
     const boundedVec = result as { storage?: unknown[]; len?: number | bigint };
 
     if (boundedVec?.storage && boundedVec.len !== undefined) {
-      // BoundedVec structure: use len to know how many valid items
       const validCount = Number(boundedVec.len);
-
       for (let i = 0; i < validCount; i++) {
         const note = boundedVec.storage[i];
         if (note) {
-          console.log(
-            `[queryL2Positions] Raw note ${i}:`,
-            JSON.stringify(note, (_, v) => (typeof v === "bigint" ? v.toString() : v))
-          );
-          const parsed = parsePositionNote(note);
-          console.log(`[queryL2Positions] Parsed position ${i}:`, {
-            intentId: parsed.intentId,
-            status: parsed.status,
-            shares: parsed.shares.toString(),
-          });
-          positions.push(parsed);
+          positions.push(parsePositionNote(note));
         }
       }
     } else if (Array.isArray(result)) {
-      // Fallback: if it's just an array, filter out empty notes
       for (const note of result) {
         const parsed = parsePositionNote(note);
-        // Skip empty notes (nonce = 0x0 means uninitialized)
         if (parsed.intentId !== "0x0" && parsed.shares > 0n) {
           positions.push(parsed);
         }
@@ -149,9 +140,10 @@ export async function queryL2Positions(
     }
 
     // For pending deposits, fetch deadline and netAmount from public storage
+    // Note: pos.status comes from the note, so use NotePositionStatus
     const enrichedPositions = await Promise.all(
       positions.map(async (pos) => {
-        if (pos.status === L2PositionStatus.PendingDeposit) {
+        if (pos.status === NotePositionStatus.PendingDeposit) {
           const [deadline, netAmount] = await Promise.all([
             queryIntentDeadline(contract, pos.intentId),
             queryIntentNetAmount(contract, pos.intentId),
@@ -162,7 +154,6 @@ export async function queryL2Positions(
       })
     );
 
-    console.log("[queryL2Positions] Successfully queried", enrichedPositions.length, "positions");
     return {
       positions: enrichedPositions,
       success: true,
@@ -170,7 +161,6 @@ export async function queryL2Positions(
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error querying positions";
-    console.error("[queryL2Positions] Error:", errorMessage, error);
     return {
       positions: [],
       success: false,
@@ -555,17 +545,10 @@ export async function scanUserIntentsFromL1(
   userL2Address: string,
   fromBlock?: bigint
 ): Promise<ScanIntentsResult> {
-  console.log("[scanUserIntentsFromL1] Starting scan for user:", userL2Address);
-  console.log("[scanUserIntentsFromL1] Portal address:", portalAddress);
-
   try {
-    // Get current block number
     const currentBlock = await publicClient.getBlockNumber();
     const startBlock = fromBlock ?? (currentBlock > 10000n ? currentBlock - 10000n : 0n);
 
-    console.log(`[scanUserIntentsFromL1] Scanning blocks ${startBlock} to ${currentBlock}`);
-
-    // Query DepositExecuted events
     const logs = await publicClient.getLogs({
       address: portalAddress,
       event: DEPOSIT_EXECUTED_ABI[0],
@@ -573,19 +556,13 @@ export async function scanUserIntentsFromL1(
       toBlock: currentBlock,
     });
 
-    console.log(`[scanUserIntentsFromL1] Found ${logs.length} DepositExecuted events`);
-
     const foundIntents: FoundIntent[] = [];
 
-    // Check each intent's owner on L2
     for (const log of logs) {
       const intentId = log.args.intentId;
       if (!intentId) continue;
 
-      console.log(`[scanUserIntentsFromL1] Checking intent: ${intentId}`);
-
       try {
-        // Query the owner from L2
         const { Fr } = await import("@aztec/aztec.js/fields");
         const intentIdField = Fr.fromString(intentId);
 
@@ -594,13 +571,8 @@ export async function scanUserIntentsFromL1(
           .simulate({});
 
         const ownerStr = ownerResult?.toString?.() ?? "";
-        console.log(
-          `[scanUserIntentsFromL1] Intent ${intentId.slice(0, 10)}... owner: ${ownerStr.slice(0, 20)}...`
-        );
 
-        // Check if owner matches user
         if (ownerStr.toLowerCase() === userL2Address.toLowerCase()) {
-          console.log(`[scanUserIntentsFromL1] MATCH! Intent belongs to user`);
           foundIntents.push({
             intentId,
             asset: log.args.asset ?? "",
@@ -609,13 +581,10 @@ export async function scanUserIntentsFromL1(
             blockNumber: log.blockNumber,
           });
         }
-      } catch (error) {
+      } catch {
         // Intent might not exist on L2 or query failed
-        console.warn(`[scanUserIntentsFromL1] Failed to query owner for ${intentId}:`, error);
       }
     }
-
-    console.log(`[scanUserIntentsFromL1] Found ${foundIntents.length} intents belonging to user`);
 
     return {
       intents: foundIntents,
@@ -624,7 +593,6 @@ export async function scanUserIntentsFromL1(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error scanning intents";
-    console.error("[scanUserIntentsFromL1] Error:", errorMessage);
     return {
       intents: [],
       totalScanned: 0,

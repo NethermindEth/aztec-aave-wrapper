@@ -240,24 +240,16 @@ export async function waitForL2ToL1MessageProof(
   const startTime = Date.now();
   let currentBlock = startBlock;
 
-  console.log(`[messageProof] Waiting for L2→L1 message proof starting from block ${startBlock}`);
-  console.log(`[messageProof] Message hash: ${message.toString()}`);
-
   while (Date.now() - startTime < maxWaitMs) {
     try {
       // Get the latest block number
       const latestBlock = await node.getBlockNumber();
-      console.log(`[messageProof] Checking blocks ${currentBlock} to ${latestBlock}`);
 
       // Search from current block to latest
       for (let blockNum = currentBlock; blockNum <= latestBlock; blockNum++) {
         const witness = await computeL2ToL1MembershipWitness(node, blockNum, message);
 
         if (witness) {
-          console.log(`[messageProof] Found message in block ${blockNum}`);
-          console.log(`[messageProof] Leaf index: ${witness.leafIndex}`);
-          console.log(`[messageProof] Sibling path length: ${witness.siblingPath.pathSize}`);
-
           return {
             success: true,
             l2BlockNumber: BigInt(blockNum),
@@ -272,7 +264,6 @@ export async function waitForL2ToL1MessageProof(
       // Update current block to avoid re-checking
       currentBlock = latestBlock + 1;
 
-      console.log(`[messageProof] Message not found yet, waiting ${pollIntervalMs}ms...`);
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     } catch (error) {
       console.log(

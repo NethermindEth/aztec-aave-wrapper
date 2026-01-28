@@ -69,22 +69,13 @@ export function useL2Positions(): UseL2PositionsResult {
 
       // Filter out PendingWithdraw positions where tokens were already claimed
       const portalAddress = state.contracts.portal;
-      console.log("[handleRefreshPositions] Portal address for filtering:", portalAddress);
       if (portalAddress) {
         try {
-          console.log("[handleRefreshPositions] Calling filterClaimedWithdrawals...");
           const publicClient = createL1PublicClient();
           await filterClaimedWithdrawals(publicClient, portalAddress as Address, walletAddress);
-          console.log("[handleRefreshPositions] filterClaimedWithdrawals completed");
-        } catch (filterError) {
-          // Non-critical - log but continue
-          console.warn(
-            "[handleRefreshPositions] Failed to filter claimed withdrawals:",
-            filterError
-          );
+        } catch {
+          // Non-critical - continue
         }
-      } else {
-        console.log("[handleRefreshPositions] Skipping filter - no portal address");
       }
 
       if (l2BridgedTokenAddress) {
@@ -99,8 +90,8 @@ export function useL2Positions(): UseL2PositionsResult {
           );
           setL2UsdcBalance(l2Balance.toString());
           addLog(`L2 USDC balance: ${formatUSDC(l2Balance)}`);
-        } catch (balanceError) {
-          console.error("[handleRefreshPositions] Balance error:", balanceError);
+        } catch {
+          // Non-critical
         }
       }
 
@@ -171,8 +162,8 @@ export function useL2Positions(): UseL2PositionsResult {
           // Non-critical
         }
       }
-    } catch (error) {
-      console.warn("[useL2Positions] Auto-load failed:", error);
+    } catch {
+      // Silent auto-load failure
     }
   };
 

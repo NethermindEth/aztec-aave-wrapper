@@ -169,36 +169,24 @@ async function waitForL1ToL2Message(
   maxWaitMs = 300_000, // 5 minutes - increased to allow L2 blocks to advance
   pollIntervalMs = 5000 // 5 seconds between polls
 ): Promise<boolean> {
-  console.log("[waitForL1ToL2Message] ENTERED FUNCTION");
-  console.log("[waitForL1ToL2Message] messageLeaf:", messageLeaf);
-  console.log("[waitForL1ToL2Message] maxWaitMs:", maxWaitMs);
-
   const startTime = Date.now();
   const { Fr } = await import("@aztec/aztec.js/fields");
 
   // Convert hex message leaf to Fr for querying
   const messageLeafFr = Fr.fromString(messageLeaf);
-  console.log("[waitForL1ToL2Message] messageLeafFr:", messageLeafFr.toString());
 
   let pollCount = 0;
   let lastBlockMined = Date.now();
   const minMineInterval = 10000; // Mine L1 every 10s to trigger archiver sync faster
 
-  console.log("[waitForL1ToL2Message] Starting poll loop...");
-
   while (Date.now() - startTime < maxWaitMs) {
     pollCount++;
-    console.log(`[waitForL1ToL2Message] Poll ${pollCount} starting...`);
 
     try {
-      console.log("[waitForL1ToL2Message] Getting current block number...");
       const currentBlock = await node.getBlockNumber();
-      console.log("[waitForL1ToL2Message] currentBlock:", currentBlock);
 
       // Step 1: Check which block the message will be available
-      console.log("[waitForL1ToL2Message] Calling getL1ToL2MessageBlock...");
       const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
-      console.log("[waitForL1ToL2Message] messageBlockNumber:", messageBlockNumber);
 
       if (messageBlockNumber === undefined) {
         logInfo(
@@ -217,7 +205,6 @@ async function waitForL1ToL2Message(
         console.log(
           `[L1→L2] Poll ${pollCount}: currentBlock=${currentBlock} >= messageBlock=${messageBlockNumber}`
         );
-        console.log(`[L1→L2] Attempting to get membership witness...`);
 
         if (typeof nodeAny.getL1ToL2MembershipWitness === "function") {
           try {
@@ -225,7 +212,6 @@ async function waitForL1ToL2Message(
               `[L1→L2] Calling getL1ToL2MembershipWitness(${currentBlock}, ${messageLeafFr.toString()})`
             );
             const witness = await nodeAny.getL1ToL2MembershipWitness(currentBlock, messageLeafFr);
-            console.log(`[L1→L2] Witness response:`, witness);
 
             if (witness && witness.length > 0) {
               const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -237,12 +223,10 @@ async function waitForL1ToL2Message(
               );
               return true;
             }
-            console.log(`[L1→L2] Witness returned but empty or invalid`);
             logInfo(
               `Poll ${pollCount}: Block ${currentBlock} >= ${messageBlockNumber} but witness not yet available`
             );
           } catch (witnessError) {
-            console.log(`[L1→L2] Witness query error:`, witnessError);
             logInfo(
               `Poll ${pollCount}: Witness query failed: ${witnessError instanceof Error ? witnessError.message : "error"}`
             );
@@ -313,7 +297,6 @@ async function waitForL1ToL2Message(
  *   { node, wallet, contract },
  *   { assetId: 1n, amount: 1_000_000n, originalDecimals: 6, deadlineOffset: 3600 }
  * );
- * console.log(`Deposited! Intent: ${result.intentId}, Shares: ${result.shares}`);
  * ```
  */
 export async function executeDepositFlow(
@@ -332,14 +315,6 @@ export async function executeDepositFlow(
 
   // Initialize operation tracking
   startOperation("deposit", totalSteps);
-
-  // Debug: Log loaded addresses at flow start to catch stale config issues
-  console.log("=== DEPOSIT FLOW: LOADED ADDRESSES ===");
-  console.log("  mockUsdc:", l1Addresses.mockUsdc);
-  console.log("  portal:", l1Addresses.portal);
-  console.log("  aztecOutbox:", l1Addresses.aztecOutbox);
-  console.log("  L2 contract:", contract.address.toString());
-  console.log("=======================================");
 
   try {
     // =========================================================================
@@ -454,13 +429,6 @@ export async function executeDepositFlow(
     const fee = (config.amount * 10n) / 10000n;
     const netAmount = config.amount - fee;
 
-    console.log("=== L2 Contract Values (must match) ===");
-    console.log("  caller:", `0x${callerField.toString(16)}`);
-    console.log("  secretHash:", secretHash.toString());
-    console.log("  computed salt:", l2Salt.toString());
-    console.log("  fee:", fee.toString());
-    console.log("  net_amount:", netAmount.toString());
-
     // Create deposit intent for L1 with the correct computed values
     const intentIdHex = pad(toHex(BigInt(intentIdStr)), { size: 32 }) as Hex;
     const ownerHashHex = pad(toHex(ownerHash), { size: 32 }) as Hex;
@@ -477,15 +445,6 @@ export async function executeDepositFlow(
       salt: saltHex,
       secretHash: secretHashHex,
     };
-
-    console.log("=== DEBUG: Deposit Intent Values ===");
-    console.log("intentId:", depositIntent.intentId);
-    console.log("ownerHash:", depositIntent.ownerHash);
-    console.log("asset:", depositIntent.asset);
-    console.log("amount:", depositIntent.amount.toString());
-    console.log("originalDecimals:", depositIntent.originalDecimals);
-    console.log("deadline:", depositIntent.deadline.toString());
-    console.log("salt:", depositIntent.salt);
 
     // Get L2 block number from the request_deposit transaction
     const l2TxBlockNumber = depositResult.blockNumber ?? (await node.getBlockNumber());
@@ -511,34 +470,15 @@ export async function executeDepositFlow(
       l2Salt.toBigInt(), // intent.salt (computed same as L2)
       secretHash.toBigInt(), // secret_hash
     ];
-    console.log(
-      "Content fields for L2→L1 message:",
-      contentFields.map((f) => `0x${f.toString(16)}`)
-    );
 
     // Pack fields into bytes (each field as 32-byte big-endian) and compute sha256
     const packedData = new Uint8Array(contentFields.length * 32);
     for (let i = 0; i < contentFields.length; i++) {
       packedData.set(bigIntToBytes32(contentFields[i]), i * 32);
     }
-    console.log("=== SHA256 DEBUG ===");
-    console.log("Packed data length:", packedData.length, "bytes (expected 256)");
-    console.log(
-      "Packed data (hex):",
-      "0x" +
-        Array.from(packedData)
-          .map((b) => b.toString(16).padStart(2, "0"))
-          .join("")
-    );
 
     // Compute sha256 and convert to field (truncate to 31 bytes/248 bits to fit in BN254 field)
     const contentHash = await sha256ToField(packedData);
-    console.log("SHA256 to Field (truncated to 31 bytes):", contentHash.toString());
-
-    console.log("=== DEBUG: Deposit Flow ===");
-    console.log("Content hash:", contentHash.toString());
-    console.log("Outbox address:", l1Addresses.aztecOutbox);
-    console.log("Portal address:", l1Addresses.portal);
 
     // Compute the full L2→L1 message hash
     const l2ToL1Message = await computeL2ToL1MessageHash({
@@ -548,8 +488,6 @@ export async function executeDepositFlow(
       rollupVersion: new Fr(rollupVersion),
       chainId: new Fr(chainId),
     });
-
-    console.log("L2→L1 message hash:", l2ToL1Message.toString());
 
     // Wait for the L2→L1 message proof from the real outbox
     logSection("L2→L1", "Waiting for message to be proven on L1...");
@@ -592,7 +530,7 @@ export async function executeDepositFlow(
     };
 
     // Check if intent was already consumed (from a previous failed attempt)
-    const alreadyConsumed = await publicClient.readContract({
+    const _alreadyConsumed = await publicClient.readContract({
       address: l1Addresses.portal,
       abi: [
         {
@@ -606,11 +544,6 @@ export async function executeDepositFlow(
       functionName: "consumedDepositIntents",
       args: [depositIntent.intentId],
     });
-    console.log("Intent already consumed?", alreadyConsumed);
-    console.log("Executing with proof:", {
-      l2BlockNumber: proof.l2BlockNumber.toString(),
-      leafIndex: proof.leafIndex.toString(),
-    });
 
     const executeResult = await executeDeposit(
       publicClient,
@@ -623,12 +556,9 @@ export async function executeDepositFlow(
     const l1ToL2MessageIndex = executeResult.messageIndex;
     const l1MessageLeaf = executeResult.messageLeaf;
     logInfo(`L1→L2 message index: ${l1ToL2MessageIndex}`);
-    console.log("L1→L2 message leaf (L1 computed):", l1MessageLeaf);
 
     // Get shares recorded for this intent
-    console.log("[DEBUG] Fetching shares for intent...");
     const shares = await getIntentShares(publicClient, l1Addresses.portal, intentIdHex);
-    console.log("[DEBUG] Shares fetched:", shares.toString());
     logSuccess(`Shares recorded: ${shares.toString()}`);
 
     // =========================================================================
@@ -637,9 +567,6 @@ export async function executeDepositFlow(
     currentStep = 5;
     logStep(5, totalSteps, "Wait for L1→L2 message");
     setOperationStep(5);
-
-    console.log("[L1→L2] Starting to wait for message to be consumable...");
-    console.log("[L1→L2] Message leaf:", l1MessageLeaf);
 
     // Wait for L1→L2 message to be consumable (polls membership witness - no signing)
     const messageReady = await waitForL1ToL2Message(publicClient, node, l1MessageLeaf);
@@ -654,24 +581,10 @@ export async function executeDepositFlow(
     // Use actual shares from L1 (fetched above) - must match message content hash
     // assetAsField was already computed earlier (L1 token address as BigInt)
 
-    console.log("=== DEBUG: Values for finalize_deposit ===");
-    console.log(`  intentId: ${intentId.toString()}`);
-    console.log(`  shares: ${shares}`);
-    console.log(`  assetAsField: ${assetAsField}`);
-    console.log(`  assetAsField (hex): 0x${assetAsField.toString(16)}`);
-    console.log(`  l1ToL2MessageIndex: ${l1ToL2MessageIndex}`);
-    console.log(`  secret: ${secret.toString()}`);
-    console.log(`  L2 contract address: ${contract.address.toString()}`);
-    console.log(`  Portal address: ${l1Addresses.portal}`);
-
     // CRITICAL: Log whether we will attempt finalize_deposit
-    console.log("=== FINALIZE DECISION ===");
-    console.log(`  messageReady: ${messageReady}`);
     if (!messageReady) {
-      console.log("  ACTION: SKIPPING finalize_deposit - message not consumable yet");
       logSection("L2", "Cannot finalize - L1→L2 message not consumable", "warning");
     } else {
-      console.log("  ACTION: PROCEEDING with finalize_deposit");
     }
 
     if (!messageReady) {
@@ -692,9 +605,6 @@ export async function executeDepositFlow(
           wallet.address
         );
         txHashes.l2Finalize = finalizeResult.txHash;
-        console.log("=== FINALIZE_DEPOSIT SUCCESS ===");
-        console.log(`  txHash: ${finalizeResult.txHash}`);
-        console.log("  Position receipt note should now exist on L2");
         logSuccess(`Finalize tx: ${finalizeResult.txHash}`);
       } catch (error) {
         logSection("L2", "finalize_deposit failed", "warning");

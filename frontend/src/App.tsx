@@ -21,6 +21,7 @@ import { OperationTabs } from "./components/OperationTabs";
 import { PositionsList } from "./components/PositionsList";
 import { RecoverDeposit } from "./components/RecoverDeposit";
 import { TopBar } from "./components/TopBar";
+import { WalletBalances } from "./components/WalletBalances";
 import { createL1PublicClient } from "./services/l1/client";
 import { balanceOf } from "./services/l1/tokens";
 import { connectEthereumWallet, type EthereumWalletConnection } from "./services/wallet/ethereum";
@@ -126,6 +127,18 @@ const App: Component = () => {
             />
           </ErrorBoundary>
 
+          {/* Wallet Balances - Token holdings across L1/L2 */}
+          <ErrorBoundary>
+            <WalletBalances
+              l1Address={state.wallet.l1Address}
+              l2Address={state.wallet.l2Address}
+              publicClient={publicClient()}
+              mockUsdcAddress={state.contracts.mockUsdc}
+              mockLendingPoolAddress={state.contracts.mockLendingPool}
+              l2BridgedTokenAddress={state.contracts.l2BridgedToken}
+            />
+          </ErrorBoundary>
+
           {/* Main Operations */}
           <ErrorBoundary>
             <OperationTabs
@@ -154,6 +167,7 @@ const App: Component = () => {
             <PositionsList
               onWithdraw={controller.actions.handleWithdraw}
               onCancel={controller.actions.handleCancelDeposit}
+              onFinalizeDeposit={controller.actions.handleFinalizeDeposit}
               onClaimRefund={controller.actions.handleClaimRefund}
               onRefresh={controller.actions.handleRefreshPositions}
               isRefreshing={controller.positions.isRefreshing()}

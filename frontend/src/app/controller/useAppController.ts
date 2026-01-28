@@ -54,6 +54,7 @@ export interface AppController {
     handleDeposit: (amount: bigint, deadline: number) => Promise<void>;
     handleWithdraw: (intentId: string) => Promise<void>;
     handleCancelDeposit: (intentId: string, deadline: bigint, netAmount: bigint) => Promise<void>;
+    handleFinalizeDeposit: (intentId: string) => Promise<void>;
     handleClaimRefund: (
       intentId: string,
       deadline: bigint,
@@ -126,6 +127,7 @@ export function useAppController(): AppController {
       handleDeposit: operations.handleDeposit,
       handleWithdraw: operations.handleWithdraw,
       handleCancelDeposit: operations.handleCancelDeposit,
+      handleFinalizeDeposit: operations.handleFinalizeDeposit,
       handleClaimRefund: operations.handleClaimRefund,
       handleClaimBridge: (bridge) => handleClaimBridge(bridge, addLog),
       handleRefreshBridges: () => handleRefreshBridges(addLog),

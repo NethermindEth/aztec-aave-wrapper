@@ -366,20 +366,11 @@ export function getStoredIntentIds(): string[] {
  * @returns Array of all decrypted secret entries
  */
 export async function getAllSecrets(l2AddressHex: string): Promise<SecretEntry[]> {
-  console.log("[getAllSecrets] l2AddressHex:", l2AddressHex);
   if (!l2AddressHex || l2AddressHex.trim() === "") {
-    console.log("[getAllSecrets] Empty l2AddressHex, returning []");
     return [];
   }
 
   const storedSecrets = loadStoredSecrets();
-  console.log("[getAllSecrets] Raw stored secrets count:", storedSecrets.length);
-  if (storedSecrets.length > 0) {
-    console.log(
-      "[getAllSecrets] Stored intentIds:",
-      storedSecrets.map((s) => s.intentId)
-    );
-  }
   const decryptedSecrets: SecretEntry[] = [];
 
   try {
@@ -388,28 +379,19 @@ export async function getAllSecrets(l2AddressHex: string): Promise<SecretEntry[]
     for (const stored of storedSecrets) {
       try {
         const secretHex = await decryptSecret(stored.encryptedSecret, stored.iv, key);
-        console.log("[getAllSecrets] Successfully decrypted secret for intentId:", stored.intentId);
         decryptedSecrets.push({
           intentId: stored.intentId,
           secretHex,
           storedAt: stored.storedAt,
         });
-      } catch (err) {
+      } catch {
         // Skip secrets that fail to decrypt (wrong key / different user)
-        console.log(
-          "[getAllSecrets] Failed to decrypt secret for intentId:",
-          stored.intentId,
-          "error:",
-          err
-        );
       }
     }
-  } catch (err) {
-    console.log("[getAllSecrets] Failed to derive key:", err);
+  } catch {
     return [];
   }
 
-  console.log("[getAllSecrets] Returning", decryptedSecrets.length, "decrypted secrets");
   return decryptedSecrets;
 }
 

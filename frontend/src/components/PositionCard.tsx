@@ -21,6 +21,8 @@ export interface PositionCardProps {
   onWithdraw: (intentId: string) => void;
   /** Callback when cancel button is clicked for expired pending deposits */
   onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
+  /** Callback when finalize button is clicked for pending deposits */
+  onFinalizeDeposit?: (intentId: string) => void;
   /** Callback when refund button is clicked for expired pending withdrawals */
   onClaimRefund?: (intentId: string, deadline: bigint, shares: bigint, assetId: string) => void;
   /** Current L1 timestamp for deadline comparison (use L1 time, not local) */
@@ -126,6 +128,28 @@ export function PositionCard(props: PositionCardProps) {
     }
   };
 
+  // Check if this is a pending deposit that can be finalized
+  // Finalization is allowed when:
+  // 1. Status is PendingDeposit
+  // 2. Deadline has NOT passed (deposit hasn't expired)
+  // 3. onFinalizeDeposit callback is provided
+  // Note: We don't check hasStoredSecret here - we'll handle that during finalization
+  const canFinalize = () => {
+    if (props.position.status !== IntentStatus.PendingDeposit) return false;
+    if (!props.onFinalizeDeposit) return false;
+    // If we have timestamp and deadline, check it hasn't expired
+    if (props.currentL1Timestamp && props.position.deadline > 0n) {
+      if (props.currentL1Timestamp > props.position.deadline) return false;
+    }
+    return true;
+  };
+
+  const handleFinalize = () => {
+    if (props.onFinalizeDeposit && canFinalize()) {
+      props.onFinalizeDeposit(props.position.intentId);
+    }
+  };
+
   // Check if this is a pending withdrawal that can be refunded
   // Refund is allowed when:
   // 1. Status is PendingWithdraw
@@ -189,6 +213,13 @@ export function PositionCard(props: PositionCardProps) {
         </div>
       </div>
 
+      {/* Status message for pending deposits */}
+      <Show when={props.position.status === IntentStatus.PendingDeposit && canFinalize()}>
+        <p class="position-status-message">
+          L1 deposit complete. Click "Finalize Deposit" to create your position.
+        </p>
+      </Show>
+
       {/* Status message for pending withdrawals */}
       <Show when={props.position.status === IntentStatus.PendingWithdraw && !canClaimRefund()}>
         <p class="position-status-message">
@@ -198,12 +229,22 @@ export function PositionCard(props: PositionCardProps) {
 
       {/* Action buttons */}
       <Show
-        when={props.position.status === IntentStatus.Confirmed || canCancel() || canClaimRefund()}
+        when={
+          props.position.status === IntentStatus.Confirmed ||
+          canCancel() ||
+          canFinalize() ||
+          canClaimRefund()
+        }
       >
         <div class="position-actions">
           <Show when={props.position.status === IntentStatus.Confirmed}>
             <Button class="btn-cta" onClick={() => props.onWithdraw(props.position.intentId)}>
               Withdraw
+            </Button>
+          </Show>
+          <Show when={canFinalize()}>
+            <Button class="btn-cta" onClick={handleFinalize}>
+              Finalize Deposit
             </Button>
           </Show>
           <Show when={canCancel()}>

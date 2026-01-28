@@ -15,14 +15,14 @@ import {
 } from "../services/l2/client.js";
 import {
   connectEthereumWallet,
+  createConnectionForAddress,
+  disconnectEthereumWallet,
   type EthereumWalletConnection,
   formatEthBalance,
   getEthBalance,
-  hasInjectedProvider,
   isCorrectChain,
-  onAccountsChanged,
-  onChainChanged,
   switchToAnvil,
+  watchAccountChanges,
 } from "../services/wallet/ethereum.js";
 import {
   type AnyWalletConnection,
@@ -159,14 +159,12 @@ export function TopBar() {
   let aztecConnection: AnyWalletConnection | null = null;
 
   // Wallet event cleanup
-  let cleanupAccountsChanged: (() => void) | null = null;
-  let cleanupChainChanged: (() => void) | null = null;
+  let cleanupAccountWatcher: (() => void) | null = null;
 
   onCleanup(() => {
     if (l1PollInterval) clearInterval(l1PollInterval);
     if (l2PollInterval) clearInterval(l2PollInterval);
-    cleanupAccountsChanged?.();
-    cleanupChainChanged?.();
+    cleanupAccountWatcher?.();
   });
 
   // ============================================================================
@@ -267,11 +265,12 @@ export function TopBar() {
   };
 
   /**
-   * Auto-connect Ethereum wallet
+   * Connect Ethereum wallet via Web3Modal
    */
   const connectEthWallet = async () => {
-    if (!hasInjectedProvider()) {
-      setEthWalletStatus("disconnected");
+    // Don't start a new connection if already connecting
+    if (ethWalletStatus() === "connecting") {
+      console.log("Connection already in progress");
       return;
     }
 
@@ -301,35 +300,57 @@ export function TopBar() {
       setEthWalletStatus("connected");
       saveWalletConnection(STORAGE_KEYS.ETH_WALLET_CONNECTED, true);
 
-      // Event listeners
-      cleanupAccountsChanged = onAccountsChanged((accounts) => {
-        if (accounts.length === 0) {
+      // Watch for account changes
+      cleanupAccountWatcher = watchAccountChanges(async (account) => {
+        if (!account.isConnected || !account.address) {
           disconnectEthWallet();
-        } else {
-          actions.setWallet({ l1Address: accounts[0] });
-          refreshL1Balances();
+        } else if (account.address !== state.wallet.l1Address) {
+          // Account changed - recreate the connection with new account (no MetaMask prompt)
+          console.log("Account changed to:", account.address);
+          try {
+            const newConnection = createConnectionForAddress(account.address);
+            ethConnection = newConnection;
+            actions.setWallet({ l1Address: newConnection.address });
+
+            const ethBal = await getEthBalance(newConnection.publicClient, newConnection.address);
+            actions.setEthBalance(ethBal.toString());
+
+            if (state.contracts.mockUsdc) {
+              const publicClient = createL1PublicClient();
+              const usdcBal = await balanceOf(
+                publicClient,
+                state.contracts.mockUsdc,
+                newConnection.address
+              );
+              actions.setUsdcBalance(usdcBal.toString());
+            }
+          } catch (err) {
+            console.warn("Failed to refresh connection after account change:", err);
+          }
+        }
+        if (account.chainId) {
+          setWrongChain(!isCorrectChain(account.chainId));
         }
       });
-
-      cleanupChainChanged = onChainChanged((chainIdHex) => {
-        const chainId = parseInt(chainIdHex, 16);
-        setWrongChain(!isCorrectChain(chainId));
-      });
-    } catch {
-      setEthWalletStatus("error");
-      saveWalletConnection(STORAGE_KEYS.ETH_WALLET_CONNECTED, false);
+    } catch (err) {
+      console.warn("Wallet connection failed:", err);
+      // Show user-friendly error for common issues
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      if (errorMsg.includes("already in progress")) {
+        console.info("Tip: Close any pending MetaMask dialogs and try again");
+      }
+      setEthWalletStatus("disconnected");
     }
   };
 
   /**
    * Disconnect Ethereum wallet
    */
-  const disconnectEthWallet = () => {
+  const disconnectEthWallet = async () => {
+    cleanupAccountWatcher?.();
+    cleanupAccountWatcher = null;
+    await disconnectEthereumWallet();
     ethConnection = null;
-    cleanupAccountsChanged?.();
-    cleanupChainChanged?.();
-    cleanupAccountsChanged = null;
-    cleanupChainChanged = null;
     setWrongChain(false);
     setEthWalletStatus("disconnected");
     saveWalletConnection(STORAGE_KEYS.ETH_WALLET_CONNECTED, false);

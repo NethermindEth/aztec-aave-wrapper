@@ -38,10 +38,18 @@ export interface ClaimPendingBridgesProps {
 }
 
 /**
- * Format block number for display
+ * Format L2 sync progress for display
+ * Shows current block vs target block when available
  */
-function formatBlockNumber(blockNumber: bigint): string {
-  return `Block ${blockNumber.toString()}`;
+function formatSyncProgress(bridge: PendingBridge): string {
+  if (bridge.currentL2Block !== undefined && bridge.targetL2Block !== undefined) {
+    return `L2 Block ${bridge.currentL2Block.toString()} / ${bridge.targetL2Block.toString()}`;
+  }
+  if (bridge.currentL2Block !== undefined) {
+    return `L2 Block ${bridge.currentL2Block.toString()}`;
+  }
+  // Fallback to L1 block
+  return `L1 Block ${bridge.l1BlockNumber.toString()}`;
 }
 
 /**
@@ -141,8 +149,7 @@ export function ClaimPendingBridges(props: ClaimPendingBridgesProps) {
                         </span>
                       </div>
                       <div class="text-xs text-muted-foreground">
-                        {formatBlockNumber(bridge.l1BlockNumber)} &middot;{" "}
-                        {bridge.messageKey.slice(0, 12)}...
+                        {formatSyncProgress(bridge)} &middot; {bridge.messageKey.slice(0, 12)}...
                       </div>
                       <Show when={bridge.leafIndex !== undefined}>
                         <div class="text-xs text-green-500">

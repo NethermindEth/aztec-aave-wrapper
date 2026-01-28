@@ -141,11 +141,6 @@ export function useBridge(): UseBridgeResult {
       const { wallet, address: walletAddress } = await connectWallet();
 
       addLog("Loading BridgedToken contract...");
-      console.log("[handleClaimBridge] l2BridgedTokenAddress:", l2BridgedTokenAddress);
-      console.log(
-        "[handleClaimBridge] wallet type:",
-        isDevWallet(wallet) ? "DevWallet" : "Azguard"
-      );
 
       if (!l2BridgedTokenAddress) {
         throw new Error(
@@ -156,12 +151,6 @@ export function useBridge(): UseBridgeResult {
       const { contract: bridgedTokenContract } = isDevWallet(wallet)
         ? await loadBridgedTokenWithDevWallet(wallet, l2BridgedTokenAddress)
         : await loadBridgedTokenWithAzguard(wallet, l2BridgedTokenAddress);
-
-      console.log("[handleClaimBridge] bridgedTokenContract loaded:", !!bridgedTokenContract);
-      console.log(
-        "[handleClaimBridge] bridgedTokenContract.address:",
-        bridgedTokenContract?.address?.toString?.()
-      );
 
       const { AztecAddress } = await import("@aztec/aztec.js/addresses");
 
@@ -174,11 +163,6 @@ export function useBridge(): UseBridgeResult {
         wallet: { address: AztecAddress.fromString(walletAddress) },
         bridgedTokenContract,
       };
-
-      console.log(
-        "[handleClaimBridge] l2Context.wallet.address:",
-        l2Context.wallet.address.toString()
-      );
 
       addLog("Executing claim...");
       const result = await executeBridgeClaim(l2Context, bridge);
@@ -193,7 +177,7 @@ export function useBridge(): UseBridgeResult {
           );
           setL2UsdcBalance(l2Balance.toString());
         } catch {
-          console.warn("Failed to refresh L2 USDC balance");
+          // Non-critical
         }
 
         await handleRefreshBridges(addLog);
@@ -254,8 +238,8 @@ export function useBridge(): UseBridgeResult {
       );
 
       setBridgeState("pendingBridges", result.bridges);
-    } catch (error) {
-      console.warn("[useBridge] Auto-load failed:", error);
+    } catch {
+      // Silent auto-load failure
     } finally {
       setBridgeState("isLoading", false);
     }

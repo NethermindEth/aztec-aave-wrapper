@@ -44,6 +44,10 @@ export interface PendingBridge {
   status: PendingBridgeStatus;
   /** Actual leaf index in L2 tree (if ready) */
   leafIndex?: bigint;
+  /** Current L2 block number */
+  currentL2Block?: bigint;
+  /** L2 block number at which message will be ready to claim */
+  targetL2Block?: bigint;
 }
 
 /**
@@ -84,29 +88,11 @@ export async function scanPendingBridges(
   l2Node?: AztecNodeClient,
   fromBlock: bigint = 0n
 ): Promise<PendingBridgeScanResult> {
-  console.log("[scanPendingBridges] Starting scan...");
-  console.log("[scanPendingBridges] tokenPortalAddress:", tokenPortalAddress);
-  console.log("[scanPendingBridges] l2WalletAddress:", l2WalletAddress);
-
   // 1. Get all L1 deposit events
   const events = await getDepositToAztecPrivateEvents(publicClient, tokenPortalAddress, fromBlock);
-  console.log("[scanPendingBridges] Found L1 events:", events.length);
-  if (events.length > 0) {
-    console.log(
-      "[scanPendingBridges] Event messageKeys:",
-      events.map((e) => e.messageKey)
-    );
-  }
 
   // 2. Get all stored secrets and build a lookup by intentId (messageKey)
   const secrets = await getAllSecrets(l2WalletAddress);
-  console.log("[scanPendingBridges] Found stored secrets:", secrets.length);
-  if (secrets.length > 0) {
-    console.log(
-      "[scanPendingBridges] Secret intentIds:",
-      secrets.map((s) => s.intentId)
-    );
-  }
 
   const secretsByMessageKey = new Map<string, string>();
 
@@ -126,12 +112,16 @@ export async function scanPendingBridges(
       // We have the secret for this event - it's a claimable bridge
       let status: PendingBridgeStatus = "unknown";
       let leafIndex: bigint | undefined;
+      let currentL2Block: bigint | undefined;
+      let targetL2Block: bigint | undefined;
 
       // 4. Check L2 readiness if node is provided
       if (l2Node) {
         const readiness = await checkMessageReadiness(l2Node, event.messageKey, event.messageIndex);
         status = readiness.ready ? "ready" : "pending";
         leafIndex = readiness.leafIndex;
+        currentL2Block = readiness.currentL2Block;
+        targetL2Block = readiness.targetL2Block;
       }
 
       bridges.push({
@@ -144,6 +134,8 @@ export async function scanPendingBridges(
         secret,
         status,
         leafIndex,
+        currentL2Block,
+        targetL2Block,
       });
     }
   }
@@ -186,61 +178,50 @@ export async function getClaimableBridges(
  * @param messageKey - The message key (content hash)
  * @param messageIndex - The message index from L1 event (used as leafIndex fallback)
  */
+interface MessageReadinessResult {
+  ready: boolean;
+  leafIndex?: bigint;
+  currentL2Block?: bigint;
+  targetL2Block?: bigint;
+}
+
 async function checkMessageReadiness(
   node: AztecNodeClient,
   messageKey: string,
-  messageIndex: bigint
-): Promise<{ ready: boolean; leafIndex?: bigint }> {
+  _messageIndex: bigint
+): Promise<MessageReadinessResult> {
   try {
     const { Fr } = await import("@aztec/aztec.js/fields");
     const messageLeafFr = Fr.fromString(messageKey);
 
-    console.log("[checkMessageReadiness] Checking message:", `${messageKey.slice(0, 18)}...`);
-    console.log("[checkMessageReadiness] messageIndex from L1:", messageIndex.toString());
-
     const currentBlock = await node.getBlockNumber();
     const messageBlockNumber = await node.getL1ToL2MessageBlock(messageLeafFr);
 
-    console.log(
-      "[checkMessageReadiness] currentBlock:",
-      currentBlock,
-      "messageBlockNumber:",
-      messageBlockNumber
-    );
+    // Always include current block info
+    const baseResult: MessageReadinessResult = {
+      ready: false,
+      currentL2Block: BigInt(currentBlock),
+      targetL2Block: messageBlockNumber !== undefined ? BigInt(messageBlockNumber) : undefined,
+    };
 
     if (messageBlockNumber === undefined || currentBlock < messageBlockNumber) {
-      console.log("[checkMessageReadiness] Message not ready (block check failed)");
-      return { ready: false };
+      return baseResult;
     }
 
     // Get membership witness which includes the actual leaf index
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const nodeAny = node as any;
 
-    console.log(
-      "[checkMessageReadiness] Has getL1ToL2MessageMembershipWitness:",
-      typeof nodeAny.getL1ToL2MessageMembershipWitness === "function"
-    );
-
     if (typeof nodeAny.getL1ToL2MessageMembershipWitness === "function") {
       try {
-        console.log("[checkMessageReadiness] Calling getL1ToL2MessageMembershipWitness...");
         const witness = await nodeAny.getL1ToL2MessageMembershipWitness(
           currentBlock,
           messageLeafFr
         );
-        console.log("[checkMessageReadiness] witness:", witness);
-        console.log("[checkMessageReadiness] witness type:", typeof witness);
-        console.log("[checkMessageReadiness] witness length:", witness?.length);
         if (witness && witness.length >= 2) {
           const leafIndex = witness[0];
-          console.log(
-            "[checkMessageReadiness] leafIndex from witness:",
-            leafIndex,
-            "type:",
-            typeof leafIndex
-          );
           return {
+            ...baseResult,
             ready: true,
             leafIndex:
               typeof leafIndex === "bigint"
@@ -248,27 +229,13 @@ async function checkMessageReadiness(
                 : BigInt(leafIndex?.toString?.() ?? leafIndex),
           };
         }
-        console.log(
-          "[checkMessageReadiness] Witness too short or null, witness.length:",
-          witness?.length
-        );
-      } catch (err) {
-        // Witness not available yet
-        console.log("[checkMessageReadiness] getL1ToL2MessageMembershipWitness threw:", err);
-        return { ready: false };
+      } catch {
+        return baseResult;
       }
     }
 
-    // Fallback if method doesn't exist - should not happen with proper node client
-    console.log(
-      "[checkMessageReadiness] FALLBACK - getL1ToL2MessageMembershipWitness not available!"
-    );
-    console.log(
-      "[checkMessageReadiness] Cannot claim without proper leaf index from membership witness"
-    );
-    return { ready: false };
-  } catch (err) {
-    console.log("[checkMessageReadiness] Outer catch - error:", err);
+    return baseResult;
+  } catch {
     return { ready: false };
   }
 }

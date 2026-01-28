@@ -295,7 +295,6 @@ export async function executeDeposit(
   // Extract message index from L2MessageSent event
   // The event has signature: L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf, uint256 messageIndex)
   const L2_MESSAGE_SENT_TOPIC = keccak256(toBytes("L2MessageSent(bytes32,bytes32,uint256)"));
-  console.log("L2MessageSent topic:", L2_MESSAGE_SENT_TOPIC);
 
   let messageIndex = 0n;
   let messageLeaf = "0x0" as Hex;
@@ -319,10 +318,6 @@ export async function executeDeposit(
           // Parse messageIndex from the second 32 bytes of data
           const messageIndexHex = `0x${log.data.slice(66, 130)}`;
           messageIndex = BigInt(messageIndexHex);
-          console.log("=== L2MessageSent Event ===");
-          console.log("  intentId (topic[1]):", log.topics[1]);
-          console.log("  messageLeaf (L1 computed hash):", messageLeaf);
-          console.log("  messageIndex:", messageIndex.toString());
           logInfo(`Extracted L1→L2 message index: ${messageIndex}`);
           break;
         } catch {
@@ -337,8 +332,6 @@ export async function executeDeposit(
     console.log("Warning: Could not extract message index. Portal logs:");
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() === portalAddress.toLowerCase()) {
-        console.log("  Topic[0]:", log.topics[0]);
-        console.log("  Data length:", log.data?.length);
       }
     }
   }
@@ -423,14 +416,10 @@ export async function executeWithdraw(
   const l2MessageSentTopic = "0xda6a32d6995bf9aa269353dddbe234d0866298db111521e41d8a65ab4f6c96a7";
 
   // Debug: log all events
-  console.log("[executeWithdraw] === PARSING ALL EVENTS ===");
   for (const log of receipt.logs) {
     if (log.address.toLowerCase() === portalAddress.toLowerCase()) {
-      console.log(`[executeWithdraw]   Topic[0]: ${log.topics[0]}`);
-      console.log(`[executeWithdraw]   Data: ${log.data?.slice(0, 140)}...`);
     }
   }
-  console.log("[executeWithdraw] ========================");
 
   for (const log of receipt.logs) {
     // Only look at logs from the portal contract
@@ -449,15 +438,10 @@ export async function executeWithdraw(
     } else if (eventTopic === tokensDepositedToL2Topic.toLowerCase() && log.data.length >= 130) {
       // TokensDepositedToL2 event - parse messageKey from data (first 32 bytes)
       messageKey = `0x${log.data.slice(2, 66)}` as Hex;
-      console.log("[executeWithdraw] Parsed messageKey from TokensDepositedToL2:", messageKey);
     } else if (eventTopic === l2MessageSentTopic.toLowerCase() && log.data.length >= 130) {
       // L2MessageSent event - extract messageLeaf and messageIndex for L2 finalization
       messageLeaf = `0x${log.data.slice(2, 66)}` as Hex;
       messageIndex = BigInt(`0x${log.data.slice(66, 130)}`);
-      console.log("[executeWithdraw] === L2MessageSent (WITHDRAW CONFIRMATION) ===");
-      console.log(`[executeWithdraw]   messageLeaf (L1 computed): ${messageLeaf}`);
-      console.log(`[executeWithdraw]   messageIndex: ${messageIndex}`);
-      console.log("[executeWithdraw] ============================================");
     }
   }
 

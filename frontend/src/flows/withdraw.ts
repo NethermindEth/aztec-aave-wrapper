@@ -231,7 +231,6 @@ function validateFullWithdrawal(requestedAmount: bigint, positionShares: bigint)
  *     deadlineOffset: 3600,
  *   }
  * );
- * console.log(`Withdrew! Intent: ${result.intentId}, Amount: ${result.amount}`);
  * ```
  */
 export async function executeWithdrawFlow(
@@ -240,7 +239,6 @@ export async function executeWithdrawFlow(
   l2Context: WithdrawL2Context,
   config: WithdrawConfig
 ): Promise<WithdrawResult> {
-  console.log("=== WITHDRAW FLOW STARTED ===");
   const { publicClient, relayerWallet } = l1Clients;
   const { node, wallet, contract } = l2Context;
   const totalSteps = getWithdrawStepCount();
@@ -252,12 +250,6 @@ export async function executeWithdrawFlow(
   // Extract position data
   const { position, deadlineOffset } = config;
   const withdrawAmount = position.shares; // Full withdrawal only
-
-  console.log("=== WITHDRAW CONFIG ===");
-  console.log(`  position.depositIntentId: ${position.depositIntentId.toString()}`);
-  console.log(`  position.shares: ${position.shares}`);
-  console.log(`  withdrawAmount: ${withdrawAmount}`);
-  console.log(`  deadlineOffset: ${deadlineOffset}`);
 
   // Validate full withdrawal constraint
   validateFullWithdrawal(withdrawAmount, position.shares);
@@ -303,7 +295,6 @@ export async function executeWithdrawFlow(
       functionName: "consumedWithdrawIntents",
       args: [depositIntentIdHex],
     });
-    console.log("Withdraw intent already consumed on L1?", alreadyConsumed);
 
     if (alreadyConsumed) {
       logInfo("Withdrawal already executed on L1, cleaning up stale position...");
@@ -332,12 +323,6 @@ export async function executeWithdrawFlow(
       `Position nonce (deposit intent ID): ${position.depositIntentId.toString().slice(0, 16)}...`
     );
 
-    console.log("=== STEP 2: REQUEST_WITHDRAW ===");
-    console.log(`  nonce (depositIntentId): ${position.depositIntentId.toString()}`);
-    console.log(`  amount: ${withdrawAmount}`);
-    console.log(`  deadline: ${deadline}`);
-    console.log(`  secretHash: ${secretHash.toString()}`);
-
     let intentId: Fr;
     let l2RequestBlockNumber: number | undefined;
     try {
@@ -358,9 +343,6 @@ export async function executeWithdrawFlow(
 
       const intentIdStr = intentId.toString();
       setOperationIntentId(intentIdStr);
-      console.log("=== REQUEST_WITHDRAW SUCCESS ===");
-      console.log(`  intentId: ${intentIdStr}`);
-      console.log(`  txHash: ${withdrawResultLocal.txHash}`);
       logSuccess(`Withdraw Intent ID: ${intentIdStr.slice(0, 16)}...`);
       logSuccess(`L2 tx: ${withdrawResultLocal.txHash}`);
     } catch (error) {
@@ -391,7 +373,6 @@ export async function executeWithdrawFlow(
     logStep(3, totalSteps, "Prepare L1 execution");
     setOperationStep(3);
 
-    console.log("=== STEP 3: PREPARE L1 EXECUTION ===");
     logInfo("L2 request complete, preparing L1 execution...");
 
     // =========================================================================
@@ -400,8 +381,6 @@ export async function executeWithdrawFlow(
     currentStep = 4;
     logStep(4, totalSteps, "Execute withdraw on L1");
     setOperationStep(4);
-
-    console.log("=== STEP 4: EXECUTE WITHDRAW ON L1 ===");
 
     // Create withdraw intent for L1
     const intentIdHex = pad(toHex(BigInt(intentIdStr)), { size: 32 }) as Hex;
@@ -414,14 +393,6 @@ export async function executeWithdrawFlow(
       amount: withdrawAmount,
       deadline,
     };
-
-    console.log("=== WITHDRAW INTENT VALUES ===");
-    console.log(`  intentId: ${intentIdHex}`);
-    console.log(`  ownerHash: ${ownerHashHex}`);
-    console.log(`  amount: ${withdrawAmount}`);
-    console.log(`  deadline: ${deadline}`);
-    console.log(`  secretHash: ${secretHashHex}`);
-    console.log(`  Outbox address: ${l1Addresses.aztecOutbox}`);
 
     // Get L2 block number from the request_withdraw transaction
     const l2TxBlockNumber = l2RequestBlockNumber ?? (await node.getBlockNumber());
@@ -462,8 +433,6 @@ export async function executeWithdrawFlow(
     for (let i = 0; i < contentFields.length; i++) {
       packedData.set(bigIntToBytes32(contentFields[i]), i * 32);
     }
-    console.log("=== SHA256 DEBUG ===");
-    console.log("Packed data length:", packedData.length, "bytes (expected 192)");
     console.log(
       "Packed data (hex):",
       "0x" +
@@ -474,7 +443,6 @@ export async function executeWithdrawFlow(
 
     // Compute sha256 and convert to field (truncate to 31 bytes/248 bits to fit in BN254 field)
     const contentHash = await sha256ToField(packedData);
-    console.log("SHA256 to Field (truncated to 31 bytes):", contentHash.toString());
 
     // Compute the full L2→L1 message hash
     const l2ToL1Message = await computeL2ToL1MessageHash({
@@ -484,8 +452,6 @@ export async function executeWithdrawFlow(
       rollupVersion: new Fr(rollupVersion),
       chainId: new Fr(chainId),
     });
-
-    console.log("L2→L1 message hash:", l2ToL1Message.toString());
 
     // Wait for the L2→L1 message proof from the real outbox
     logSection("L2→L1", "Waiting for message to be proven on L1...");
@@ -527,7 +493,6 @@ export async function executeWithdrawFlow(
       siblingPath: proofResult.siblingPath! as `0x${string}`[],
     };
 
-    console.log("Executing withdraw on L1...");
     const executeResult = await executeWithdraw(
       publicClient,
       relayerWallet,
@@ -541,15 +506,9 @@ export async function executeWithdrawFlow(
 
     const messageKey = executeResult.messageKey;
 
-    const l1ToL2MessageIndex = executeResult.messageIndex;
-    const l1MessageLeaf = executeResult.messageLeaf;
+    const _l1ToL2MessageIndex = executeResult.messageIndex;
+    const _l1MessageLeaf = executeResult.messageLeaf;
 
-    console.log("=== L1 EXECUTE WITHDRAW SUCCESS ===");
-    console.log(`  txHash: ${executeResult.txHash}`);
-    console.log(`  actualWithdrawnAmount: ${actualWithdrawnAmount}`);
-    console.log(`  messageKey: ${messageKey}`);
-    console.log(`  messageIndex: ${l1ToL2MessageIndex}`);
-    console.log(`  messageLeaf: ${l1MessageLeaf}`);
     logSuccess(`Withdraw executed on L1 (tx: ${executeResult.txHash.slice(0, 10)}...)`);
 
     // Store secret for later token claim - use messageKey as the key (not intentId)
