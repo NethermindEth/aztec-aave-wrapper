@@ -47,20 +47,22 @@ struct WithdrawConfirmation {
 /// @title Confirmation Library
 /// @notice Helper functions for encoding and decoding confirmations
 library ConfirmationLib {
+    error InvalidActionTypeForDeposit();
+    error InvalidActionTypeForWithdraw();
+    error PayloadTooShort();
     /// @notice Encode a DepositConfirmation for Wormhole payload
     /// @param confirmation The confirmation to encode
     /// @return Encoded bytes suitable for Wormhole message payload
-    function encodeDepositConfirmation(
-        DepositConfirmation memory confirmation
-    ) internal pure returns (bytes memory) {
-        return abi.encode(
-            uint8(0), // Action type: 0 = deposit confirmation
-            confirmation.intentId,
-            confirmation.ownerHash,
-            uint8(confirmation.status),
-            confirmation.shares,
-            confirmation.asset
-        );
+    function encodeDepositConfirmation(DepositConfirmation memory confirmation) internal pure returns (bytes memory) {
+        return
+            abi.encode(
+                uint8(0), // Action type: 0 = deposit confirmation
+                confirmation.intentId,
+                confirmation.ownerHash,
+                uint8(confirmation.status),
+                confirmation.shares,
+                confirmation.asset
+            );
     }
 
     /// @notice Decode a DepositConfirmation from Wormhole payload
@@ -81,24 +83,25 @@ library ConfirmationLib {
             confirmation.asset
         ) = abi.decode(payload, (uint8, bytes32, bytes32, uint8, uint128, address));
 
-        require(actionType == 0, "Invalid action type for deposit confirmation");
+        if (actionType != 0) {
+            revert InvalidActionTypeForDeposit();
+        }
         confirmation.status = ConfirmationStatus(status);
     }
 
     /// @notice Encode a WithdrawConfirmation for Wormhole payload
     /// @param confirmation The confirmation to encode
     /// @return Encoded bytes suitable for Wormhole message payload
-    function encodeWithdrawConfirmation(
-        WithdrawConfirmation memory confirmation
-    ) internal pure returns (bytes memory) {
-        return abi.encode(
-            uint8(1), // Action type: 1 = withdraw confirmation
-            confirmation.intentId,
-            confirmation.ownerHash,
-            uint8(confirmation.status),
-            confirmation.amount,
-            confirmation.asset
-        );
+    function encodeWithdrawConfirmation(WithdrawConfirmation memory confirmation) internal pure returns (bytes memory) {
+        return
+            abi.encode(
+                uint8(1), // Action type: 1 = withdraw confirmation
+                confirmation.intentId,
+                confirmation.ownerHash,
+                uint8(confirmation.status),
+                confirmation.amount,
+                confirmation.asset
+            );
     }
 
     /// @notice Decode a WithdrawConfirmation from Wormhole payload
@@ -119,17 +122,19 @@ library ConfirmationLib {
             confirmation.asset
         ) = abi.decode(payload, (uint8, bytes32, bytes32, uint8, uint128, address));
 
-        require(actionType == 1, "Invalid action type for withdraw confirmation");
+        if (actionType != 1) {
+            revert InvalidActionTypeForWithdraw();
+        }
         confirmation.status = ConfirmationStatus(status);
     }
 
     /// @notice Extract action type from encoded payload without full decode
     /// @param payload The encoded confirmation payload
     /// @return actionType 0 = deposit, 1 = withdraw
-    function getActionType(
-        bytes memory payload
-    ) internal pure returns (uint8 actionType) {
-        require(payload.length >= 32, "Payload too short");
+    function getActionType(bytes memory payload) internal pure returns (uint8 actionType) {
+        if (payload.length < 32) {
+            revert PayloadTooShort();
+        }
         assembly {
             // Load first 32 bytes after length prefix
             // abi.encode stores uint8 as a right-padded 32-byte value

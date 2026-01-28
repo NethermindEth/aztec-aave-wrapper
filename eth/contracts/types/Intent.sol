@@ -48,104 +48,6 @@ struct WithdrawIntent {
     uint64 deadline;
 }
 
-/// @title Intent Library
-/// @notice Helper functions for encoding and validating intents
-library IntentLib {
-    /// @notice Compute the hash of a DepositIntent for message verification
-    /// @dev Must match L2 encoding exactly for cross-chain message consumption
-    ///      Uses sha256ToField to match Noir's sha256_to_field
-    /// @param intent The deposit intent to hash
-    /// @return Hash of the intent suitable for Merkle proof verification
-    function hashDepositIntent(
-        DepositIntent memory intent
-    ) internal pure returns (bytes32) {
-        // Encode all fields as 32-byte values (256 bytes total) to match Noir encoding
-        return Hash.sha256ToField(
-            abi.encodePacked(
-                intent.intentId,
-                intent.ownerHash,
-                bytes32(uint256(uint160(intent.asset))),
-                bytes32(uint256(intent.amount)),
-                bytes32(uint256(intent.originalDecimals)),
-                bytes32(uint256(intent.deadline)),
-                intent.salt,
-                intent.secretHash
-            )
-        );
-    }
-
-    /// @notice Compute the hash of a WithdrawIntent for message verification
-    /// @dev Uses sha256ToField to match Noir's sha256_to_field
-    /// @param intent The withdrawal intent to hash
-    /// @param asset The asset address being withdrawn
-    /// @param secretHash Hash of secret for L1→L2 message consumption
-    /// @return Hash of the intent suitable for Merkle proof verification
-    function hashWithdrawIntent(
-        WithdrawIntent memory intent,
-        address asset,
-        bytes32 secretHash
-    ) internal pure returns (bytes32) {
-        // Encode all fields as 32-byte values (192 bytes total) to match Noir encoding
-        return Hash.sha256ToField(
-            abi.encodePacked(
-                intent.intentId,
-                intent.ownerHash,
-                bytes32(uint256(intent.amount)),
-                bytes32(uint256(intent.deadline)),
-                bytes32(uint256(uint160(asset))),
-                secretHash
-            )
-        );
-    }
-
-    /// @notice Encode DepositIntent for Wormhole payload
-    /// @dev This encoding is sent to the target executor
-    /// @param intent The deposit intent to encode
-    /// @return Encoded bytes suitable for Wormhole message payload
-    function encodeDepositIntent(
-        DepositIntent memory intent
-    ) internal pure returns (bytes memory) {
-        return abi.encode(
-            intent.intentId,
-            intent.ownerHash,
-            intent.asset,
-            intent.amount,
-            intent.originalDecimals,
-            intent.deadline,
-            intent.salt,
-            intent.secretHash
-        );
-    }
-
-    /// @notice Decode DepositIntent from Wormhole payload
-    /// @param payload The encoded intent payload
-    /// @return The decoded deposit intent
-    function decodeDepositIntent(
-        bytes memory payload
-    ) internal pure returns (DepositIntent memory) {
-        return abi.decode(payload, (DepositIntent));
-    }
-
-    /// @notice Encode WithdrawIntent for Wormhole payload
-    /// @param intent The withdrawal intent to encode
-    /// @return Encoded bytes suitable for Wormhole message payload
-    function encodeWithdrawIntent(
-        WithdrawIntent memory intent
-    ) internal pure returns (bytes memory) {
-        return abi.encode(intent.intentId, intent.ownerHash, intent.amount, intent.deadline);
-    }
-
-    /// @notice Decode WithdrawIntent from Wormhole payload
-    /// @param payload The encoded intent payload
-    /// @return intent The decoded withdrawal intent
-    function decodeWithdrawIntent(
-        bytes memory payload
-    ) internal pure returns (WithdrawIntent memory intent) {
-        (intent.intentId, intent.ownerHash, intent.amount, intent.deadline) =
-            abi.decode(payload, (bytes32, bytes32, uint128, uint64));
-    }
-}
-
 /// @notice Payload for token bridge transfer on withdrawal completion
 /// @dev Sent from Target Executor → L1 Portal via Wormhole Token Bridge
 /// Contains information needed to route tokens to the correct L2 recipient
@@ -161,25 +63,116 @@ struct WithdrawTokenPayload {
     address asset;
 }
 
+/// @title Intent Library
+/// @notice Helper functions for encoding and validating intents
+library IntentLib {
+    /// @notice Compute the hash of a DepositIntent for message verification
+    /// @dev Must match L2 encoding exactly for cross-chain message consumption
+    ///      Uses sha256ToField to match Noir's sha256_to_field
+    /// @param intent The deposit intent to hash
+    /// @return Hash of the intent suitable for Merkle proof verification
+    function hashDepositIntent(DepositIntent memory intent) internal pure returns (bytes32) {
+        // Encode all fields as 32-byte values (256 bytes total) to match Noir encoding
+        return
+            Hash.sha256ToField(
+                abi.encodePacked(
+                    intent.intentId,
+                    intent.ownerHash,
+                    bytes32(uint256(uint160(intent.asset))),
+                    bytes32(uint256(intent.amount)),
+                    bytes32(uint256(intent.originalDecimals)),
+                    bytes32(uint256(intent.deadline)),
+                    intent.salt,
+                    intent.secretHash
+                )
+            );
+    }
+
+    /// @notice Compute the hash of a WithdrawIntent for message verification
+    /// @dev Uses sha256ToField to match Noir's sha256_to_field
+    /// @param intent The withdrawal intent to hash
+    /// @param asset The asset address being withdrawn
+    /// @param secretHash Hash of secret for L1→L2 message consumption
+    /// @return Hash of the intent suitable for Merkle proof verification
+    function hashWithdrawIntent(
+        WithdrawIntent memory intent,
+        address asset,
+        bytes32 secretHash
+    ) internal pure returns (bytes32) {
+        // Encode all fields as 32-byte values (192 bytes total) to match Noir encoding
+        return
+            Hash.sha256ToField(
+                abi.encodePacked(
+                    intent.intentId,
+                    intent.ownerHash,
+                    bytes32(uint256(intent.amount)),
+                    bytes32(uint256(intent.deadline)),
+                    bytes32(uint256(uint160(asset))),
+                    secretHash
+                )
+            );
+    }
+
+    /// @notice Encode DepositIntent for Wormhole payload
+    /// @dev This encoding is sent to the target executor
+    /// @param intent The deposit intent to encode
+    /// @return Encoded bytes suitable for Wormhole message payload
+    function encodeDepositIntent(DepositIntent memory intent) internal pure returns (bytes memory) {
+        return
+            abi.encode(
+                intent.intentId,
+                intent.ownerHash,
+                intent.asset,
+                intent.amount,
+                intent.originalDecimals,
+                intent.deadline,
+                intent.salt,
+                intent.secretHash
+            );
+    }
+
+    /// @notice Decode DepositIntent from Wormhole payload
+    /// @param payload The encoded intent payload
+    /// @return The decoded deposit intent
+    function decodeDepositIntent(bytes memory payload) internal pure returns (DepositIntent memory) {
+        return abi.decode(payload, (DepositIntent));
+    }
+
+    /// @notice Encode WithdrawIntent for Wormhole payload
+    /// @param intent The withdrawal intent to encode
+    /// @return Encoded bytes suitable for Wormhole message payload
+    function encodeWithdrawIntent(WithdrawIntent memory intent) internal pure returns (bytes memory) {
+        return abi.encode(intent.intentId, intent.ownerHash, intent.amount, intent.deadline);
+    }
+
+    /// @notice Decode WithdrawIntent from Wormhole payload
+    /// @param payload The encoded intent payload
+    /// @return intent The decoded withdrawal intent
+    function decodeWithdrawIntent(bytes memory payload) internal pure returns (WithdrawIntent memory intent) {
+        (intent.intentId, intent.ownerHash, intent.amount, intent.deadline) = abi.decode(
+            payload,
+            (bytes32, bytes32, uint128, uint64)
+        );
+    }
+}
+
 /// @title WithdrawTokenPayloadLib
 /// @notice Helper functions for encoding/decoding withdrawal token payloads
 library WithdrawTokenPayloadLib {
     /// @notice Encode a WithdrawTokenPayload for Wormhole token bridge
     /// @param payload The payload to encode
     /// @return Encoded bytes suitable for transferTokensWithPayload
-    function encode(
-        WithdrawTokenPayload memory payload
-    ) internal pure returns (bytes memory) {
+    function encode(WithdrawTokenPayload memory payload) internal pure returns (bytes memory) {
         return abi.encode(payload.intentId, payload.ownerHash, payload.secretHash, payload.asset);
     }
 
     /// @notice Decode a WithdrawTokenPayload from Wormhole token bridge
     /// @param data The encoded payload
     /// @return payload The decoded withdrawal token payload
-    function decode(
-        bytes memory data
-    ) internal pure returns (WithdrawTokenPayload memory payload) {
-        (payload.intentId, payload.ownerHash, payload.secretHash, payload.asset) =
-            abi.decode(data, (bytes32, bytes32, bytes32, address));
+    function decode(bytes memory data) internal pure returns (WithdrawTokenPayload memory payload) {
+        (payload.intentId, payload.ownerHash, payload.secretHash, payload.asset) = abi.decode(
+            data,
+            (bytes32, bytes32, bytes32, address)
+        );
     }
 }

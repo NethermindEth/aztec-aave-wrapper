@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import { DataStructures } from "../libraries/DataStructures.sol";
+import {DataStructures} from "../libraries/DataStructures.sol";
 
 /**
  * @title IAztecInbox
@@ -15,12 +15,6 @@ import { DataStructures } from "../libraries/DataStructures.sol";
  */
 interface IAztecInbox {
     /**
-     * @notice Get the Aztec instance version
-     * @return The version number for this Aztec instance
-     */
-    function VERSION() external view returns (uint256);
-
-    /**
      * @notice Send a message to an L2 contract
      * @param _recipient The L2 recipient actor (address + version)
      * @param _content The message content hash
@@ -33,6 +27,12 @@ interface IAztecInbox {
         bytes32 _content,
         bytes32 _secretHash
     ) external returns (bytes32 entryKey, uint256 index);
+
+    /**
+     * @notice Get the Aztec instance version
+     * @return The version number for this Aztec instance
+     */
+    function VERSION() external view returns (uint256);
 
     /**
      * @notice Get the current inbox tree root

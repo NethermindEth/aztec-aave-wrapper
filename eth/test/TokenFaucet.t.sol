@@ -37,21 +37,21 @@ contract TokenFaucetTest is Test {
     // ============ Constructor Tests ============
 
     function test_Constructor() public view {
-        assertEq(address(faucet.token()), address(token));
-        assertEq(faucet.dripAmount(), DRIP_AMOUNT);
-        assertEq(faucet.cooldownPeriod(), COOLDOWN_PERIOD);
+        assertEq(address(faucet.TOKEN()), address(token));
+        assertEq(faucet.DRIP_AMOUNT(), DRIP_AMOUNT);
+        assertEq(faucet.COOLDOWN_PERIOD(), COOLDOWN_PERIOD);
     }
 
     function test_Constructor_ZeroDripAmount() public {
         // Zero drip amount is technically valid (though useless)
         TokenFaucet zeroFaucet = new TokenFaucet(token, 0, COOLDOWN_PERIOD);
-        assertEq(zeroFaucet.dripAmount(), 0);
+        assertEq(zeroFaucet.DRIP_AMOUNT(), 0);
     }
 
     function test_Constructor_ZeroCooldown() public {
         // Zero cooldown allows unlimited claims
         TokenFaucet zeroCooldown = new TokenFaucet(token, DRIP_AMOUNT, 0);
-        assertEq(zeroCooldown.cooldownPeriod(), 0);
+        assertEq(zeroCooldown.COOLDOWN_PERIOD(), 0);
     }
 
     // ============ claim Tests ============
@@ -402,8 +402,8 @@ contract TokenFaucetTest is Test {
     function testFuzz_Constructor_AnyConfiguration(uint256 dripAmount, uint256 cooldown) public {
         TokenFaucet f = new TokenFaucet(token, dripAmount, cooldown);
 
-        assertEq(f.dripAmount(), dripAmount);
-        assertEq(f.cooldownPeriod(), cooldown);
-        assertEq(address(f.token()), address(token));
+        assertEq(f.DRIP_AMOUNT(), dripAmount);
+        assertEq(f.COOLDOWN_PERIOD(), cooldown);
+        assertEq(address(f.TOKEN()), address(token));
     }
 }

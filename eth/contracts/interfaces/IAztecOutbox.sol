@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import { DataStructures } from "../libraries/DataStructures.sol";
+import {DataStructures} from "../libraries/DataStructures.sol";
 
 /**
  * @title IAztecOutbox
@@ -45,7 +45,5 @@ interface IAztecOutbox {
      * @param _l2BlockNumber The L2 block number
      * @return The root hash and metadata
      */
-    function getRootData(
-        uint256 _l2BlockNumber
-    ) external view returns (bytes32, uint256);
+    function getRootData(uint256 _l2BlockNumber) external view returns (bytes32, uint256);
 }

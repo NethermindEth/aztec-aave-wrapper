@@ -99,10 +99,10 @@ contract PortalTest is Test {
     // ============ Constructor Tests ============
 
     function test_Constructor() public view {
-        assertEq(portal.aztecOutbox(), address(aztecOutbox));
-        assertEq(portal.aztecInbox(), address(aztecInbox));
-        assertEq(portal.tokenPortal(), address(tokenPortal));
-        assertEq(portal.aavePool(), address(aavePool));
+        assertEq(portal.AZTEC_OUTBOX(), address(aztecOutbox));
+        assertEq(portal.AZTEC_INBOX(), address(aztecInbox));
+        assertEq(portal.TOKEN_PORTAL(), address(tokenPortal));
+        assertEq(portal.AAVE_POOL(), address(aavePool));
         assertEq(portal.l2ContractAddress(), l2ContractAddress);
         assertEq(portal.owner(), owner);
     }
@@ -799,7 +799,7 @@ contract MockTokenPortal is ITokenPortal {
         return (keccak256("messageKey"), 0);
     }
 
-    function underlying() external view returns (address) {
+    function UNDERLYING() external view returns (address) {
         return underlyingToken;
     }
 

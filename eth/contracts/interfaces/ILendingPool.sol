@@ -18,12 +18,7 @@ interface ILendingPool {
      * @param referralCode Code used to register the integrator originating the operation, for potential rewards.
      *        0 if the action is executed directly by the user, without any middle-man
      */
-    function supply(
-        address asset,
-        uint256 amount,
-        address onBehalfOf,
-        uint16 referralCode
-    ) external;
+    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
 
     /**
      * @notice Withdraws an `amount` of underlying asset from the reserve, burning the equivalent aTokens owned
@@ -66,9 +61,7 @@ interface ILendingPool {
      * @param asset The address of the underlying asset of the reserve
      * @return The reserve's normalized income
      */
-    function getReserveNormalizedIncome(
-        address asset
-    ) external view returns (uint256);
+    function getReserveNormalizedIncome(address asset) external view returns (uint256);
 
     /**
      * @notice Returns the state and configuration of the reserve

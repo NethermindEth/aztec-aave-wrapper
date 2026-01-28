@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import { MockERC20 } from "./MockERC20.sol";
+import {MockERC20} from "./MockERC20.sol";
 
 /**
  * @title TokenFaucet
@@ -10,13 +10,13 @@ import { MockERC20 } from "./MockERC20.sol";
  */
 contract TokenFaucet {
     /// @notice The token this faucet dispenses
-    MockERC20 public immutable token;
+    MockERC20 public immutable TOKEN;
 
     /// @notice Amount of tokens dispensed per claim
-    uint256 public immutable dripAmount;
+    uint256 public immutable DRIP_AMOUNT;
 
     /// @notice Cooldown period between claims (in seconds)
-    uint256 public immutable cooldownPeriod;
+    uint256 public immutable COOLDOWN_PERIOD;
 
     /// @notice Last claim timestamp per address
     mapping(address => uint256) public lastClaimTime;
@@ -33,14 +33,10 @@ contract TokenFaucet {
      * @param dripAmount_ Amount of tokens per claim (in token's smallest unit)
      * @param cooldownPeriod_ Seconds between allowed claims per address
      */
-    constructor(
-        MockERC20 token_,
-        uint256 dripAmount_,
-        uint256 cooldownPeriod_
-    ) {
-        token = token_;
-        dripAmount = dripAmount_;
-        cooldownPeriod = cooldownPeriod_;
+    constructor(MockERC20 token_, uint256 dripAmount_, uint256 cooldownPeriod_) {
+        TOKEN = token_;
+        DRIP_AMOUNT = dripAmount_;
+        COOLDOWN_PERIOD = cooldownPeriod_;
     }
 
     /**
@@ -49,16 +45,16 @@ contract TokenFaucet {
      */
     function claim() external {
         uint256 lastClaim = lastClaimTime[msg.sender];
-        uint256 nextClaimTime = lastClaim + cooldownPeriod;
+        uint256 nextClaimTime = lastClaim + COOLDOWN_PERIOD;
 
         if (block.timestamp < nextClaimTime) {
             revert CooldownNotExpired(nextClaimTime - block.timestamp);
         }
 
         lastClaimTime[msg.sender] = block.timestamp;
-        token.mint(msg.sender, dripAmount);
+        TOKEN.mint(msg.sender, DRIP_AMOUNT);
 
-        emit Claimed(msg.sender, dripAmount);
+        emit Claimed(msg.sender, DRIP_AMOUNT);
     }
 
     /**
@@ -68,7 +64,7 @@ contract TokenFaucet {
      * @return remainingCooldown Seconds until next claim is allowed (0 if claimable)
      */
     function canClaim(address account) external view returns (bool claimable, uint256 remainingCooldown) {
-        uint256 nextClaimTime = lastClaimTime[account] + cooldownPeriod;
+        uint256 nextClaimTime = lastClaimTime[account] + COOLDOWN_PERIOD;
         if (block.timestamp >= nextClaimTime) {
             return (true, 0);
         }

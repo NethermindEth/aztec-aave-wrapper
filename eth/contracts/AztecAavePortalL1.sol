@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import { IAztecOutbox } from "./interfaces/IAztecOutbox.sol";
-import { IAztecInbox } from "./interfaces/IAztecInbox.sol";
-import { DataStructures } from "./libraries/DataStructures.sol";
-import { Hash } from "./libraries/Hash.sol";
-import { ILendingPool } from "./interfaces/ILendingPool.sol";
-import { DepositIntent, WithdrawIntent, IntentLib } from "./types/Intent.sol";
-import { ITokenPortal } from "./interfaces/ITokenPortal.sol";
-import { ConfirmationStatus } from "./types/Confirmation.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
-import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
+import {IAztecOutbox} from "./interfaces/IAztecOutbox.sol";
+import {IAztecInbox} from "./interfaces/IAztecInbox.sol";
+import {DataStructures} from "./libraries/DataStructures.sol";
+import {Hash} from "./libraries/Hash.sol";
+import {ILendingPool} from "./interfaces/ILendingPool.sol";
+import {DepositIntent, WithdrawIntent, IntentLib} from "./types/Intent.sol";
+import {ITokenPortal} from "./interfaces/ITokenPortal.sol";
+import {ConfirmationStatus} from "./types/Confirmation.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
 /**
  * @title AztecAavePortalL1
@@ -33,23 +33,6 @@ import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 contract AztecAavePortalL1 is Ownable2Step, Pausable {
     using SafeERC20 for IERC20;
 
-    // ============ Immutables ============
-
-    /// @notice Aztec L2->L1 message outbox
-    address public immutable aztecOutbox;
-
-    /// @notice Aztec L1->L2 message inbox
-    address public immutable aztecInbox;
-
-    /// @notice Aztec token portal for L1<->L2 token bridging
-    address public immutable tokenPortal;
-
-    /// @notice Aave V3 lending pool
-    address public immutable aavePool;
-
-    /// @notice Aztec instance version (read from inbox at construction)
-    uint256 public immutable aztecVersion;
-
     // ============ Deadline Configuration ============
 
     /// @notice Minimum allowed deadline (5 minutes)
@@ -57,6 +40,23 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
     /// @notice Maximum allowed deadline (24 hours)
     uint256 public constant MAX_DEADLINE = 24 hours;
+
+    // ============ Immutables ============
+
+    /// @notice Aztec L2->L1 message outbox
+    address public immutable AZTEC_OUTBOX;
+
+    /// @notice Aztec L1->L2 message inbox
+    address public immutable AZTEC_INBOX;
+
+    /// @notice Aztec token portal for L1<->L2 token bridging
+    address public immutable TOKEN_PORTAL;
+
+    /// @notice Aave V3 lending pool
+    address public immutable AAVE_POOL;
+
+    /// @notice Aztec instance version (read from inbox at construction)
+    uint256 public immutable AZTEC_VERSION;
 
     // ============ State ============
 
@@ -77,24 +77,9 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
     /// @dev Maps intentId -> asset address
     mapping(bytes32 => address) public intentAssets;
 
-    // ============ Errors ============
-
-    error IntentAlreadyConsumed(bytes32 intentId);
-    error DeadlinePassed();
-    error InvalidDeadline(uint256 deadline);
-    error L2MessageSendFailed();
-    error TokenPortalDepositFailed();
-    error TokenTransferFailed();
-    error ZeroAddress();
-    error NoSharesForIntent(bytes32 intentId);
-    error AaveSupplyFailed();
-    error AaveWithdrawFailed();
-
     // ============ Events ============
 
-    event DepositExecuted(
-        bytes32 indexed intentId, address indexed asset, uint256 amount, uint256 shares
-    );
+    event DepositExecuted(bytes32 indexed intentId, address indexed asset, uint256 amount, uint256 shares);
 
     event WithdrawExecuted(bytes32 indexed intentId, address indexed asset, uint256 amount);
 
@@ -108,6 +93,22 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
     event L2ContractAddressUpdated(bytes32 indexed oldAddress, bytes32 indexed newAddress);
 
+    event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
+
+    // ============ Errors ============
+
+    error IntentAlreadyConsumed(bytes32 intentId);
+    error DeadlinePassed();
+    error InvalidDeadline(uint256 deadline);
+    error L2MessageSendFailed();
+    error TokenPortalDepositFailed();
+    error TokenTransferFailed();
+    error ZeroAddress();
+    error NoSharesForIntent(bytes32 intentId);
+    error AaveSupplyFailed();
+    error AaveWithdrawFailed();
+    error TokenApprovalFailed();
+
     // ============ Constructor ============
 
     constructor(
@@ -119,48 +120,20 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         address _initialOwner
     ) Ownable(_initialOwner) {
         if (
-            _aztecOutbox == address(0) || _aztecInbox == address(0) || _tokenPortal == address(0)
-                || _aavePool == address(0)
+            _aztecOutbox == address(0) ||
+            _aztecInbox == address(0) ||
+            _tokenPortal == address(0) ||
+            _aavePool == address(0)
         ) {
             revert ZeroAddress();
         }
-        aztecOutbox = _aztecOutbox;
-        aztecInbox = _aztecInbox;
-        tokenPortal = _tokenPortal;
-        aavePool = _aavePool;
+        AZTEC_OUTBOX = _aztecOutbox;
+        AZTEC_INBOX = _aztecInbox;
+        TOKEN_PORTAL = _tokenPortal;
+        AAVE_POOL = _aavePool;
         l2ContractAddress = _l2ContractAddress;
         // Read version from inbox to ensure compatibility
-        aztecVersion = IAztecInbox(_aztecInbox).VERSION();
-    }
-
-    // ============ Internal Functions ============
-
-    /**
-     * @notice Validate that a deadline is within acceptable bounds
-     * @param deadline The deadline timestamp to validate
-     */
-    function _validateDeadline(
-        uint256 deadline
-    ) internal view {
-        uint256 timeUntilDeadline = deadline > block.timestamp ? deadline - block.timestamp : 0;
-
-        if (timeUntilDeadline < MIN_DEADLINE) {
-            revert InvalidDeadline(deadline);
-        }
-        if (timeUntilDeadline > MAX_DEADLINE) {
-            revert InvalidDeadline(deadline);
-        }
-    }
-
-    /**
-     * @notice Get the aToken address for an asset from Aave
-     * @param asset The underlying asset address
-     * @return aTokenAddress The aToken address
-     */
-    function _getATokenAddress(
-        address asset
-    ) internal view returns (address aTokenAddress) {
-        (,,,,,,,, aTokenAddress,,,,,,) = ILendingPool(aavePool).getReserveData(asset);
+        AZTEC_VERSION = IAztecInbox(_aztecInbox).VERSION();
     }
 
     // ============ External Functions ============
@@ -206,28 +179,30 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Step 5: Construct L2ToL1Msg and consume from Aztec outbox
         DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
-            sender: DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion }),
-            recipient: DataStructures.L1Actor({ actor: address(this), chainId: block.chainid }),
+            sender: DataStructures.L2Actor({actor: l2ContractAddress, version: AZTEC_VERSION}),
+            recipient: DataStructures.L1Actor({actor: address(this), chainId: block.chainid}),
             content: intentHash
         });
-        IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
+        IAztecOutbox(AZTEC_OUTBOX).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
         // Step 6: Mark intent as consumed for replay protection
         consumedDepositIntents[intent.intentId] = true;
 
         // Step 7: Claim tokens from TokenPortal (based on L2 burn authorization)
-        ITokenPortal(tokenPortal).withdraw(intent.amount, address(this));
+        ITokenPortal(TOKEN_PORTAL).withdraw(intent.amount, address(this));
 
         // Step 8: Get aToken balance before supply
         address aToken = _getATokenAddress(intent.asset);
         uint256 aTokenBalanceBefore = IERC20(aToken).balanceOf(address(this));
 
         // Step 9: Approve Aave pool to spend tokens
-        bool approveSuccess = IERC20(intent.asset).approve(aavePool, intent.amount);
-        require(approveSuccess, "Token approval failed");
+        bool approveSuccess = IERC20(intent.asset).approve(AAVE_POOL, intent.amount);
+        if (!approveSuccess) {
+            revert TokenApprovalFailed();
+        }
 
         // Step 10: Supply tokens to Aave (this contract receives aTokens)
-        ILendingPool(aavePool).supply(
+        ILendingPool(AAVE_POOL).supply(
             intent.asset,
             intent.amount,
             address(this), // aTokens go to this contract
@@ -250,15 +225,24 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Step 13: Send L1->L2 confirmation message
         bytes32 messageContent = _computeDepositFinalizationMessage(
-            intent.intentId, intent.ownerHash, ConfirmationStatus.SUCCESS, shares, intent.asset
+            intent.intentId,
+            intent.ownerHash,
+            ConfirmationStatus.SUCCESS,
+            shares,
+            intent.asset
         );
 
         // Construct L2 recipient and send message with the user's secretHash
         // This ensures only the user who knows the secret can consume the L1→L2 message
-        DataStructures.L2Actor memory recipient =
-            DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion });
-        (bytes32 messageLeaf, uint256 messageIndex) =
-            IAztecInbox(aztecInbox).sendL2Message(recipient, messageContent, intent.secretHash);
+        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({
+            actor: l2ContractAddress,
+            version: AZTEC_VERSION
+        });
+        (bytes32 messageLeaf, uint256 messageIndex) = IAztecInbox(AZTEC_INBOX).sendL2Message(
+            recipient,
+            messageContent,
+            intent.secretHash
+        );
 
         emit DepositConfirmed(intent.intentId, shares, ConfirmationStatus.SUCCESS);
         emit L2MessageSent(intent.intentId, messageLeaf, messageIndex);
@@ -317,11 +301,11 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Step 6: Construct L2ToL1Msg and consume from Aztec outbox
         DataStructures.L2ToL1Msg memory outboxMessage = DataStructures.L2ToL1Msg({
-            sender: DataStructures.L2Actor({ actor: l2ContractAddress, version: aztecVersion }),
-            recipient: DataStructures.L1Actor({ actor: address(this), chainId: block.chainid }),
+            sender: DataStructures.L2Actor({actor: l2ContractAddress, version: AZTEC_VERSION}),
+            recipient: DataStructures.L1Actor({actor: address(this), chainId: block.chainid}),
             content: intentHash
         });
-        IAztecOutbox(aztecOutbox).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
+        IAztecOutbox(AZTEC_OUTBOX).consume(outboxMessage, l2BlockNumber, leafIndex, siblingPath);
 
         // Step 7: Mark intent as consumed for replay protection
         consumedWithdrawIntents[intent.intentId] = true;
@@ -332,7 +316,7 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
 
         // Step 9: Withdraw from Aave (withdraw full aToken balance for this intent)
         // Note: In MVP, we track shares per intent, so we withdraw the exact shares
-        uint256 withdrawnAmount = ILendingPool(aavePool).withdraw(
+        uint256 withdrawnAmount = ILendingPool(AAVE_POOL).withdraw(
             asset,
             shares, // Withdraw the shares we tracked
             address(this)
@@ -345,78 +329,22 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
         emit WithdrawExecuted(intent.intentId, asset, withdrawnAmount);
 
         // Step 10: Approve token portal and deposit to L2
-        IERC20(asset).approve(tokenPortal, 0);
-        bool approveSuccess = IERC20(asset).approve(tokenPortal, withdrawnAmount);
+        IERC20(asset).approve(TOKEN_PORTAL, 0);
+        bool approveSuccess = IERC20(asset).approve(TOKEN_PORTAL, withdrawnAmount);
         if (!approveSuccess) {
             revert TokenTransferFailed();
         }
 
-        (bytes32 messageKey, uint256 messageIndex) =
-            ITokenPortal(tokenPortal).depositToAztecPrivate(withdrawnAmount, secretHash);
+        (bytes32 messageKey, uint256 messageIndex) = ITokenPortal(TOKEN_PORTAL).depositToAztecPrivate(
+            withdrawnAmount,
+            secretHash
+        );
 
         emit TokensDepositedToL2(intent.intentId, messageKey, messageIndex);
 
         // Note: No L1->L2 confirmation message needed for withdrawals.
         // Token claiming via BridgedToken completes the withdrawal flow.
         // The PendingWithdraw note on L2 remains for refund capability if needed.
-    }
-
-    // ============ Internal Helper Functions ============
-
-    /**
-     * @notice Compute the message content for deposit finalization on L2
-     * @dev Uses sha256ToField to match Aztec's L1↔L2 message content hash pattern.
-     *      The encoding must exactly match the L2 Noir contract's hash computation.
-     * @param intentId The intent ID
-     * @param shares The number of shares received
-     * @param asset The asset address (converted to bytes32 for L2 compatibility)
-     * @return The message content hash (truncated to field element size)
-     */
-    function _computeDepositFinalizationMessage(
-        bytes32 intentId,
-        bytes32, // ownerHash - unused, kept for interface compatibility
-        ConfirmationStatus, // status - unused, kept for interface compatibility
-        uint128 shares,
-        address asset
-    ) internal pure returns (bytes32) {
-        // Match L2 encoding: sha256([intent_id, asset_id, shares])
-        // Asset address is padded to bytes32 for L2 Field compatibility
-        return Hash.sha256ToField(
-            abi.encodePacked(intentId, bytes32(uint256(uint160(asset))), bytes32(uint256(shares)))
-        );
-    }
-
-    // ============ View Functions ============
-
-    /**
-     * @notice Get the shares tracked for an intent
-     * @param intentId The intent ID
-     * @return shares The number of shares
-     */
-    function getIntentShares(
-        bytes32 intentId
-    ) external view returns (uint128) {
-        return intentShares[intentId];
-    }
-
-    /**
-     * @notice Get the asset tracked for an intent
-     * @param intentId The intent ID
-     * @return asset The asset address
-     */
-    function getIntentAsset(
-        bytes32 intentId
-    ) external view returns (address) {
-        return intentAssets[intentId];
-    }
-
-    /**
-     * @notice Get the deadline constraints for intent validation
-     * @return minDeadline Minimum deadline offset in seconds (5 minutes)
-     * @return maxDeadline Maximum deadline offset in seconds (24 hours)
-     */
-    function getDeadlineConstraints() external pure returns (uint256 minDeadline, uint256 maxDeadline) {
-        return (MIN_DEADLINE, MAX_DEADLINE);
     }
 
     // ============ Admin Functions ============
@@ -457,15 +385,88 @@ contract AztecAavePortalL1 is Ownable2Step, Pausable {
      * @dev Only callable by owner. Required when L2 contract is deployed after L1 portal.
      * @param _l2ContractAddress The new L2 contract address (bytes32 for Aztec addresses)
      */
-    function setL2ContractAddress(
-        bytes32 _l2ContractAddress
-    ) external onlyOwner {
+    function setL2ContractAddress(bytes32 _l2ContractAddress) external onlyOwner {
         bytes32 oldAddress = l2ContractAddress;
         l2ContractAddress = _l2ContractAddress;
         emit L2ContractAddressUpdated(oldAddress, _l2ContractAddress);
     }
 
-    // ============ Admin Events ============
+    // ============ View Functions ============
 
-    event EmergencyWithdraw(address indexed token, address indexed to, uint256 amount);
+    /**
+     * @notice Get the shares tracked for an intent
+     * @param intentId The intent ID
+     * @return shares The number of shares
+     */
+    function getIntentShares(bytes32 intentId) external view returns (uint128) {
+        return intentShares[intentId];
+    }
+
+    /**
+     * @notice Get the asset tracked for an intent
+     * @param intentId The intent ID
+     * @return asset The asset address
+     */
+    function getIntentAsset(bytes32 intentId) external view returns (address) {
+        return intentAssets[intentId];
+    }
+
+    // ============ Pure Functions ============
+
+    /**
+     * @notice Get the deadline constraints for intent validation
+     * @return minDeadline Minimum deadline offset in seconds (5 minutes)
+     * @return maxDeadline Maximum deadline offset in seconds (24 hours)
+     */
+    function getDeadlineConstraints() external pure returns (uint256 minDeadline, uint256 maxDeadline) {
+        return (MIN_DEADLINE, MAX_DEADLINE);
+    }
+
+    // ============ Internal Functions ============
+
+    /**
+     * @notice Validate that a deadline is within acceptable bounds
+     * @param deadline The deadline timestamp to validate
+     */
+    function _validateDeadline(uint256 deadline) internal view {
+        uint256 timeUntilDeadline = deadline > block.timestamp ? deadline - block.timestamp : 0;
+
+        if (timeUntilDeadline < MIN_DEADLINE) {
+            revert InvalidDeadline(deadline);
+        }
+        if (timeUntilDeadline > MAX_DEADLINE) {
+            revert InvalidDeadline(deadline);
+        }
+    }
+
+    /**
+     * @notice Get the aToken address for an asset from Aave
+     * @param asset The underlying asset address
+     * @return aTokenAddress The aToken address
+     */
+    function _getATokenAddress(address asset) internal view returns (address aTokenAddress) {
+        (, , , , , , , , aTokenAddress, , , , , , ) = ILendingPool(AAVE_POOL).getReserveData(asset);
+    }
+
+    /**
+     * @notice Compute the message content for deposit finalization on L2
+     * @dev Uses sha256ToField to match Aztec's L1↔L2 message content hash pattern.
+     *      The encoding must exactly match the L2 Noir contract's hash computation.
+     * @param intentId The intent ID
+     * @param shares The number of shares received
+     * @param asset The asset address (converted to bytes32 for L2 compatibility)
+     * @return The message content hash (truncated to field element size)
+     */
+    function _computeDepositFinalizationMessage(
+        bytes32 intentId,
+        bytes32, // ownerHash - unused, kept for interface compatibility
+        ConfirmationStatus, // status - unused, kept for interface compatibility
+        uint128 shares,
+        address asset
+    ) internal pure returns (bytes32) {
+        // Match L2 encoding: sha256([intent_id, asset_id, shares])
+        // Asset address is padded to bytes32 for L2 Field compatibility
+        return
+            Hash.sha256ToField(abi.encodePacked(intentId, bytes32(uint256(uint160(asset))), bytes32(uint256(shares))));
+    }
 }

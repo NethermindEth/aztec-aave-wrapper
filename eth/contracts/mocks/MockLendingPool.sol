@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import { ILendingPool } from "../interfaces/ILendingPool.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { MockERC20 } from "./MockERC20.sol";
+import {ILendingPool} from "../interfaces/ILendingPool.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {MockERC20} from "./MockERC20.sol";
 
 /**
  * @title MockLendingPool
@@ -26,18 +26,17 @@ contract MockLendingPool is ILendingPool {
     /// @notice Mock normalized income per asset (RAY = 1e27)
     mapping(address => uint256) public normalizedIncomes;
 
-    event Supply(
-        address indexed asset, uint256 amount, address indexed onBehalfOf, uint16 referralCode
-    );
+    event Supply(address indexed asset, uint256 amount, address indexed onBehalfOf, uint16 referralCode);
     event Withdraw(address indexed asset, uint256 amount, address indexed to);
 
-    function supply(
-        address asset,
-        uint256 amount,
-        address onBehalfOf,
-        uint16 referralCode
-    ) external override {
-        require(!failSupply, "MockLendingPool: supply failed");
+    error SupplyFailed();
+    error WithdrawFailed();
+    error InsufficientBalance();
+
+    function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external override {
+        if (failSupply) {
+            revert SupplyFailed();
+        }
 
         // Transfer tokens from sender to this contract
         IERC20(asset).transferFrom(msg.sender, address(this), amount);
@@ -54,15 +53,15 @@ contract MockLendingPool is ILendingPool {
         emit Supply(asset, amount, onBehalfOf, referralCode);
     }
 
-    function withdraw(
-        address asset,
-        uint256 amount,
-        address to
-    ) external override returns (uint256) {
-        require(!failWithdraw, "MockLendingPool: withdraw failed");
+    function withdraw(address asset, uint256 amount, address to) external override returns (uint256) {
+        if (failWithdraw) {
+            revert WithdrawFailed();
+        }
 
         // Check deposit balance
-        require(deposits[msg.sender][asset] >= amount, "MockLendingPool: insufficient balance");
+        if (deposits[msg.sender][asset] < amount) {
+            revert InsufficientBalance();
+        }
 
         // Update deposit tracking
         deposits[msg.sender][asset] -= amount;
@@ -81,15 +80,25 @@ contract MockLendingPool is ILendingPool {
         return amount;
     }
 
-    function getUserAccountData(
-        address
-    ) external pure override returns (uint256, uint256, uint256, uint256, uint256, uint256) {
-        return (0, 0, 0, 0, 0, type(uint256).max);
+    // Test helpers (external non-view)
+    function setFailSupply(bool fail) external {
+        failSupply = fail;
     }
 
-    function getReserveNormalizedIncome(
-        address asset
-    ) external view override returns (uint256) {
+    function setFailWithdraw(bool fail) external {
+        failWithdraw = fail;
+    }
+
+    function setATokenAddress(address asset, address aToken) external {
+        aTokenAddresses[asset] = aToken;
+    }
+
+    function setNormalizedIncome(address asset, uint256 income) external {
+        normalizedIncomes[asset] = income;
+    }
+
+    // View functions
+    function getReserveNormalizedIncome(address asset) external view override returns (uint256) {
         uint256 income = normalizedIncomes[asset];
         // Default to RAY (1e27) if not set, which represents 1.0 (no yield)
         return income == 0 ? 1e27 : income;
@@ -124,28 +133,14 @@ contract MockLendingPool is ILendingPool {
         return (0, 0, 0, 0, 0, 0, 0, 0, aToken, address(0), address(0), address(0), 0, 0, 0);
     }
 
-    // Test helpers
-    function setFailSupply(
-        bool fail
-    ) external {
-        failSupply = fail;
-    }
-
-    function setFailWithdraw(
-        bool fail
-    ) external {
-        failWithdraw = fail;
-    }
-
     function getDeposit(address user, address asset) external view returns (uint256) {
         return deposits[user][asset];
     }
 
-    function setATokenAddress(address asset, address aToken) external {
-        aTokenAddresses[asset] = aToken;
-    }
-
-    function setNormalizedIncome(address asset, uint256 income) external {
-        normalizedIncomes[asset] = income;
+    // Pure functions
+    function getUserAccountData(
+        address
+    ) external pure override returns (uint256, uint256, uint256, uint256, uint256, uint256) {
+        return (0, 0, 0, 0, 0, type(uint256).max);
     }
 }

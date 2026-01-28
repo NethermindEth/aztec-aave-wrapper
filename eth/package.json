@@ -8,11 +8,17 @@
     "build": "forge build",
     "test": "forge test -vvv",
     "coverage": "forge coverage",
-    "fmt": "forge fmt",
-    "fmt:check": "forge fmt --check",
+    "fmt": "prettier --write 'contracts/**/*.sol'",
+    "fmt:check": "prettier --check 'contracts/**/*.sol'",
+    "lint:sol": "solhint 'contracts/**/*.sol'",
+    "check": "bun run lint:sol",
     "clean": "forge clean"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "prettier": "^3.8.1",
+    "prettier-plugin-solidity": "^2.2.1",
+    "solhint": "^6.0.3"
+  },
   "engines": {
     "node": ">=18.0.0"
   }

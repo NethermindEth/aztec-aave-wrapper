@@ -59,11 +59,11 @@ contract TokenPortalTest is Test {
     // ============ Constructor Tests ============
 
     function test_Constructor() public view {
-        assertEq(portal.underlying(), address(token));
-        assertEq(portal.inbox(), address(inbox));
-        assertEq(portal.outbox(), address(outbox));
+        assertEq(portal.UNDERLYING(), address(token));
+        assertEq(portal.INBOX(), address(inbox));
+        assertEq(portal.OUTBOX(), address(outbox));
         assertEq(portal.l2Bridge(), l2Bridge);
-        assertEq(portal.aztecVersion(), inbox.VERSION());
+        assertEq(portal.AZTEC_VERSION(), inbox.VERSION());
     }
 
     function test_Constructor_RevertIf_ZeroUnderlying() public {

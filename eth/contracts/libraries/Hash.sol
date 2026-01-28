@@ -16,9 +16,7 @@ library Hash {
      * @param _data The data to hash
      * @return The hash truncated to field element size
      */
-    function sha256ToField(
-        bytes memory _data
-    ) internal pure returns (bytes32) {
+    function sha256ToField(bytes memory _data) internal pure returns (bytes32) {
         return bytes32(bytes.concat(new bytes(1), bytes31(sha256(_data))));
     }
 }

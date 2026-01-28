@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import { ITokenPortal } from "./interfaces/ITokenPortal.sol";
-import { IAztecInbox } from "./interfaces/IAztecInbox.sol";
-import { IAztecOutbox } from "./interfaces/IAztecOutbox.sol";
-import { DataStructures } from "./libraries/DataStructures.sol";
-import { Hash } from "./libraries/Hash.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Ownable2Step, Ownable } from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {ITokenPortal} from "./interfaces/ITokenPortal.sol";
+import {IAztecInbox} from "./interfaces/IAztecInbox.sol";
+import {IAztecOutbox} from "./interfaces/IAztecOutbox.sol";
+import {DataStructures} from "./libraries/DataStructures.sol";
+import {Hash} from "./libraries/Hash.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
 /**
  * @title TokenPortal
@@ -35,16 +35,16 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
     // ============ Immutables ============
 
     /// @notice The underlying ERC20 token this portal handles
-    address public immutable override underlying;
+    address public immutable override UNDERLYING;
 
     /// @notice Aztec L1->L2 message inbox
-    address public immutable inbox;
+    address public immutable INBOX;
 
     /// @notice Aztec L2->L1 message outbox
-    address public immutable outbox;
+    address public immutable OUTBOX;
 
     /// @notice Aztec instance version (read from inbox at construction)
-    uint256 public immutable aztecVersion;
+    uint256 public immutable AZTEC_VERSION;
 
     // ============ Mutable State ============
 
@@ -59,14 +59,6 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
     /// @dev Used by AavePortal which consumes L2->L1 deposit intent messages directly
     mapping(address => bool) public authorizedWithdrawers;
 
-    // ============ Errors ============
-
-    error ZeroAddress();
-    error ZeroAmount();
-    error InvalidWithdrawAmount();
-    error UnauthorizedWithdrawer();
-    error L2BridgeNotSet();
-
     // ============ Events ============
 
     event DepositToAztecPublic(
@@ -77,15 +69,22 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         uint256 messageIndex
     );
 
-    event DepositToAztecPrivate(
-        uint256 amount, bytes32 secretHash, bytes32 messageKey, uint256 messageIndex
-    );
+    event DepositToAztecPrivate(uint256 amount, bytes32 secretHash, bytes32 messageKey, uint256 messageIndex);
 
     event WithdrawFromAztec(address indexed recipient, uint256 amount);
 
     event AuthorizedWithdrawerSet(address indexed withdrawer, bool authorized);
 
     event L2BridgeSet(bytes32 indexed l2Bridge);
+
+    // ============ Errors ============
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error InvalidWithdrawAmount();
+    error UnauthorizedWithdrawer();
+    error L2BridgeNotSet();
+    error L2BridgeAlreadySet();
 
     // ============ Constructor ============
 
@@ -109,11 +108,11 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         if (_underlying == address(0) || _inbox == address(0) || _outbox == address(0)) {
             revert ZeroAddress();
         }
-        underlying = _underlying;
-        inbox = _inbox;
-        outbox = _outbox;
+        UNDERLYING = _underlying;
+        INBOX = _inbox;
+        OUTBOX = _outbox;
         l2Bridge = _l2Bridge;
-        aztecVersion = IAztecInbox(_inbox).VERSION();
+        AZTEC_VERSION = IAztecInbox(_inbox).VERSION();
         if (_authorizedWithdrawer != address(0)) {
             authorizedWithdrawers[_authorizedWithdrawer] = true;
         }
@@ -146,17 +145,15 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         }
 
         // Lock tokens on L1 (transfer from sender to this contract)
-        IERC20(underlying).safeTransferFrom(msg.sender, address(this), _amount);
+        IERC20(UNDERLYING).safeTransferFrom(msg.sender, address(this), _amount);
 
         // Compute message content: public mint includes recipient in content
         bytes32 content = Hash.sha256ToField(abi.encodePacked(_to, _amount, _secretHash));
 
         // Send L1->L2 message
-        DataStructures.L2Actor memory recipient =
-            DataStructures.L2Actor({ actor: l2Bridge, version: aztecVersion });
+        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({actor: l2Bridge, version: AZTEC_VERSION});
 
-        (messageKey, messageIndex) =
-            IAztecInbox(inbox).sendL2Message(recipient, content, _secretHash);
+        (messageKey, messageIndex) = IAztecInbox(INBOX).sendL2Message(recipient, content, _secretHash);
 
         emit DepositToAztecPublic(_to, _amount, _secretHash, messageKey, messageIndex);
     }
@@ -185,22 +182,21 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         }
 
         // Lock tokens on L1 (transfer from sender to this contract)
-        IERC20(underlying).safeTransferFrom(msg.sender, address(this), _amount);
+        IERC20(UNDERLYING).safeTransferFrom(msg.sender, address(this), _amount);
 
         // Compute message content: private mint doesn't include recipient
-        bytes32 content =
-            Hash.sha256ToField(abi.encodePacked(_amount, _secretHashForL2MessageConsumption));
+        bytes32 content = Hash.sha256ToField(abi.encodePacked(_amount, _secretHashForL2MessageConsumption));
 
         // Send L1->L2 message
-        DataStructures.L2Actor memory recipient =
-            DataStructures.L2Actor({ actor: l2Bridge, version: aztecVersion });
+        DataStructures.L2Actor memory recipient = DataStructures.L2Actor({actor: l2Bridge, version: AZTEC_VERSION});
 
-        (messageKey, messageIndex) =
-            IAztecInbox(inbox).sendL2Message(recipient, content, _secretHashForL2MessageConsumption);
-
-        emit DepositToAztecPrivate(
-            _amount, _secretHashForL2MessageConsumption, messageKey, messageIndex
+        (messageKey, messageIndex) = IAztecInbox(INBOX).sendL2Message(
+            recipient,
+            content,
+            _secretHashForL2MessageConsumption
         );
+
+        emit DepositToAztecPrivate(_amount, _secretHashForL2MessageConsumption, messageKey, messageIndex);
     }
 
     // ============ Withdraw Functions ============
@@ -247,15 +243,15 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
 
         // Construct and consume the L2->L1 message
         DataStructures.L2ToL1Msg memory message = DataStructures.L2ToL1Msg({
-            sender: DataStructures.L2Actor({ actor: l2Bridge, version: aztecVersion }),
-            recipient: DataStructures.L1Actor({ actor: address(this), chainId: block.chainid }),
+            sender: DataStructures.L2Actor({actor: l2Bridge, version: AZTEC_VERSION}),
+            recipient: DataStructures.L1Actor({actor: address(this), chainId: block.chainid}),
             content: content
         });
 
-        IAztecOutbox(outbox).consume(message, _l2BlockNumber, _leafIndex, _siblingPath);
+        IAztecOutbox(OUTBOX).consume(message, _l2BlockNumber, _leafIndex, _siblingPath);
 
         // Release tokens to recipient
-        IERC20(underlying).safeTransfer(_recipient, _amount);
+        IERC20(UNDERLYING).safeTransfer(_recipient, _amount);
 
         emit WithdrawFromAztec(_recipient, _amount);
     }
@@ -280,7 +276,7 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
         }
 
         // Release tokens to recipient
-        IERC20(underlying).safeTransfer(_recipient, _amount);
+        IERC20(UNDERLYING).safeTransfer(_recipient, _amount);
 
         emit WithdrawFromAztec(_recipient, _amount);
     }
@@ -314,7 +310,7 @@ contract TokenPortal is ITokenPortal, Ownable2Step {
             revert ZeroAddress();
         }
         if (l2Bridge != bytes32(0)) {
-            revert("L2 bridge already set");
+            revert L2BridgeAlreadySet();
         }
         l2Bridge = _l2Bridge;
         emit L2BridgeSet(_l2Bridge);
