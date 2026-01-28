@@ -52,9 +52,7 @@ function getStatusLabel(status: number): string {
 function ChevronIcon(): JSX.Element {
   return (
     <svg
-      class="accordion-chevron"
-      width="16"
-      height="16"
+      class="w-4 h-4 text-zinc-500 transition-transform duration-200"
       fill="none"
       stroke="currentColor"
       viewBox="0 0 24 24"
@@ -372,31 +370,47 @@ export function RecoverDeposit() {
   };
 
   return (
-    <section class={`accordion ${isExpanded() ? "open" : ""}`}>
-      {/* Accordion Header */}
+    <div class="glass-card !p-0 overflow-hidden">
+      {/* Collapsible Header */}
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded())}
-        class="accordion-header"
+        class="w-full flex items-center justify-between p-4 hover:bg-white/[0.02] transition-colors"
         aria-expanded={isExpanded()}
         aria-controls="recover-deposit-content"
       >
-        <div>
-          <div class="accordion-title">
-            <span class="accordion-icon">⚠️</span>
-            Recover Stuck Deposit
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+            <svg
+              class="w-4 h-4 text-amber-500"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
           </div>
-          <p class="accordion-description">Query and cancel failed deposits to recover tokens</p>
+          <div class="text-left">
+            <div class="text-sm font-medium text-zinc-200">Recover Stuck Deposit</div>
+            <p class="text-xs text-zinc-500">Query and cancel failed deposits to recover tokens</p>
+          </div>
         </div>
-        <ChevronIcon />
+        <div class={`transition-transform duration-200 ${isExpanded() ? "rotate-180" : ""}`}>
+          <ChevronIcon />
+        </div>
       </button>
 
-      {/* Accordion Content */}
-      <div class="accordion-content" id="recover-deposit-content">
-        <div class="space-y-4">
+      {/* Collapsible Content */}
+      <Show when={isExpanded()}>
+        <div class="px-4 pb-4 space-y-4 border-t border-white/5" id="recover-deposit-content">
           {/* Scan Section */}
-          <div class="bg-zinc-800/50 rounded p-3 space-y-3">
-            <div class="flex items-center justify-between">
+          <div class="mt-4 p-4 rounded-lg bg-black/20 border border-white/5 space-y-3">
+            <div class="flex items-center justify-between gap-4">
               <div>
                 <h3 class="text-sm font-medium text-zinc-200">Find My Deposits</h3>
                 <p class="text-xs text-zinc-500">Scan L1 events to find your pending deposits</p>
@@ -405,15 +419,15 @@ export function RecoverDeposit() {
                 type="button"
                 onClick={handleScan}
                 disabled={isScanning()}
-                class="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
+                class="btn-cta !w-auto !px-4 !py-2 text-sm"
               >
-                {isScanning() ? "Scanning..." : "Scan for Deposits"}
+                {isScanning() ? "Scanning..." : "Scan"}
               </button>
             </div>
 
             {/* Scan Error */}
             <Show when={scanError()}>
-              <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
+              <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
                 {scanError()}
               </div>
             </Show>
@@ -427,15 +441,17 @@ export function RecoverDeposit() {
                     <button
                       type="button"
                       onClick={() => selectIntent(intent)}
-                      class="w-full text-left p-2 bg-zinc-700 hover:bg-zinc-600 rounded text-sm transition-colors"
+                      class="w-full text-left p-3 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/5 hover:border-white/10 transition-all"
                     >
                       <div class="flex justify-between items-center">
                         <span class="text-zinc-300 font-mono text-xs">
                           {intent.intentId.slice(0, 10)}...{intent.intentId.slice(-8)}
                         </span>
-                        <span class="text-zinc-400">{formatUSDC(intent.amount)} USDC</span>
+                        <span class="text-zinc-300 font-medium">
+                          {formatUSDC(intent.amount)} USDC
+                        </span>
                       </div>
-                      <div class="text-xs text-zinc-500 mt-1">
+                      <div class="text-[10px] text-zinc-500 mt-1 font-mono">
                         Shares: {intent.shares.toString()} | Block: {intent.blockNumber.toString()}
                       </div>
                     </button>
@@ -446,46 +462,51 @@ export function RecoverDeposit() {
           </div>
 
           {/* Divider */}
-          <div class="flex items-center gap-2">
-            <div class="flex-1 border-t border-zinc-700"></div>
-            <span class="text-xs text-zinc-600">or enter intent ID manually</span>
-            <div class="flex-1 border-t border-zinc-700"></div>
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+            <span class="text-[10px] text-zinc-600 uppercase tracking-wider">
+              or enter manually
+            </span>
+            <div class="flex-1 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
           </div>
 
+          {/* Manual Input */}
           <div>
-            <label class="block text-sm text-zinc-400 mb-1">Intent ID</label>
+            <label class="block text-xs text-zinc-500 mb-2">Intent ID</label>
             <div class="flex gap-2">
-              <input
-                type="text"
-                value={intentId()}
-                onInput={(e) => setIntentId(e.currentTarget.value)}
-                placeholder="0x..."
-                class="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-              />
+              <div class="flex-1 input-wrapper">
+                <input
+                  type="text"
+                  value={intentId()}
+                  onInput={(e) => setIntentId(e.currentTarget.value)}
+                  placeholder="0x..."
+                  class="input-field !text-left !text-sm"
+                />
+              </div>
               <button
                 type="button"
                 onClick={handleQuery}
                 disabled={isQuerying() || !intentId().trim()}
-                class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-100 text-sm font-medium rounded transition-colors"
+                class="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:cursor-not-allowed text-zinc-300 text-sm font-medium border border-white/10 hover:border-white/20 transition-all"
               >
-                {isQuerying() ? "Querying..." : "Query"}
+                {isQuerying() ? "..." : "Query"}
               </button>
             </div>
-            <p class="text-xs text-zinc-600 mt-1">
+            <p class="text-[10px] text-zinc-600 mt-1.5">
               Find your intent ID in the browser console from when you executed the deposit
             </p>
           </div>
 
           {/* Query Error */}
           <Show when={queryError()}>
-            <div class="p-3 bg-red-900/20 border border-red-800 rounded text-sm text-red-400">
+            <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
               {queryError()}
             </div>
           </Show>
 
           {/* Cancel Success */}
           <Show when={cancelSuccess()}>
-            <div class="p-3 bg-green-900/20 border border-green-800 rounded text-sm text-green-400">
+            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
               {cancelSuccess()}
             </div>
           </Show>
@@ -493,88 +514,88 @@ export function RecoverDeposit() {
           {/* Deposit Info */}
           <Show when={depositInfo()}>
             {(info) => (
-              <div class="bg-zinc-800 rounded p-4 space-y-3">
+              <div class="p-4 rounded-lg bg-white/[0.02] border border-white/5 space-y-4">
                 <h3 class="text-sm font-medium text-zinc-200">Pending Deposit Found</h3>
 
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                  <div class="text-zinc-500">Status:</div>
-                  <div class="text-zinc-200">
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <div class="text-zinc-500">Status</div>
+                  <div>
                     <span
-                      class={
+                      class={`px-2 py-0.5 rounded text-xs font-medium ${
                         info().status === L2PositionStatus.PendingDeposit
-                          ? "text-yellow-400"
+                          ? "bg-amber-500/20 text-amber-400"
                           : info().status === L2PositionStatus.Active
-                            ? "text-green-400"
-                            : "text-zinc-400"
-                      }
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-zinc-500/20 text-zinc-400"
+                      }`}
                     >
                       {getStatusLabel(info().status)}
                     </span>
                   </div>
 
-                  <div class="text-zinc-500">Net Amount:</div>
-                  <div class="text-zinc-200">{formatUSDC(info().netAmount)} USDC</div>
+                  <div class="text-zinc-500">Net Amount</div>
+                  <div class="text-zinc-200 font-mono">{formatUSDC(info().netAmount)} USDC</div>
 
-                  <div class="text-zinc-500">Deadline:</div>
-                  <div class="text-zinc-200">{formatTimestamp(info().deadline)}</div>
+                  <div class="text-zinc-500">Deadline</div>
+                  <div class="text-zinc-200 font-mono text-xs">
+                    {formatTimestamp(info().deadline)}
+                  </div>
 
-                  <div class="text-zinc-500">Already Consumed:</div>
-                  <div class={info().isConsumed ? "text-red-400" : "text-green-400"}>
+                  <div class="text-zinc-500">Consumed</div>
+                  <div class={info().isConsumed ? "text-red-400" : "text-emerald-400"}>
                     {info().isConsumed ? "Yes" : "No"}
                   </div>
 
-                  <div class="text-zinc-500">Can Cancel:</div>
-                  <div class={info().canCancel ? "text-green-400" : "text-yellow-400"}>
+                  <div class="text-zinc-500">Can Cancel</div>
+                  <div class={info().canCancel ? "text-emerald-400" : "text-amber-400"}>
                     {info().canCancel ? "Yes" : "No"}
                   </div>
 
                   <Show when={!info().canCancel && info().timeUntilCancellable > 0}>
-                    <div class="text-zinc-500">Time Until Cancellable:</div>
-                    <div class="text-yellow-400">
-                      {Math.ceil(info().timeUntilCancellable / 60)} minutes
+                    <div class="text-zinc-500">Time Until Cancellable</div>
+                    <div class="text-amber-400 font-mono">
+                      {Math.ceil(info().timeUntilCancellable / 60)} min
                     </div>
                   </Show>
 
-                  <div class="text-zinc-500">Secret Stored:</div>
-                  <div class={secretExists() ? "text-green-400" : "text-red-400"}>
+                  <div class="text-zinc-500">Secret Stored</div>
+                  <div class={secretExists() ? "text-emerald-400" : "text-red-400"}>
                     {secretExists() ? "Yes" : "No"}
                   </div>
                 </div>
 
                 {/* Complete Deposit Button - show if not consumed and secret exists */}
                 <Show when={!info().isConsumed && secretExists()}>
-                  <div class="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleCompleteDeposit}
-                      disabled={isCompleting()}
-                      class="w-full px-4 py-2 bg-green-600 hover:bg-green-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
-                    >
-                      {isCompleting() ? "Completing..." : "Complete Deposit (Create Position)"}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCompleteDeposit}
+                    disabled={isCompleting()}
+                    class="btn-cta ready"
+                  >
+                    {isCompleting() ? "Completing..." : "Complete Deposit (Create Position)"}
+                  </button>
                 </Show>
 
                 {/* Complete Success */}
                 <Show when={completeSuccess()}>
-                  <div class="p-2 bg-green-900/20 border border-green-800 rounded text-xs text-green-400">
+                  <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
                     {completeSuccess()}
                   </div>
                 </Show>
 
                 {/* Complete Error */}
                 <Show when={completeError()}>
-                  <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
+                  <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
                     {completeError()}
                   </div>
                 </Show>
 
                 {/* No Secret Warning */}
                 <Show when={!info().isConsumed && !secretExists()}>
-                  <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
+                  <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
                     <strong>Secret not found.</strong> The secret was not stored during the original
                     deposit. This deposit cannot be completed normally. Your options:
-                    <ul class="list-disc ml-4 mt-1">
+                    <ul class="list-disc ml-4 mt-1 space-y-0.5">
                       <li>Wait for the deadline to pass, then cancel to recover your tokens</li>
                       <li>
                         If you saved the secret elsewhere, you can complete manually via console
@@ -585,30 +606,28 @@ export function RecoverDeposit() {
 
                 {/* Cancel Button */}
                 <Show when={info().canCancel}>
-                  <div class="pt-2">
-                    <button
-                      type="button"
-                      onClick={handleCancel}
-                      disabled={isCancelling()}
-                      class="w-full px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-medium rounded transition-colors"
-                    >
-                      {isCancelling()
-                        ? "Cancelling..."
-                        : `Cancel & Recover ${formatUSDC(info().netAmount)} USDC`}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    disabled={isCancelling()}
+                    class="w-full px-4 py-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-amber-400 font-medium border border-amber-500/30 transition-all"
+                  >
+                    {isCancelling()
+                      ? "Cancelling..."
+                      : `Cancel & Recover ${formatUSDC(info().netAmount)} USDC`}
+                  </button>
                 </Show>
 
                 {/* Not Cancellable Warning */}
                 <Show when={!info().canCancel && !info().isConsumed}>
-                  <div class="p-2 bg-yellow-900/20 border border-yellow-800 rounded text-xs text-yellow-400">
+                  <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
                     You cannot cancel yet. Wait until the deadline passes.
                   </div>
                 </Show>
 
                 {/* Already Consumed Warning */}
                 <Show when={info().isConsumed}>
-                  <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
+                  <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
                     This intent has already been consumed. If you have a position, refresh from L2.
                     If not, the deposit may have failed on L1.
                   </div>
@@ -616,7 +635,7 @@ export function RecoverDeposit() {
 
                 {/* Cancel Error */}
                 <Show when={cancelError()}>
-                  <div class="p-2 bg-red-900/20 border border-red-800 rounded text-xs text-red-400">
+                  <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
                     {cancelError()}
                   </div>
                 </Show>
@@ -624,7 +643,7 @@ export function RecoverDeposit() {
             )}
           </Show>
         </div>
-      </div>
-    </section>
+      </Show>
+    </div>
   );
 }

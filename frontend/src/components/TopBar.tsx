@@ -3,9 +3,10 @@
  *
  * Compact navigation bar with auto-connecting network and wallet status.
  * Terminal-inspired aesthetic with real-time connection indicators.
+ * Includes collapsible section for deployed contract addresses.
  */
 
-import { createEffect, createSignal, on, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { createL1PublicClient, verifyL1Connection } from "../services/l1/client.js";
 import { balanceOf } from "../services/l1/tokens.js";
 import {
@@ -101,6 +102,86 @@ function StatusIndicator(props: { status: "connected" | "connecting" | "disconne
   };
 
   return <span class={`network-dot ${stateClass()}`} />;
+}
+
+/**
+ * Block number display with subtle update animation
+ */
+/**
+ * Contract address entry for display
+ */
+interface ContractEntry {
+  name: string;
+  address: string;
+  layer: "L1" | "L2";
+}
+
+/**
+ * Truncate a contract address for display
+ * Shows first 6 and last 4 characters: 0x1234...abcd
+ */
+function truncateContractAddress(address: string): string {
+  if (address.length <= 13) {
+    return address;
+  }
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+/**
+ * L1 icon (Ethereum-style)
+ */
+function L1Icon() {
+  return (
+    <svg
+      class="contract-pill-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d="M12 2L2 12l10 10 10-10L12 2z" />
+      <path d="M12 8v8" />
+      <path d="M8 12h8" />
+    </svg>
+  );
+}
+
+/**
+ * L2 icon (Aztec-style with layers)
+ */
+function L2Icon() {
+  return (
+    <svg
+      class="contract-pill-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+    >
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
+    </svg>
+  );
+}
+
+/**
+ * Copy address to clipboard with visual feedback
+ */
+async function copyContractAddress(address: string, event: MouseEvent): Promise<void> {
+  const target = event.currentTarget as HTMLElement;
+  try {
+    if (!navigator.clipboard) {
+      throw new Error("Clipboard API not available");
+    }
+    await navigator.clipboard.writeText(address);
+    target.setAttribute("data-copied", "true");
+    setTimeout(() => {
+      target.removeAttribute("data-copied");
+    }, 1500);
+  } catch (err) {
+    console.warn("Clipboard copy failed, address:", address, err);
+  }
 }
 
 /**
@@ -443,6 +524,39 @@ export function TopBar() {
   const allConnected = () =>
     state.l1.connected && state.l2.connected && state.wallet.l1Address && state.wallet.l2Address;
 
+  /**
+   * Check if contracts are loaded
+   */
+  const hasContracts = () =>
+    state.contracts.portal !== null &&
+    state.contracts.mockUsdc !== null &&
+    state.contracts.l2Wrapper !== null;
+
+  /**
+   * Get list of contract addresses for display in header
+   */
+  const contractEntries = (): ContractEntry[] => {
+    const entries: ContractEntry[] = [];
+
+    if (state.contracts.portal) {
+      entries.push({ name: "Portal", address: state.contracts.portal, layer: "L1" });
+    }
+    if (state.contracts.mockUsdc) {
+      entries.push({ name: "USDC", address: state.contracts.mockUsdc, layer: "L1" });
+    }
+    if (state.contracts.mockLendingPool) {
+      entries.push({ name: "Pool", address: state.contracts.mockLendingPool, layer: "L1" });
+    }
+    if (state.contracts.l2BridgedToken) {
+      entries.push({ name: "Token", address: state.contracts.l2BridgedToken, layer: "L2" });
+    }
+    if (state.contracts.l2Wrapper) {
+      entries.push({ name: "Wrapper", address: state.contracts.l2Wrapper, layer: "L2" });
+    }
+
+    return entries;
+  };
+
   return (
     <>
       <header class="header">
@@ -654,6 +768,35 @@ export function TopBar() {
               </Show>
             </div>
           </div>
+
+          {/* Deployed Contracts Section */}
+          <Show when={hasContracts()}>
+            <div class="mt-3 pt-3 border-t border-zinc-800/30">
+              <div class="max-w-4xl mx-auto">
+                <div class="text-zinc-500 uppercase tracking-wider text-[9px] font-medium mb-2">
+                  Deployed Contracts
+                </div>
+                <div class="contracts-grid">
+                  <For each={contractEntries()}>
+                    {(contract) => (
+                      <button
+                        type="button"
+                        class="contract-pill"
+                        title={`Click to copy: ${contract.address}`}
+                        onClick={(e) => copyContractAddress(contract.address, e)}
+                      >
+                        {contract.layer === "L1" ? <L1Icon /> : <L2Icon />}
+                        <span class="contract-name">{contract.name}</span>
+                        <span class="contract-address">
+                          {truncateContractAddress(contract.address)}
+                        </span>
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </div>
+            </div>
+          </Show>
 
           {/* All systems status */}
           <div class="mt-3 pt-2 border-t border-zinc-800/30 flex justify-center">

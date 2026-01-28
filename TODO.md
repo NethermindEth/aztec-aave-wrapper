@@ -1,2 +1,2 @@
 - disable finalize deposit auto detection, add separate finalize deposit button to account for devnet longer block times
-- move deployed contracts addresses visual in collapsable section of header
+- update deploy script to handle eth/sepolia aztec/devnet deployments
