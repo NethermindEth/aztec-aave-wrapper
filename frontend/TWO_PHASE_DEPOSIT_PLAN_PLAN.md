@@ -35,7 +35,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-## Phase 2: Flow Logic — Split Deposit into Two Phases
+## Phase 2: Flow Logic — Split Deposit into Two Phases **COMPLETE**
 
 Extract the existing `executeDepositFlow` (`flows/deposit.ts:303-676`) into two independent phase functions.
 
@@ -93,7 +93,7 @@ Create the non-blocking proof status checker that the UI will use to poll.
 cd frontend && npx tsc --noEmit --pretty 2>&1 | head -20
 ```
 
-### Step 4: Create `depositProofPoller.ts` service
+### Step 4: Create `depositProofPoller.ts` service **COMPLETE**
 
 #### Goal
 Create a single-shot async function `checkDepositProofStatus` that checks whether a pending deposit's L2 block has been proven on L1. Returns a status enum: `'waiting_for_proof'`, `'waiting_for_checkpoint'`, `'ready'`, or `'error'`. This is called by the UI hook on a 30-second interval.
