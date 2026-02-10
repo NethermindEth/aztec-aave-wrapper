@@ -64,7 +64,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-### Step 3: Create `depositPhase2.ts` flow
+### Step 3: Create `depositPhase2.ts` flow **COMPLETE**
 
 #### Goal
 Extract steps 3-6 from `executeDepositFlow` (lines 386-636) into a standalone Phase 2 function. Takes a `PendingDeposit` and executes: L2→L1 message hash computation, proof fetching, checkpoint proving, L1 `executeDeposit`, L1→L2 message wait, L2 `finalize_deposit`, and pending deposit cleanup.
