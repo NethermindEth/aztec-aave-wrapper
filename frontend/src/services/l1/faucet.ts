@@ -17,24 +17,24 @@ import { logInfo, logSuccess, logWarning } from "../../store/logger.js";
  * Includes only the functions needed for claiming tokens and checking status.
  */
 export const TOKEN_FAUCET_ABI = [
-  // Read-only configuration
+  // Read-only configuration (uppercase to match Solidity public immutable vars)
   {
     type: "function",
-    name: "token",
+    name: "TOKEN",
     inputs: [],
     outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
   },
   {
     type: "function",
-    name: "dripAmount",
+    name: "DRIP_AMOUNT",
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
   },
   {
     type: "function",
-    name: "cooldownPeriod",
+    name: "COOLDOWN_PERIOD",
     inputs: [],
     outputs: [{ name: "", type: "uint256" }],
     stateMutability: "view",
@@ -139,17 +139,17 @@ export async function getFaucetConfig(
     publicClient.readContract({
       address: faucetAddress,
       abi: TOKEN_FAUCET_ABI,
-      functionName: "token",
+      functionName: "TOKEN",
     }),
     publicClient.readContract({
       address: faucetAddress,
       abi: TOKEN_FAUCET_ABI,
-      functionName: "dripAmount",
+      functionName: "DRIP_AMOUNT",
     }),
     publicClient.readContract({
       address: faucetAddress,
       abi: TOKEN_FAUCET_ABI,
-      functionName: "cooldownPeriod",
+      functionName: "COOLDOWN_PERIOD",
     }),
   ]);
 
@@ -219,7 +219,7 @@ export async function getDripAmount(
   const amount = await publicClient.readContract({
     address: faucetAddress,
     abi: TOKEN_FAUCET_ABI,
-    functionName: "dripAmount",
+    functionName: "DRIP_AMOUNT",
   });
   return amount as bigint;
 }
@@ -238,7 +238,7 @@ export async function getCooldownPeriod(
   const period = await publicClient.readContract({
     address: faucetAddress,
     abi: TOKEN_FAUCET_ABI,
-    functionName: "cooldownPeriod",
+    functionName: "COOLDOWN_PERIOD",
   });
   return period as bigint;
 }

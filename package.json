@@ -14,10 +14,13 @@
     "typecheck": "bun run --filter '*' typecheck",
     "clean": "bun run --filter '*' clean",
     "format": "bun run --filter '*' format",
-    "check": "bun run --filter '*' check"
+    "check": "bun run --filter '*' check",
+    "deploy:local": "bun run scripts/deploy-local.ts",
+    "deploy:devnet": "bun run scripts/deploy-devnet.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
+    "dotenv": "17.2.3",
     "typescript": "^5.3.3"
   },
   "engines": {

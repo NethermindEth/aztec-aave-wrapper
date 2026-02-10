@@ -11,22 +11,36 @@ import path from 'path';
 // Use workspace root's node_modules (matches Aztec's official vite config approach)
 const nodeModulesPath = `${searchForWorkspaceRoot(process.cwd())}/node_modules`;
 
-// Serve .deployments.local.json from project root during development
+// Serve deployment files from project root during development
+// Supports both .deployments.local.json and .deployments.devnet.json
 // Also handle WASM MIME types
 const serveDeploymentsPlugin = (): Plugin => {
-  const deploymentsPath = path.resolve(__dirname, '../.deployments.local.json');
+  const localDeploymentsPath = path.resolve(__dirname, '../.deployments.local.json');
+  const devnetDeploymentsPath = path.resolve(__dirname, '../.deployments.devnet.json');
+
   return {
     name: 'serve-deployments-and-wasm',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        // Handle deployments file
+        // Handle local deployments file
         if (req.url === '/.deployments.local.json') {
-          if (fs.existsSync(deploymentsPath)) {
+          if (fs.existsSync(localDeploymentsPath)) {
             res.setHeader('Content-Type', 'application/json');
-            res.end(fs.readFileSync(deploymentsPath, 'utf-8'));
+            res.end(fs.readFileSync(localDeploymentsPath, 'utf-8'));
           } else {
             res.statusCode = 404;
-            res.end(JSON.stringify({ error: 'Deployments file not found. Run deploy script first.' }));
+            res.end(JSON.stringify({ error: 'Local deployments file not found. Run `make devnet-up` first.' }));
+          }
+          return;
+        }
+        // Handle devnet deployments file
+        if (req.url === '/.deployments.devnet.json') {
+          if (fs.existsSync(devnetDeploymentsPath)) {
+            res.setHeader('Content-Type', 'application/json');
+            res.end(fs.readFileSync(devnetDeploymentsPath, 'utf-8'));
+          } else {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: 'Devnet deployments file not found. Deploy to devnet first.' }));
           }
           return;
         }
@@ -126,9 +140,12 @@ export default defineConfig({
           src: '../eth/out/AztecAavePortalL1.sol/AztecAavePortalL1.json',
           dest: 'artifacts',
         },
-        // Only copy deployments file if it exists (created during deploy)
+        // Copy deployment files if they exist (created during deploy)
         ...(fs.existsSync(path.resolve(__dirname, '../.deployments.local.json'))
           ? [{ src: '../.deployments.local.json', dest: '.' }]
+          : []),
+        ...(fs.existsSync(path.resolve(__dirname, '../.deployments.devnet.json'))
+          ? [{ src: '../.deployments.devnet.json', dest: '.' }]
           : []),
         // Copy Aztec WASM files for browser execution
         {

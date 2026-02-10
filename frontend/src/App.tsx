@@ -8,7 +8,7 @@
  * lives in useAppController, making App purely a layout/wiring layer.
  */
 
-import { type Component, createEffect, createSignal, on } from "solid-js";
+import { type Component, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
 import type { Account, Chain, PublicClient, Transport, WalletClient } from "viem";
 import { useAppController } from "./app/controller/useAppController";
 import { ClaimPendingBridges } from "./components/ClaimPendingBridges";
@@ -24,7 +24,13 @@ import { TopBar } from "./components/TopBar";
 import { WalletBalances } from "./components/WalletBalances";
 import { createL1PublicClient } from "./services/l1/client";
 import { balanceOf } from "./services/l1/tokens";
-import { connectEthereumWallet, type EthereumWalletConnection } from "./services/wallet/ethereum";
+import {
+  connectEthereumWallet,
+  createConnectionForAddress,
+  type EthereumWalletConnection,
+  isCorrectChain,
+  watchAccountChanges,
+} from "./services/wallet/ethereum";
 import { useApp } from "./store/hooks";
 
 /**
@@ -58,6 +64,7 @@ const App: Component = () => {
   );
 
   // Connect wallet when L1 address is available (wallet connected in TopBar)
+  // Only set walletClient if on the correct chain to prevent transaction errors
   createEffect(
     on(
       () => state.wallet.l1Address,
@@ -66,7 +73,15 @@ const App: Component = () => {
           try {
             const connection = await connectEthereumWallet();
             setEthConnection(connection);
-            setWalletClient(connection.walletClient as WalletClient<Transport, Chain, Account>);
+            // Only enable write operations if on correct chain
+            if (isCorrectChain(connection.chainId)) {
+              setWalletClient(connection.walletClient as WalletClient<Transport, Chain, Account>);
+            } else {
+              console.warn(
+                `Wallet on wrong chain (${connection.chainId}). Switch to correct network to use faucet.`
+              );
+              setWalletClient(null);
+            }
           } catch (err) {
             console.warn("Failed to get wallet client for faucet:", err);
           }
@@ -77,6 +92,28 @@ const App: Component = () => {
       }
     )
   );
+
+  // Watch for chain changes and update walletClient accordingly
+  onMount(() => {
+    const cleanup = watchAccountChanges((account) => {
+      if (account.chainId !== undefined) {
+        const connection = ethConnection();
+        if (connection && account.address) {
+          if (isCorrectChain(account.chainId)) {
+            // Chain is now correct, create a new connection with updated chain
+            const newConnection = createConnectionForAddress(account.address);
+            setEthConnection(newConnection);
+            setWalletClient(newConnection.walletClient as WalletClient<Transport, Chain, Account>);
+          } else {
+            // Wrong chain, disable write operations
+            setWalletClient(null);
+          }
+        }
+      }
+    });
+
+    onCleanup(cleanup);
+  });
 
   /**
    * Refresh L1 USDC balance after faucet claim

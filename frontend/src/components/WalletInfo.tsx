@@ -8,6 +8,7 @@
 import { createEffect, createSignal, on, onCleanup, Show } from "solid-js";
 import { createL1PublicClient } from "../services/l1/client.js";
 import { balanceOf } from "../services/l1/tokens.js";
+import { getCurrentNetwork } from "../services/network.js";
 import {
   connectEthereumWallet,
   type EthereumWalletConnection,
@@ -17,7 +18,7 @@ import {
   isCorrectChain,
   onAccountsChanged,
   onChainChanged,
-  switchToAnvil,
+  switchToCorrectChain,
 } from "../services/wallet/ethereum.js";
 import {
   type AnyWalletConnection,
@@ -198,16 +199,24 @@ export function WalletInfo() {
   };
 
   /**
-   * Handle switch to Anvil chain
+   * Handle switch to the correct chain for current network
    */
   const handleSwitchChain = async () => {
     try {
-      await switchToAnvil();
+      await switchToCorrectChain();
       setWrongChain(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to switch network";
       setL1Error(message);
     }
+  };
+
+  /**
+   * Get expected chain info for display
+   */
+  const expectedChain = () => {
+    const network = getCurrentNetwork();
+    return { name: network.l1.chainName, id: network.l1.chainId };
   };
 
   /**
@@ -297,7 +306,9 @@ export function WalletInfo() {
 
             <Show when={wrongChain()}>
               <div class="space-y-2">
-                <p class="text-xs text-amber-600">Wrong network. Switch to Anvil (31337)</p>
+                <p class="text-xs text-amber-600">
+                  Wrong network. Switch to {expectedChain().name} ({expectedChain().id})
+                </p>
                 <Button size="sm" variant="outline" onClick={handleSwitchChain} class="w-full">
                   Switch Network
                 </Button>

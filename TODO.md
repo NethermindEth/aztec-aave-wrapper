@@ -1,2 +1,3 @@
 - disable finalize deposit auto detection, add separate finalize deposit button to account for devnet longer block times
 - update deploy script to handle eth/sepolia aztec/devnet deployments
+- deploy vercel using skill

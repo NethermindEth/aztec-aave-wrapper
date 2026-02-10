@@ -11,6 +11,7 @@
  */
 
 import type { AztecAddress as AztecAddressType } from "@aztec/aztec.js/addresses";
+import { getCurrentNetwork } from "../network.js";
 
 // =============================================================================
 // Types
@@ -126,7 +127,12 @@ async function checkDevnetReset(node: any): Promise<boolean> {
 // Connection
 // =============================================================================
 
-const PXE_URL = "http://localhost:8080";
+/**
+ * Get the PXE URL for the current network
+ */
+function getPxeUrl(): string {
+  return getCurrentNetwork().l2.pxeUrl;
+}
 
 /**
  * Connect to the dev wallet.
@@ -138,7 +144,8 @@ const PXE_URL = "http://localhost:8080";
  * @throws Error if PXE/Node is not available
  */
 export async function connectDevWallet(): Promise<DevWalletConnection> {
-  console.log("[DevWallet] Connecting to local node at", PXE_URL);
+  const pxeUrl = getPxeUrl();
+  console.log("[DevWallet] Connecting to node at", pxeUrl);
 
   // Dynamically import Aztec modules to avoid bundling issues
   const { createAztecNodeClient, waitForNode } = await import("@aztec/aztec.js/node");
@@ -147,14 +154,14 @@ export async function connectDevWallet(): Promise<DevWalletConnection> {
     await import("@aztec/accounts/testing");
 
   // Create node client
-  const node = createAztecNodeClient(PXE_URL);
+  const node = createAztecNodeClient(pxeUrl);
 
   // Wait for node to be ready
   try {
     await waitForNode(node);
   } catch (_error) {
     throw new Error(
-      `Failed to connect to Aztec node at ${PXE_URL}. Is the devnet running? (make devnet-up)`
+      `Failed to connect to Aztec node at ${pxeUrl}. Is the devnet running? (make devnet-up)`
     );
   }
 

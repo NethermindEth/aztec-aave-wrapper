@@ -11,6 +11,7 @@
  */
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
+import { getCurrentNetwork } from "../network.js";
 import type { AzguardWallet } from "../wallet/aztec.js";
 import type { DevWallet } from "../wallet/devWallet.js";
 import { getSponsoredFeePaymentMethod } from "./operations.js";
@@ -102,21 +103,33 @@ export async function loadBridgedTokenWithAzguard(
       "@generated/BridgedToken"
     );
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+    const { createAztecNodeClient } = await import("@aztec/aztec.js/node");
 
     const contractAddress = AztecAddress.fromString(contractAddressString);
-    logInfo("Registering BridgedToken contract artifact with wallet...");
+    logInfo("Checking if BridgedToken is registered with wallet...");
 
     const contractMetadata = await wallet.getContractMetadata(contractAddress);
+    let contractInstance = contractMetadata.contractInstance;
 
-    if (!contractMetadata.contractInstance) {
-      throw new Error(
-        `BridgedToken contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
-      );
+    // If not found in wallet's PXE, fetch from node directly
+    if (!contractInstance) {
+      logInfo("BridgedToken not in wallet PXE, fetching from node...");
+      const network = getCurrentNetwork();
+      const node = createAztecNodeClient(network.l2.pxeUrl);
+      const fetchedInstance = await node.getContract(contractAddress);
+
+      if (!fetchedInstance) {
+        throw new Error(
+          `BridgedToken contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
+        );
+      }
+      contractInstance = fetchedInstance;
     }
 
+    logInfo("Registering BridgedToken contract artifact with wallet...");
     try {
       const registerPromise = wallet.registerContract(
-        contractMetadata.contractInstance,
+        contractInstance,
         BridgedTokenContractArtifact as Parameters<typeof wallet.registerContract>[1]
       );
       const timeoutPromise = new Promise((_, reject) =>
@@ -177,7 +190,8 @@ export async function loadBridgedTokenWithDevWallet(
 
     if (!contractInstance) {
       logInfo("[DevWallet] BridgedToken not in PXE, fetching from node...");
-      const node = createAztecNodeClient("http://localhost:8080");
+      const network = getCurrentNetwork();
+      const node = createAztecNodeClient(network.l2.pxeUrl);
       const fetchedInstance = await node.getContract(contractAddress);
 
       if (!fetchedInstance) {

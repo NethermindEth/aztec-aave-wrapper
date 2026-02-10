@@ -5,7 +5,7 @@
  * Matches the pattern from e2e/scripts/full-flow.ts:399-409.
  */
 
-import { getDefaultL2Chain, isLocalDevelopment } from "../../config/chains.js";
+import { getDefaultL2Chain, isLocalNetwork } from "../../config/chains.js";
 import { type AztecModules, loadAztecModules } from "./modules.js";
 
 // =============================================================================
@@ -136,8 +136,8 @@ export async function waitForL2Node(node: AztecNodeClient): Promise<void> {
  * ```
  */
 export async function createDevnetL2NodeClient(): Promise<AztecNodeClient> {
-  if (!isLocalDevelopment()) {
-    console.warn("createDevnetL2NodeClient() called outside local development environment");
+  if (!isLocalNetwork()) {
+    console.warn("createDevnetL2NodeClient() called outside local network environment");
   }
 
   return createL2NodeClient();

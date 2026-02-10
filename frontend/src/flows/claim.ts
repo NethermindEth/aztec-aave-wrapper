@@ -644,10 +644,18 @@ export async function executeBridgeClaim(
     const secret = BigInt(pendingBridge.secret);
     const messageLeafIndex = pendingBridge.leafIndex;
 
+    // Debug: log raw values from pendingBridge
+    console.log("[executeBridgeClaim] Raw pendingBridge.amount:", pendingBridge.amount);
+    console.log("[executeBridgeClaim] Raw pendingBridge.secret:", pendingBridge.secret);
+    console.log("[executeBridgeClaim] Raw pendingBridge.leafIndex:", pendingBridge.leafIndex);
+    console.log("[executeBridgeClaim] Raw pendingBridge.messageKey:", pendingBridge.messageKey);
+    console.log("[executeBridgeClaim] Raw pendingBridge.secretHash:", pendingBridge.secretHash);
+
     logInfo("Calling claim_private on BridgedToken...");
     logInfo(`  amount: ${amount}`);
-    logInfo(`  secret: ${secret.toString(16).slice(0, 16)}...`);
+    logInfo(`  secret (hex): 0x${secret.toString(16)}`);
     logInfo(`  messageLeafIndex: ${messageLeafIndex}`);
+    logInfo(`  messageKey: ${pendingBridge.messageKey}`);
 
     const claimResult = await claimPrivate(
       bridgedTokenContract,

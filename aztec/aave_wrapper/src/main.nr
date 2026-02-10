@@ -326,7 +326,7 @@ pub(crate) contract AaveWrapper {
 
     use crate::{
         compute_deposit_confirmation_content, compute_deposit_message_content, compute_intent_id,
-        compute_owner_hash, compute_withdraw_confirmation_content, compute_withdraw_message_content,
+        compute_owner_hash, compute_withdraw_message_content,
     };
     use crate::types::{DepositIntent, PositionReceiptNote, PositionStatus, WithdrawIntent};
     use bridged_token::BridgedToken;
@@ -891,10 +891,7 @@ pub(crate) contract AaveWrapper {
         // Only allow internal enqueued calls from this contract
         let caller = self.msg_sender().unwrap();
         let contract_address = self.context.this_address();
-        assert(
-            caller.to_field() == contract_address.to_field(),
-            "Unauthorized public entrypoint",
-        );
+        assert(caller.to_field() == contract_address.to_field(), "Unauthorized public entrypoint");
 
         // Validate deadline is non-zero (detailed bounds enforced on L1)
         assert(deadline > 0, "Deadline must be greater than zero");

@@ -14,6 +14,7 @@ import {
   createL2NodeClient,
   verifyL2Connection,
 } from "../services/l2/client.js";
+import { getCurrentNetwork } from "../services/network.js";
 import {
   connectEthereumWallet,
   createConnectionForAddress,
@@ -22,7 +23,7 @@ import {
   formatEthBalance,
   getEthBalance,
   isCorrectChain,
-  switchToAnvil,
+  switchToCorrectChain,
   watchAccountChanges,
 } from "../services/wallet/ethereum.js";
 import {
@@ -33,6 +34,7 @@ import {
 } from "../services/wallet/index.js";
 import { useApp } from "../store/hooks.js";
 import { formatUSDCFromString } from "../types/state.js";
+import { NetworkSelector } from "./NetworkSelector.js";
 
 /**
  * Polling interval for block number updates (ms)
@@ -290,8 +292,11 @@ export function TopBar() {
   const connectL2 = async () => {
     setL2Status("connecting");
     try {
+      console.log("[L2] Connecting to Aztec node...");
       nodeClient = await createL2NodeClient();
+      console.log("[L2] Node client created, verifying connection...");
       const nodeInfo = await verifyL2Connection(nodeClient);
+      console.log("[L2] Connected to Aztec:", nodeInfo.nodeVersion);
       const blockNumber = await nodeClient.getBlockNumber();
 
       actions.setL2Connection({
@@ -312,7 +317,8 @@ export function TopBar() {
           /* silent */
         }
       }, BLOCK_POLL_INTERVAL);
-    } catch {
+    } catch (err) {
+      console.error("[L2] Failed to connect to Aztec:", err);
       setL2Status("error");
       actions.setL2Connection({ connected: false });
     }
@@ -482,16 +488,21 @@ export function TopBar() {
   };
 
   /**
-   * Handle chain switch
+   * Handle chain switch to the correct network
    */
   const handleSwitchChain = async () => {
     try {
-      await switchToAnvil();
+      await switchToCorrectChain();
       setWrongChain(false);
     } catch {
       /* silent */
     }
   };
+
+  /**
+   * Get the current network's chain name for display
+   */
+  const expectedChainName = () => getCurrentNetwork().l1.chainName;
 
   // Refresh balances when contracts or wallet change
   createEffect(
@@ -579,9 +590,17 @@ export function TopBar() {
 
         {/* Status indicators */}
         <div class="header-right">
+          {/* Network selector */}
+          <NetworkSelector />
+
+          <div class="w-px h-4 bg-zinc-700" />
+
           {/* Network status */}
           <div class="flex items-center gap-3">
-            <div class="flex items-center gap-1.5" title={`L1 Anvil - Chain ${state.l1.chainId}`}>
+            <div
+              class="flex items-center gap-1.5"
+              title={`L1 ${expectedChainName()} - Chain ${state.l1.chainId}`}
+            >
               <StatusIndicator status={l1Status()} />
               <span class="text-[10px] text-zinc-500 uppercase tracking-wider">L1</span>
               <Show when={state.l1.connected}>
@@ -739,7 +758,7 @@ export function TopBar() {
                   onClick={handleSwitchChain}
                   class="text-amber-500 hover:text-amber-400 text-[10px] underline underline-offset-2"
                 >
-                  Switch to Anvil
+                  Switch to {expectedChainName()}
                 </button>
               </Show>
             </div>

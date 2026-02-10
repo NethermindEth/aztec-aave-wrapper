@@ -7,6 +7,7 @@
  */
 
 import { logError, logInfo, logSuccess } from "../../store/logger.js";
+import { getCurrentNetwork } from "../network.js";
 import type { AzguardWallet } from "../wallet/aztec.js";
 import type { DevWallet } from "../wallet/devWallet.js";
 import type { AaveWrapperContract } from "./deploy.js";
@@ -65,26 +66,35 @@ export async function loadContractWithAzguard(
       "@generated/AaveWrapper"
     );
     const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+    const { createAztecNodeClient } = await import("@aztec/aztec.js/node");
 
     // Parse the contract address string
     const contractAddress = AztecAddress.fromString(contractAddressString);
 
-    // Register the contract artifact with the wallet so it knows how to interact with it
-    // This is required for the wallet to simulate and execute transactions
-    logInfo("Registering contract artifact with wallet...");
-
-    // Fetch the actual contract instance from the network via the wallet
+    // Check if contract is registered with wallet's PXE
+    logInfo("Checking if AaveWrapper is registered with wallet...");
     const contractMetadata = await wallet.getContractMetadata(contractAddress);
+    let contractInstance = contractMetadata.contractInstance;
 
-    if (!contractMetadata.contractInstance) {
-      throw new Error(
-        `Contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
-      );
+    // If not found in wallet's PXE, fetch from node directly
+    if (!contractInstance) {
+      logInfo("AaveWrapper not in wallet PXE, fetching from node...");
+      const network = getCurrentNetwork();
+      const node = createAztecNodeClient(network.l2.pxeUrl);
+      const fetchedInstance = await node.getContract(contractAddress);
+
+      if (!fetchedInstance) {
+        throw new Error(
+          `Contract not found at address ${contractAddressString}. Make sure contracts are deployed.`
+        );
+      }
+      contractInstance = fetchedInstance;
     }
 
     // Register with wallet: instance first, then artifact
+    logInfo("Registering contract artifact with wallet...");
     await wallet.registerContract(
-      contractMetadata.contractInstance,
+      contractInstance,
       AaveWrapperContractArtifact as Parameters<typeof wallet.registerContract>[1]
     );
 
@@ -165,7 +175,8 @@ export async function loadContractWithDevWallet(
     // If not found in PXE, fetch from node directly
     if (!contractInstance) {
       logInfo("[DevWallet] Contract not in PXE, fetching from node...");
-      const node = createAztecNodeClient("http://localhost:8080");
+      const network = getCurrentNetwork();
+      const node = createAztecNodeClient(network.l2.pxeUrl);
       contractInstance = await node.getContract(contractAddress);
 
       if (!contractInstance) {

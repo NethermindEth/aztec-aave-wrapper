@@ -18,8 +18,8 @@ import {
   type WalletClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { foundry } from "viem/chains";
-import { getDefaultL1Chain, isLocalDevelopment } from "../../config/chains.js";
+import { foundry, sepolia } from "viem/chains";
+import { getDefaultL1Chain, isLocalNetwork } from "../../config/chains.js";
 
 // =============================================================================
 // Custom Chain Definitions
@@ -53,7 +53,8 @@ export const anvilL1Chain: Chain = defineChain({
  * Map chain IDs to viem Chain objects
  */
 const chainMap: Record<number, Chain> = {
-  [CHAIN_IDS.ANVIL_L1]: foundry, // Use foundry for better devnet compatibility
+  [CHAIN_IDS.ANVIL_L1]: foundry, // Use foundry for local devnet compatibility
+  [CHAIN_IDS.ETHEREUM_SEPOLIA]: sepolia, // Sepolia testnet for Aztec devnet
 };
 
 /**
@@ -176,8 +177,8 @@ export interface L1Clients {
 export function createDevnetL1Clients(
   userPrivateKey: `0x${string}` = DevnetAccounts.user1
 ): L1Clients {
-  if (!isLocalDevelopment()) {
-    console.warn("createDevnetL1Clients() called outside local development environment");
+  if (!isLocalNetwork()) {
+    console.warn("createDevnetL1Clients() called outside local network environment");
   }
 
   const publicClient = createL1PublicClient();

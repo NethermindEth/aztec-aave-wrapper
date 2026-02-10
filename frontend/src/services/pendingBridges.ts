@@ -218,18 +218,46 @@ async function checkMessageReadiness(
           currentBlock,
           messageLeafFr
         );
+
+        // Debug logging to understand witness format
+        console.log("[checkMessageReadiness] witness type:", typeof witness);
+        console.log("[checkMessageReadiness] witness:", JSON.stringify(witness, (_, v) =>
+          typeof v === "bigint" ? v.toString() : v
+        ));
+        if (witness) {
+          console.log("[checkMessageReadiness] witness[0] type:", typeof witness[0]);
+          console.log("[checkMessageReadiness] witness[0]:", witness[0]);
+          if (witness[0] && typeof witness[0] === "object") {
+            console.log("[checkMessageReadiness] witness[0] keys:", Object.keys(witness[0]));
+          }
+        }
+
         if (witness && witness.length >= 2) {
-          const leafIndex = witness[0];
+          const leafIndexRaw = witness[0];
+          // Handle case where leafIndex might be an object with a value property
+          let leafIndex: bigint;
+          if (typeof leafIndexRaw === "bigint") {
+            leafIndex = leafIndexRaw;
+          } else if (typeof leafIndexRaw === "object" && leafIndexRaw !== null) {
+            // Try to extract value from object (e.g., Fr type)
+            const val = (leafIndexRaw as Record<string, unknown>).value ??
+                       (leafIndexRaw as Record<string, unknown>).inner ??
+                       leafIndexRaw;
+            leafIndex = BigInt(String(val));
+          } else {
+            leafIndex = BigInt(leafIndexRaw?.toString?.() ?? leafIndexRaw);
+          }
+
+          console.log("[checkMessageReadiness] Extracted leafIndex:", leafIndex.toString());
+
           return {
             ...baseResult,
             ready: true,
-            leafIndex:
-              typeof leafIndex === "bigint"
-                ? leafIndex
-                : BigInt(leafIndex?.toString?.() ?? leafIndex),
+            leafIndex,
           };
         }
-      } catch {
+      } catch (err) {
+        console.error("[checkMessageReadiness] Error getting witness:", err);
         return baseResult;
       }
     }

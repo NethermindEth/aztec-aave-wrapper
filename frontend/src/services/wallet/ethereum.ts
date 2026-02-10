@@ -2,10 +2,10 @@
  * Ethereum Wallet Connection Service
  *
  * Connects to browser extension wallets (MetaMask, etc.) using direct provider access.
- * Targets local Anvil devnet (chainId: 31337).
+ * Supports both local Anvil (chainId: 31337) and Sepolia testnet (chainId: 11155111).
  */
 
-import { CHAIN_IDS, LOCAL_RPC_URLS } from "@aztec-aave-wrapper/shared";
+import { CHAIN_IDS } from "@aztec-aave-wrapper/shared";
 import {
   type Account,
   type Address,
@@ -19,7 +19,8 @@ import {
   type Transport,
   type WalletClient,
 } from "viem";
-import { foundry } from "viem/chains";
+import { foundry, sepolia } from "viem/chains";
+import { getCurrentNetwork } from "../network.js";
 
 // Track if a connection attempt is in progress to prevent duplicate requests
 let connectionInProgress = false;
@@ -72,6 +73,21 @@ function getProvider(): EthereumProvider {
 }
 
 /**
+ * Get the viem Chain object for the current network
+ */
+function getViemChainForNetwork(): Chain {
+  const network = getCurrentNetwork();
+  if (network.l1.chainId === CHAIN_IDS.ANVIL_L1) {
+    return foundry;
+  }
+  if (network.l1.chainId === CHAIN_IDS.ETHEREUM_SEPOLIA) {
+    return sepolia;
+  }
+  // Fallback to foundry for unknown chains
+  return foundry;
+}
+
+/**
  * Connect to Ethereum wallet using direct injected provider (MetaMask)
  *
  * @returns Wallet connection with address, clients, and chain info
@@ -93,6 +109,8 @@ export async function connectEthereumWallet(): Promise<EthereumWalletConnection>
 
   try {
     const provider = getProvider();
+    const network = getCurrentNetwork();
+    const viemChain = getViemChainForNetwork();
 
     // Request account access - this triggers the MetaMask popup
     const accounts = (await provider.request({
@@ -111,16 +129,16 @@ export async function connectEthereumWallet(): Promise<EthereumWalletConnection>
     })) as string;
     const chainId = parseInt(chainIdHex, 16);
 
-    // Create viem clients
+    // Create viem clients using current network configuration
     const walletClient = createWalletClient({
       account: address,
-      chain: foundry,
+      chain: viemChain,
       transport: custom(provider),
     });
 
     const publicClient = createPublicClient({
-      chain: foundry,
-      transport: http(LOCAL_RPC_URLS.L1),
+      chain: viemChain,
+      transport: http(network.l1.rpcUrl),
     });
 
     connectionInProgress = false;
@@ -161,22 +179,24 @@ export function createConnectionForAddress(address: Address): EthereumWalletConn
   }
 
   const provider = getProvider();
+  const network = getCurrentNetwork();
+  const viemChain = getViemChainForNetwork();
 
-  // Create viem clients with the new address
+  // Create viem clients with the new address using current network configuration
   const walletClient = createWalletClient({
     account: address,
-    chain: foundry,
+    chain: viemChain,
     transport: custom(provider),
   });
 
   const publicClient = createPublicClient({
-    chain: foundry,
-    transport: http(LOCAL_RPC_URLS.L1),
+    chain: viemChain,
+    transport: http(network.l1.rpcUrl),
   });
 
   return {
     address,
-    chainId: CHAIN_IDS.ANVIL_L1,
+    chainId: network.l1.chainId,
     walletClient,
     publicClient,
   };
@@ -203,22 +223,33 @@ export function formatEthBalance(balance: bigint): string {
 }
 
 /**
- * Check if connected to the expected chain (Anvil devnet)
+ * Check if connected to the expected chain for the current network
  */
 export function isCorrectChain(chainId: number): boolean {
-  return chainId === CHAIN_IDS.ANVIL_L1;
+  const network = getCurrentNetwork();
+  return chainId === network.l1.chainId;
 }
 
 /**
- * Request chain switch to Anvil
+ * Get the expected chain ID for the current network
  */
-export async function switchToAnvil(): Promise<void> {
+export function getExpectedChainId(): number {
+  return getCurrentNetwork().l1.chainId;
+}
+
+/**
+ * Request chain switch to the current network's chain
+ */
+export async function switchToCorrectChain(): Promise<void> {
   const provider = getProvider();
+  const network = getCurrentNetwork();
+  const chainId = network.l1.chainId;
+  const chainIdHex = `0x${chainId.toString(16)}`;
 
   try {
     await provider.request({
       method: "wallet_switchEthereumChain",
-      params: [{ chainId: `0x${CHAIN_IDS.ANVIL_L1.toString(16)}` }],
+      params: [{ chainId: chainIdHex }],
     });
   } catch (error: unknown) {
     // Chain not added, try to add it
@@ -227,14 +258,15 @@ export async function switchToAnvil(): Promise<void> {
         method: "wallet_addEthereumChain",
         params: [
           {
-            chainId: `0x${CHAIN_IDS.ANVIL_L1.toString(16)}`,
-            chainName: "Anvil Local",
+            chainId: chainIdHex,
+            chainName: network.l1.chainName,
             nativeCurrency: {
               name: "Ether",
               symbol: "ETH",
               decimals: 18,
             },
-            rpcUrls: [LOCAL_RPC_URLS.L1],
+            rpcUrls: [network.l1.rpcUrl],
+            blockExplorerUrls: network.l1.blockExplorer ? [network.l1.blockExplorer] : undefined,
           },
         ],
       });
@@ -243,6 +275,11 @@ export async function switchToAnvil(): Promise<void> {
     }
   }
 }
+
+/**
+ * @deprecated Use switchToCorrectChain instead
+ */
+export const switchToAnvil = switchToCorrectChain;
 
 /**
  * Event handler types for wallet events
