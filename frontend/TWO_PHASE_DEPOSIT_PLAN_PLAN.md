@@ -7,7 +7,7 @@ Let me also check the app layout and BusyState to understand where components ar
 Now let me read the types/state.ts to understand the state shape and IntentStatus.
 Now I have a thorough understanding of the codebase. Let me produce the structured implementation plan.
 
-## Phase 1: Data Layer — Pending Deposit Persistence
+## Phase 1: Data Layer — Pending Deposit Persistence **COMPLETE**
 
 Create the localStorage-based persistence service for pending deposits, following the `secrets.ts` pattern.
 
@@ -44,7 +44,7 @@ Extract the existing `executeDepositFlow` (`flows/deposit.ts:303-676`) into two 
 cd frontend && npx tsc --noEmit --pretty 2>&1 | head -20
 ```
 
-### Step 2: Create `depositPhase1.ts` flow
+### Step 2: Create `depositPhase1.ts` flow **COMPLETE**
 
 #### Goal
 Extract steps 1-2 from `executeDepositFlow` (lines 324-382) into a standalone Phase 1 function. This covers: secret generation, L1 timestamp fetch, `executeRequestDeposit` call, owner hash computation, secret storage, and pending deposit persistence. Returns a `DepositPhase1Result` with the `PendingDeposit` to persist.
