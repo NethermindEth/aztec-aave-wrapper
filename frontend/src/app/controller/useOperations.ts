@@ -21,6 +21,12 @@ import {
   type DepositL2Context,
   executeDepositFlow,
 } from "../../flows/deposit";
+import { executeDepositPhase1 } from "../../flows/depositPhase1";
+import {
+  executeDepositPhase2,
+  type Phase2L1Addresses,
+  type Phase2L2Context,
+} from "../../flows/depositPhase2";
 import { executeFinalizeDepositFlow, type FinalizeL2Context } from "../../flows/finalize";
 import { executeClaimRefundFlow, type RefundL2Context } from "../../flows/refund";
 import {
@@ -29,6 +35,7 @@ import {
   type WithdrawL2Context,
 } from "../../flows/withdraw";
 import { getPositionStatusLabel, type UsePositionsResult } from "../../hooks/usePositions.js";
+import { getPendingDeposits } from "../../services/pendingDeposits";
 import { createL1PublicClient } from "../../services/l1/client";
 import { getAztecOutbox } from "../../services/l1/portal";
 import { createL2NodeClient } from "../../services/l2/client";
@@ -55,6 +62,10 @@ export interface UseOperationsResult {
   handleBridge: (amount: bigint) => Promise<void>;
   /** Deposit from L2 to L1 Aave */
   handleDeposit: (amount: bigint, deadline: number) => Promise<void>;
+  /** Deposit Phase 1: L2 request_deposit (burns tokens, persists pending deposit) */
+  handleDepositPhase1: (amount: bigint, deadline: number) => Promise<void>;
+  /** Deposit Phase 2: L1 execution + L2 finalization (from pending deposit) */
+  handleDepositPhase2: (intentId: string) => Promise<void>;
   /** Withdraw from L1 Aave to L2 */
   handleWithdraw: (intentId: string) => Promise<void>;
   /** Cancel a pending deposit */
@@ -231,6 +242,163 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
 
       await refreshBalances(l1Clients.publicClient, l1Clients.walletClient.account.address, mockUsdc);
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Deposit Phase 1 Handler (L2 request_deposit)
+  // ---------------------------------------------------------------------------
+  const handleDepositPhase1 = async (amount: bigint, deadline: number) => {
+    await withBusy("depositing", async () => {
+      if (
+        !state.contracts.portal ||
+        !state.contracts.mockUsdc ||
+        !state.contracts.mockLendingPool ||
+        !state.contracts.l2Wrapper
+      ) {
+        addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+        return;
+      }
+
+      const portal = state.contracts.portal;
+      const mockUsdc = state.contracts.mockUsdc;
+      const mockLendingPool = state.contracts.mockLendingPool;
+      const l2WrapperAddress = state.contracts.l2Wrapper;
+
+      const amountFormatted = formatAmount(amount);
+      addLog(`Initiating deposit Phase 1 of ${amountFormatted} USDC with ${deadline}s deadline`);
+
+      const publicClient = createL1PublicClient();
+
+      const l1Addresses: DepositL1Addresses = {
+        portal,
+        mockUsdc,
+        mockAToken: mockUsdc,
+        mockLendingPool,
+        aztecOutbox: portal, // Not used in Phase 1, placeholder
+      };
+
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectWallet();
+
+      addLog("Loading AaveWrapper contract...");
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const l2Context: DepositL2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        contract,
+      };
+
+      addLog("Executing deposit Phase 1 (L2 request_deposit)...");
+      const result = await executeDepositPhase1(publicClient, l1Addresses, l2Context, {
+        amount,
+        originalDecimals: 6,
+        deadlineOffset: deadline,
+      });
+
+      addNewPosition({
+        intentId: result.pendingDeposit.intentId,
+        assetId: "0x01",
+        shares: toBigIntString(0n),
+        sharesFormatted: formatUSDC(0n),
+        status: IntentStatus.PendingDeposit,
+      });
+
+      addLog(
+        `Phase 1 complete! Intent: ${result.pendingDeposit.intentId.slice(0, 16)}...`,
+        LogLevel.SUCCESS
+      );
+      addLog("Pending deposit saved. Phase 2 can be executed now or later.", LogLevel.SUCCESS);
+    });
+  };
+
+  // ---------------------------------------------------------------------------
+  // Deposit Phase 2 Handler (L1 execution + L2 finalization)
+  // ---------------------------------------------------------------------------
+  const handleDepositPhase2 = async (intentId: string) => {
+    await withBusy("executingDeposit", async () => {
+      if (
+        !state.contracts.portal ||
+        !state.contracts.mockUsdc ||
+        !state.contracts.l2Wrapper
+      ) {
+        addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+        return;
+      }
+
+      const portal = state.contracts.portal;
+      const mockUsdc = state.contracts.mockUsdc;
+      const l2WrapperAddress = state.contracts.l2Wrapper;
+
+      // Find pending deposit from localStorage
+      const pendingDeposits = getPendingDeposits();
+      const pending = pendingDeposits.find(
+        (d) => d.intentId.toLowerCase() === intentId.toLowerCase()
+      );
+
+      if (!pending) {
+        addLog(`No pending deposit found for intent: ${intentId.slice(0, 16)}...`, LogLevel.ERROR);
+        return;
+      }
+
+      addLog(`Initiating deposit Phase 2 for intent: ${intentId.slice(0, 16)}...`);
+
+      addLog("Connecting to L1 (MetaMask)...");
+      const ethereumConnection = await connectEthereumWallet();
+      addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
+
+      const publicClient = createL1PublicClient();
+      const l1Clients = {
+        publicClient,
+        walletClient: ethereumConnection.walletClient,
+      };
+
+      addLog("Fetching portal configuration...");
+      const aztecOutbox = await getAztecOutbox(publicClient, portal);
+
+      const l1Addresses: Phase2L1Addresses = {
+        portal: portal as `0x${string}`,
+        mockUsdc: mockUsdc as `0x${string}`,
+        aztecOutbox: aztecOutbox as `0x${string}`,
+      };
+
+      addLog("Connecting to Aztec L2...");
+      const node = await createL2NodeClient();
+
+      addLog("Connecting to Aztec wallet...");
+      const { wallet, address: walletAddress } = await connectWallet();
+
+      addLog("Loading AaveWrapper contract...");
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, l2WrapperAddress)
+        : await loadContractWithAzguard(wallet, l2WrapperAddress);
+
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const l2Context: Phase2L2Context = {
+        node,
+        wallet: { address: AztecAddress.fromString(walletAddress) },
+        contract,
+      };
+
+      addLog("Executing deposit Phase 2 (L1 execute + L2 finalize)...");
+      const result = await executeDepositPhase2(l1Clients, l1Addresses, l2Context, pending);
+
+      updatePositionStatus(intentId, IntentStatus.Confirmed);
+      addLog(`Phase 2 complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
+      addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
+
+      await refreshBalances(
+        l1Clients.publicClient,
+        l1Clients.walletClient.account.address,
+        mockUsdc
+      );
     });
   };
 
@@ -512,6 +680,8 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
   return {
     handleBridge,
     handleDeposit,
+    handleDepositPhase1,
+    handleDepositPhase2,
     handleWithdraw,
     handleCancelDeposit,
     handleFinalizeDeposit,

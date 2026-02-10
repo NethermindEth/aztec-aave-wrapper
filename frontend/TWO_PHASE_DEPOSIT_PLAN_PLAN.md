@@ -142,7 +142,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-### Step 6: Add Phase 1 and Phase 2 handlers to `useOperations.ts`
+### Step 6: Add Phase 1 and Phase 2 handlers to `useOperations.ts` **COMPLETE**
 
 #### Goal
 Add `handleDepositPhase1` and `handleDepositPhase2` operation handlers to `useOperations`, following the same pattern as existing `handleDeposit` (lines 157-235). Keep existing `handleDeposit` for backward compatibility.

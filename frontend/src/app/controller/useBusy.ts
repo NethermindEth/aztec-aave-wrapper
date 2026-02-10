@@ -12,6 +12,7 @@ import { createStore } from "solid-js/store";
 export interface BusyState {
   bridging: boolean;
   depositing: boolean;
+  executingDeposit: boolean;
   withdrawing: boolean;
   cancelling: boolean;
   finalizing: boolean;
@@ -56,6 +57,7 @@ export function useBusy(): UseBusyResult {
   const [busy, setBusyStore] = createStore<BusyState>({
     bridging: false,
     depositing: false,
+    executingDeposit: false,
     withdrawing: false,
     cancelling: false,
     finalizing: false,
