@@ -84,7 +84,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-## Phase 3: Proof Polling Service
+## Phase 3: Proof Polling Service **COMPLETE**
 
 Create the non-blocking proof status checker that the UI will use to poll.
 
@@ -122,7 +122,7 @@ Wire the new flows and poller into the SolidJS controller layer.
 cd frontend && npx tsc --noEmit --pretty 2>&1 | head -20
 ```
 
-### Step 5: Create `usePendingDeposits.ts` hook
+### Step 5: Create `usePendingDeposits.ts` hook **COMPLETE**
 
 #### Goal
 Create a SolidJS hook following the `useBridge.ts` pattern (lines 68-259). Manages pending deposit state with auto-polling for proof readiness. Provides `handleExecuteDeposit(intentId)` that calls `executeDepositPhase2`.
