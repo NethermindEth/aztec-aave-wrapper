@@ -359,3 +359,59 @@ export async function hasMessageBeenConsumed(
 export function computeLeafId(leafIndex: bigint, pathSize: number): bigint {
   return 2n ** BigInt(pathSize) + leafIndex;
 }
+
+/**
+ * Wait for an L2 block checkpoint to be proven on the L1 Outbox.
+ *
+ * Polls `getRootData(l2BlockNumber)` on the Outbox contract. This call reverts
+ * with `Outbox__CheckpointNotProven` until the sequencer submits the block proof.
+ *
+ * @param publicClient - Viem public client (L1)
+ * @param outboxAddress - Aztec outbox address on L1
+ * @param l2BlockNumber - The L2 block number to wait for
+ * @param maxWaitMs - Maximum wait time (default 5 minutes)
+ * @param pollIntervalMs - Polling interval (default 10 seconds)
+ * @returns True if proven, false if timed out
+ */
+export async function waitForCheckpointProven(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  publicClient: any,
+  outboxAddress: string,
+  l2BlockNumber: bigint,
+  maxWaitMs = 300_000,
+  pollIntervalMs = 10_000
+): Promise<boolean> {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      await publicClient.readContract({
+        address: outboxAddress,
+        abi: [
+          {
+            name: "getRootData",
+            type: "function",
+            stateMutability: "view",
+            inputs: [{ name: "_l2BlockNumber", type: "uint256" }],
+            outputs: [
+              { name: "", type: "bytes32" },
+              { name: "", type: "uint256" },
+            ],
+          },
+        ] as const,
+        functionName: "getRootData",
+        args: [l2BlockNumber],
+      });
+      return true;
+    } catch {
+      // getRootData reverts with CheckpointNotProven when not yet proven
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      console.log(
+        `[messageProof] Checkpoint for block ${l2BlockNumber} not yet proven on L1 (${elapsed}s elapsed)`
+      );
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+  }
+
+  return false;
+}

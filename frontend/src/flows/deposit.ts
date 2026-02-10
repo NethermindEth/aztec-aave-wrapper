@@ -46,6 +46,7 @@ import {
   getOutboxVersion,
   hasMessageBeenConsumed,
   type L2ToL1MessageProofResult,
+  waitForCheckpointProven,
   waitForL2ToL1MessageProof,
 } from "../services/l2/messageProof.js";
 import {
@@ -305,7 +306,7 @@ export async function executeDepositFlow(
   l2Context: DepositL2Context,
   config: DepositConfig
 ): Promise<DepositResult> {
-  const { publicClient, userWallet, relayerWallet } = l1Clients;
+  const { publicClient, walletClient } = l1Clients;
   const { node, wallet, contract } = l2Context;
   const totalSteps = getDepositStepCount();
   const txHashes: DepositResult["txHashes"] = {};
@@ -396,7 +397,7 @@ export async function executeDepositFlow(
     logStep(4, totalSteps, "Execute deposit on L1");
     setOperationStep(4);
 
-    const userL1Address = userWallet.account.address;
+    const userL1Address = walletClient.account.address;
 
     // Check user's USDC balance
     const userBalance = await balanceOf(publicClient, l1Addresses.mockUsdc, userL1Address);
@@ -520,6 +521,20 @@ export async function executeDepositFlow(
       logInfo("Message already consumed in outbox, skipping L1 execution");
     }
 
+    // Wait for L2 block checkpoint to be proven on L1 Outbox
+    logSection("L2→L1", "Waiting for L2 block proof on L1 Outbox...");
+    const checkpointProven = await waitForCheckpointProven(
+      publicClient,
+      l1Addresses.aztecOutbox,
+      proofResult.l2BlockNumber!
+    );
+    if (!checkpointProven) {
+      throw new Error(
+        `Timed out waiting for L2 block ${proofResult.l2BlockNumber} checkpoint to be proven on L1`
+      );
+    }
+    logSuccess("Checkpoint proven on L1");
+
     // Execute deposit via relayer
     logSection("Privacy", "Relayer executing L1 deposit (not user)");
 
@@ -547,7 +562,7 @@ export async function executeDepositFlow(
 
     const executeResult = await executeDeposit(
       publicClient,
-      relayerWallet,
+      walletClient,
       l1Addresses.portal,
       depositIntent,
       proof

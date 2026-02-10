@@ -6,6 +6,7 @@
  */
 
 import { AztecWallet } from "@azguardwallet/aztec-wallet";
+import { getCurrentNetworkId } from "../network.js";
 
 /**
  * Azguard wallet instance type
@@ -37,8 +38,8 @@ const APP_METADATA = {
  * @throws Error if Azguard is not installed or user rejects connection
  */
 export async function connectAztecWallet(): Promise<AztecWalletConnection> {
-  // Connect to Azguard wallet for sandbox/local development
-  const wallet = await AztecWallet.connect(APP_METADATA, "sandbox");
+  const chain = getCurrentNetworkId() === "local" ? "sandbox" : "devnet";
+  const wallet = await AztecWallet.connect(APP_METADATA, chain);
 
   // Get the connected accounts
   // Returns array of { alias: string, item: AztecAddress }

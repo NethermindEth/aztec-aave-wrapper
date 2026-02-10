@@ -292,11 +292,8 @@ export function TopBar() {
   const connectL2 = async () => {
     setL2Status("connecting");
     try {
-      console.log("[L2] Connecting to Aztec node...");
       nodeClient = await createL2NodeClient();
-      console.log("[L2] Node client created, verifying connection...");
       const nodeInfo = await verifyL2Connection(nodeClient);
-      console.log("[L2] Connected to Aztec:", nodeInfo.nodeVersion);
       const blockNumber = await nodeClient.getBlockNumber();
 
       actions.setL2Connection({
@@ -357,7 +354,6 @@ export function TopBar() {
   const connectEthWallet = async () => {
     // Don't start a new connection if already connecting
     if (ethWalletStatus() === "connecting") {
-      console.log("Connection already in progress");
       return;
     }
 
@@ -393,7 +389,6 @@ export function TopBar() {
           disconnectEthWallet();
         } else if (account.address !== state.wallet.l1Address) {
           // Account changed - recreate the connection with new account (no MetaMask prompt)
-          console.log("Account changed to:", account.address);
           try {
             const newConnection = createConnectionForAddress(account.address);
             ethConnection = newConnection;

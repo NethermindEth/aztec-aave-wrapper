@@ -161,7 +161,7 @@ export async function executeBridgeFlow(
   l2WalletAddress: AztecAddress,
   config: BridgeConfig
 ): Promise<BridgeResult> {
-  const { publicClient, userWallet } = l1Clients;
+  const { publicClient, walletClient } = l1Clients;
   const { amount } = config;
   const txHashes: BridgeResult["txHashes"] = {};
 
@@ -186,7 +186,7 @@ export async function executeBridgeFlow(
     logInfo(`Amount to bridge: ${formatUSDC(amount)} USDC`);
     logInfo(`Secret hash: ${secretHashHex.slice(0, 18)}...`);
 
-    const userAddress = userWallet.account.address;
+    const userAddress = walletClient.account.address;
 
     // Check user's USDC balance
     const userBalance = await balanceOf(publicClient, l1Addresses.mockUsdc, userAddress);
@@ -210,7 +210,7 @@ export async function executeBridgeFlow(
       logInfo("Approving TokenPortal to spend USDC...");
       const approveResult = await approve(
         publicClient,
-        userWallet,
+        walletClient,
         l1Addresses.mockUsdc,
         l1Addresses.tokenPortal,
         amount
@@ -232,7 +232,7 @@ export async function executeBridgeFlow(
 
     const depositResult: DepositToAztecPrivateResult = await depositToAztecPrivate(
       publicClient,
-      userWallet,
+      walletClient,
       l1Addresses.tokenPortal,
       amount,
       secretHashHex

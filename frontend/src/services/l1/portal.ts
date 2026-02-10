@@ -32,7 +32,7 @@ export const PORTAL_ABI = [
   // Read-only contract addresses
   {
     type: "function",
-    name: "aztecOutbox",
+    name: "AZTEC_OUTBOX",
     inputs: [],
     outputs: [{ name: "", type: "address" }],
     stateMutability: "view",
@@ -596,7 +596,7 @@ export async function getAztecOutbox(
   const outbox = await publicClient.readContract({
     address: portalAddress,
     abi,
-    functionName: "aztecOutbox",
+    functionName: "AZTEC_OUTBOX",
     args: [],
   });
   return outbox as Address;

@@ -186,7 +186,12 @@ export function useBridge(): UseBridgeResult {
         setBridgeState("error", result.error || "Claim failed");
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : JSON.stringify(error) ?? "Unknown error";
       addLog(`Claim failed: ${message}`, LogLevel.ERROR);
       setBridgeState("error", message);
     } finally {

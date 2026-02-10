@@ -208,8 +208,6 @@ export default defineConfig({
   // Ensure WASM files are handled correctly
   assetsInclude: ['**/*.wasm'],
   optimizeDeps: {
-    // Force re-bundling dependencies on each server start to prevent stale cache issues
-    force: true,
     esbuildOptions: {
       // Node.js global to browser globalThis
       define: {

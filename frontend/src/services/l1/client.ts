@@ -158,20 +158,18 @@ export const DevnetAccounts = {
 
 export interface L1Clients {
   publicClient: PublicClient<Transport, Chain>;
-  userWallet: WalletClient<Transport, Chain, Account>;
-  relayerWallet: WalletClient<Transport, Chain, Account>;
+  walletClient: WalletClient<Transport, Chain, Account>;
 }
 
 /**
  * Create a set of L1 clients for local development.
- * Includes a public client and pre-configured wallet clients for user and relayer.
  *
  * @param userPrivateKey - Private key for user wallet (defaults to USER1)
- * @returns Object with publicClient, userWallet, and relayerWallet
+ * @returns Object with publicClient and walletClient
  *
  * @example
  * ```ts
- * const { publicClient, userWallet, relayerWallet } = createDevnetL1Clients();
+ * const { publicClient, walletClient } = createDevnetL1Clients();
  * ```
  */
 export function createDevnetL1Clients(
@@ -183,15 +181,11 @@ export function createDevnetL1Clients(
 
   const publicClient = createL1PublicClient();
 
-  const userWallet = createL1WalletClient({
+  const walletClient = createL1WalletClient({
     privateKey: userPrivateKey,
   });
 
-  const relayerWallet = createL1WalletClient({
-    privateKey: DevnetAccounts.relayer,
-  });
-
-  return { publicClient, userWallet, relayerWallet };
+  return { publicClient, walletClient };
 }
 
 /**

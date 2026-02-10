@@ -38,6 +38,7 @@ import {
   getOutboxVersion,
   hasMessageBeenConsumed,
   type L2ToL1MessageProofResult,
+  waitForCheckpointProven,
   waitForL2ToL1MessageProof,
 } from "../services/l2/messageProof.js";
 import { executeRequestWithdraw, type Fr } from "../services/l2/operations.js";
@@ -239,7 +240,7 @@ export async function executeWithdrawFlow(
   l2Context: WithdrawL2Context,
   config: WithdrawConfig
 ): Promise<WithdrawResult> {
-  const { publicClient, relayerWallet } = l1Clients;
+  const { publicClient, walletClient } = l1Clients;
   const { node, wallet, contract } = l2Context;
   const totalSteps = getWithdrawStepCount();
   const txHashes: WithdrawResult["txHashes"] = {};
@@ -484,6 +485,20 @@ export async function executeWithdrawFlow(
       logInfo("Message already consumed in outbox, skipping L1 execution");
     }
 
+    // Wait for L2 block checkpoint to be proven on L1 Outbox
+    logSection("L2→L1", "Waiting for L2 block proof on L1 Outbox...");
+    const checkpointProven = await waitForCheckpointProven(
+      publicClient,
+      l1Addresses.aztecOutbox,
+      proofResult.l2BlockNumber!
+    );
+    if (!checkpointProven) {
+      throw new Error(
+        `Timed out waiting for L2 block ${proofResult.l2BlockNumber} checkpoint to be proven on L1`
+      );
+    }
+    logSuccess("Checkpoint proven on L1");
+
     // Execute withdraw via relayer
     logSection("Privacy", "Relayer executing L1 withdraw (not user)");
 
@@ -495,7 +510,7 @@ export async function executeWithdrawFlow(
 
     const executeResult = await executeWithdraw(
       publicClient,
-      relayerWallet,
+      walletClient,
       l1Addresses.portal,
       withdrawIntent,
       secretHashHex,

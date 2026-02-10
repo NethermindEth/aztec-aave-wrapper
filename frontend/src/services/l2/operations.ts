@@ -256,7 +256,7 @@ export async function simulateRequestDeposit(
       params.secretHash
     );
 
-    const intentId = await call.simulate({ from });
+    const intentId = await call.simulate({ from, skipTxValidation: true });
 
     logInfo(`Simulation complete, intent ID: ${intentId.toString().slice(0, 16)}...`);
 
@@ -322,10 +322,12 @@ export async function executeRequestDeposit(
       params.secretHash
     );
 
-    // First, simulate to get the intent_id from the contract's own computation
-    // This ensures we use the exact same logic as the Noir contract (including fee calculation)
+    // Simulate to get the intent_id from the contract's own computation.
+    // skipTxValidation: true because we only need the return value here —
+    // gas validation would race against fluctuating L2 gas prices.
+    // The actual send() below uses sponsored fees with proper gas settings.
     logInfo("Simulating request_deposit to get intent_id from contract...");
-    const intentId = await call.simulate({ from });
+    const intentId = await call.simulate({ from, skipTxValidation: true });
     logInfo(`Intent ID from contract: ${intentId.toString().slice(0, 16)}...`);
 
     // Get the sponsored fee payment method (no Fee Juice required)
@@ -476,7 +478,7 @@ export async function simulateRequestWithdraw(
       params.secretHash
     );
 
-    const intentId = await call.simulate({ from });
+    const intentId = await call.simulate({ from, skipTxValidation: true });
 
     logInfo(`Simulation complete, intent ID: ${intentId.toString().slice(0, 16)}...`);
 
@@ -528,7 +530,7 @@ export async function executeRequestWithdraw(
     // First, simulate to get the intent_id from the contract's own computation
     // This is the same approach used in executeRequestDeposit
     logInfo("Simulating request_withdraw to get intent_id from contract...");
-    const intentId = await call.simulate({ from });
+    const intentId = await call.simulate({ from, skipTxValidation: true });
     logInfo(`Intent ID from contract: ${intentId.toString().slice(0, 16)}...`);
 
     // Get the sponsored fee payment method

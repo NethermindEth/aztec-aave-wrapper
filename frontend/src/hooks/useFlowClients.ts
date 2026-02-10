@@ -13,7 +13,6 @@
 import { type Accessor, createEffect, createMemo, createSignal, on, onCleanup } from "solid-js";
 import type { Account, Chain, Transport, WalletClient } from "viem";
 import type { L1Clients } from "../services/l1/client.js";
-import { createL1WalletClient, DevnetAccounts } from "../services/l1/client.js";
 import { balanceOf } from "../services/l1/tokens.js";
 import type { AztecNodeClient } from "../services/l2/client.js";
 import { createL2NodeClientNoWait, waitForL2Node } from "../services/l2/client.js";
@@ -213,15 +212,9 @@ export function useFlowClients(
   async function initializeL1Clients(connection: EthereumWalletConnection): Promise<L1Clients> {
     const { publicClient, walletClient } = connection;
 
-    // Create relayer wallet for L1 operations that don't reveal user identity
-    const relayerWallet = createL1WalletClient({
-      privateKey: DevnetAccounts.relayer,
-    });
-
     return {
       publicClient,
-      userWallet: walletClient as WalletClient<Transport, Chain, Account>,
-      relayerWallet,
+      walletClient: walletClient as WalletClient<Transport, Chain, Account>,
     };
   }
 

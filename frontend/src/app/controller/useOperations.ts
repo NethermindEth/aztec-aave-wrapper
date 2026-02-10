@@ -29,11 +29,7 @@ import {
   type WithdrawL2Context,
 } from "../../flows/withdraw";
 import { getPositionStatusLabel, type UsePositionsResult } from "../../hooks/usePositions.js";
-import {
-  createL1PublicClient,
-  createL1WalletClient,
-  DevnetAccounts,
-} from "../../services/l1/client";
+import { createL1PublicClient } from "../../services/l1/client";
 import { getAztecOutbox } from "../../services/l1/portal";
 import { createL2NodeClient } from "../../services/l2/client";
 import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
@@ -120,8 +116,7 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       const publicClient = createL1PublicClient();
       const l1Clients = {
         publicClient,
-        userWallet: ethereumConnection.walletClient,
-        relayerWallet: ethereumConnection.walletClient,
+        walletClient: ethereumConnection.walletClient,
       };
 
       const l1Addresses: BridgeL1Addresses = {
@@ -184,11 +179,9 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
 
       const publicClient = createL1PublicClient();
-      const relayerWallet = createL1WalletClient({ privateKey: DevnetAccounts.relayer });
       const l1Clients = {
         publicClient,
-        userWallet: ethereumConnection.walletClient,
-        relayerWallet,
+        walletClient: ethereumConnection.walletClient,
       };
 
       addLog("Fetching portal configuration...");
@@ -237,7 +230,7 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
       addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
 
-      await refreshBalances(l1Clients.publicClient, l1Clients.userWallet.account.address, mockUsdc);
+      await refreshBalances(l1Clients.publicClient, l1Clients.walletClient.account.address, mockUsdc);
     });
   };
 
@@ -280,11 +273,9 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
         addLog(`Connected to MetaMask: ${ethereumConnection.address}`);
 
         const publicClient = createL1PublicClient();
-        const relayerWallet = createL1WalletClient({ privateKey: DevnetAccounts.relayer });
         const l1Clients = {
           publicClient,
-          userWallet: ethereumConnection.walletClient,
-          relayerWallet,
+          walletClient: ethereumConnection.walletClient,
         };
 
         addLog("Fetching portal configuration...");
@@ -332,7 +323,7 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
 
         await refreshBalances(
           l1Clients.publicClient,
-          l1Clients.userWallet.account.address,
+          l1Clients.walletClient.account.address,
           state.contracts.mockUsdc
         );
       } catch (error) {

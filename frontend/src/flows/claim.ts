@@ -644,13 +644,6 @@ export async function executeBridgeClaim(
     const secret = BigInt(pendingBridge.secret);
     const messageLeafIndex = pendingBridge.leafIndex;
 
-    // Debug: log raw values from pendingBridge
-    console.log("[executeBridgeClaim] Raw pendingBridge.amount:", pendingBridge.amount);
-    console.log("[executeBridgeClaim] Raw pendingBridge.secret:", pendingBridge.secret);
-    console.log("[executeBridgeClaim] Raw pendingBridge.leafIndex:", pendingBridge.leafIndex);
-    console.log("[executeBridgeClaim] Raw pendingBridge.messageKey:", pendingBridge.messageKey);
-    console.log("[executeBridgeClaim] Raw pendingBridge.secretHash:", pendingBridge.secretHash);
-
     logInfo("Calling claim_private on BridgedToken...");
     logInfo(`  amount: ${amount}`);
     logInfo(`  secret (hex): 0x${secret.toString(16)}`);
@@ -677,7 +670,12 @@ export async function executeBridgeClaim(
       txHash: claimResult.txHash,
     };
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : JSON.stringify(error) ?? "Unknown error";
     logError(`Claim failed: ${errorMessage}`);
 
     return { success: false, error: errorMessage };
