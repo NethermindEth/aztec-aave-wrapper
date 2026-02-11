@@ -162,15 +162,19 @@ export async function executeDepositPhase1(
     const fee = (config.amount * 10n) / 10000n;
     const netAmount = config.amount - fee;
 
+    // Normalize intent ID to padded hex — this is the canonical format used
+    // everywhere (PendingDeposit, secret lookup, UI display).
+    const paddedIntentId = pad(toHex(BigInt(intentIdStr)), { size: 32 });
+
     // CRITICAL: Store secret immediately after request_deposit succeeds
     // This ensures we can finalize_deposit if the browser is closed
     const l2AddressHex = wallet.address.toString();
-    await storeSecret(intentIdStr, secret.toString(), l2AddressHex);
+    await storeSecret(paddedIntentId, secret.toString(), l2AddressHex);
     logInfo("Secret stored for recovery");
 
     // Persist pending deposit for Phase 2 resumption
     const pendingDeposit: PendingDeposit = {
-      intentId: pad(toHex(BigInt(intentIdStr)), { size: 32 }),
+      intentId: paddedIntentId,
       ownerHash: pad(toHex(ownerHashFr.toBigInt()), { size: 32 }),
       asset: l1Addresses.mockUsdc,
       amount: config.amount.toString(),

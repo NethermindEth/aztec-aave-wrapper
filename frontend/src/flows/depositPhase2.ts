@@ -17,7 +17,13 @@ import type { Address, Chain, Hex, PublicClient, Transport } from "viem";
 import type { L1Clients } from "../services/l1/client.js";
 import type { DepositIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
-import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
+import {
+  executeDeposit,
+  getDepositL2MessageSent,
+  getIntentShares,
+  isDepositIntentConsumed,
+  type MerkleProof,
+} from "../services/l1/portal.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
 import { bigIntToBytes32, hexToFr, sha256ToField } from "../services/l2/crypto.js";
@@ -347,19 +353,13 @@ export async function executeDepositPhase2(
       logInfo("Message already consumed in outbox, skipping L1 execution");
     }
 
-    // Wait for L2 block checkpoint to be proven on L1
-    logSection("L2→L1", "Waiting for L2 block proof on L1 Outbox...");
-    const checkpointProven = await waitForCheckpointProven(
-      publicClient,
-      l1Addresses.aztecOutbox,
-      proofResult.l2BlockNumber!
-    );
+    // Wait for L2 block to be proven
+    logSection("L2→L1", "Waiting for L2 block to be proven...");
+    const checkpointProven = await waitForCheckpointProven(node, proofResult.l2BlockNumber!);
     if (!checkpointProven) {
-      throw new Error(
-        `Timed out waiting for L2 block ${proofResult.l2BlockNumber} checkpoint to be proven on L1`
-      );
+      throw new Error(`Timed out waiting for L2 block ${proofResult.l2BlockNumber} to be proven`);
     }
-    logSuccess("Checkpoint proven on L1");
+    logSuccess("Block proven");
 
     // =========================================================================
     // Step 2: Execute deposit on L1
@@ -368,24 +368,58 @@ export async function executeDepositPhase2(
     logStep(2, PHASE2_TOTAL_STEPS, "Execute deposit on L1");
     setOperationStep(2);
 
-    logSection("Privacy", "Relayer executing L1 deposit (not user)");
+    let l1ToL2MessageIndex: bigint;
+    let l1MessageLeaf: Hex;
 
-    const proof: MerkleProof = {
-      l2BlockNumber: proofResult.l2BlockNumber!,
-      leafIndex: proofResult.leafIndex!,
-      siblingPath: proofResult.siblingPath! as Hex[],
-    };
-
-    const executeResult = await executeDeposit(
+    // Check if this intent was already consumed on L1 (e.g., from a previous attempt)
+    const alreadyConsumed = await isDepositIntentConsumed(
       publicClient,
-      walletClient,
       l1Addresses.portal,
-      depositIntent,
-      proof
+      pending.intentId as Hex
     );
-    txHashes.l1Execute = executeResult.txHash;
-    const l1ToL2MessageIndex = executeResult.messageIndex;
-    const l1MessageLeaf = executeResult.messageLeaf;
+
+    if (alreadyConsumed) {
+      logInfo("Intent already consumed on L1 — recovering message data from events");
+
+      // Recover the L1→L2 message data from past L2MessageSent event
+      const pastMessage = await getDepositL2MessageSent(
+        publicClient,
+        l1Addresses.portal,
+        pending.intentId as Hex
+      );
+
+      if (!pastMessage) {
+        throw new Error(
+          "Intent was consumed but L2MessageSent event not found — cannot recover L1→L2 message data"
+        );
+      }
+
+      l1ToL2MessageIndex = pastMessage.messageIndex;
+      l1MessageLeaf = pastMessage.messageLeaf;
+      logSuccess(
+        `Recovered L1→L2 message: index=${l1ToL2MessageIndex}, leaf=${l1MessageLeaf.slice(0, 16)}...`
+      );
+    } else {
+      logSection("Privacy", "Relayer executing L1 deposit (not user)");
+
+      const proof: MerkleProof = {
+        l2BlockNumber: proofResult.l2BlockNumber!,
+        leafIndex: proofResult.leafIndex!,
+        siblingPath: proofResult.siblingPath! as Hex[],
+      };
+
+      const executeResult = await executeDeposit(
+        publicClient,
+        walletClient,
+        l1Addresses.portal,
+        depositIntent,
+        proof
+      );
+      txHashes.l1Execute = executeResult.txHash;
+      l1ToL2MessageIndex = executeResult.messageIndex;
+      l1MessageLeaf = executeResult.messageLeaf;
+    }
+
     logInfo(`L1→L2 message index: ${l1ToL2MessageIndex}`);
 
     // Get shares recorded for this intent

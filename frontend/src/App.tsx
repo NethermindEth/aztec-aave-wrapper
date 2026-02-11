@@ -8,7 +8,7 @@
  * lives in useAppController, making App purely a layout/wiring layer.
  */
 
-import { type Component, createEffect, createSignal, on, onCleanup, onMount } from "solid-js";
+import { type Component, createEffect, createSignal, on, onCleanup, onMount, Show } from "solid-js";
 import type { Account, Chain, PublicClient, Transport, WalletClient } from "viem";
 import { useAppController } from "./app/controller/useAppController";
 import { ClaimPendingBridges } from "./components/ClaimPendingBridges";
@@ -19,6 +19,7 @@ import { FaucetCard } from "./components/FaucetCard";
 import { LogViewer } from "./components/LogViewer";
 import { OperationTabs } from "./components/OperationTabs";
 import { PendingDeposits } from "./components/PendingDeposits";
+import { PendingWithdrawals } from "./components/PendingWithdrawals";
 import { PositionsList } from "./components/PositionsList";
 import { RecoverDeposit } from "./components/RecoverDeposit";
 import { TopBar } from "./components/TopBar";
@@ -139,6 +140,17 @@ const App: Component = () => {
       {/* Fixed TopBar */}
       <TopBar />
 
+      {/* Transaction in-flight overlay — fixed bottom bar, always visible */}
+      <Show when={controller.derived.isAnyOperationBusy()}>
+        <div class="tx-active-overlay">
+          <div class="tx-active-spinner" />
+          <div class="tx-active-text">
+            <strong>Transaction in progress</strong>
+            <span>Please don't close or refresh this page</span>
+          </div>
+        </div>
+      </Show>
+
       {/* Main content with top padding for fixed header */}
       <main class="pt-12 pb-8 min-h-screen bg-zinc-950">
         <div class="main-container space-y-6">
@@ -212,15 +224,23 @@ const App: Component = () => {
             />
           </ErrorBoundary>
 
+          {/* Pending Withdrawals */}
+          <ErrorBoundary>
+            <PendingWithdrawals
+              onClaimRefund={controller.actions.handleClaimRefund}
+              busy={controller.busy}
+            />
+          </ErrorBoundary>
+
           {/* Positions */}
           <ErrorBoundary>
             <PositionsList
               onWithdraw={controller.actions.handleWithdraw}
               onCancel={controller.actions.handleCancelDeposit}
               onFinalizeDeposit={controller.actions.handleFinalizeDeposit}
-              onClaimRefund={controller.actions.handleClaimRefund}
               onRefresh={controller.actions.handleRefreshPositions}
               isRefreshing={controller.positions.isRefreshing()}
+              busy={controller.busy}
             />
           </ErrorBoundary>
 

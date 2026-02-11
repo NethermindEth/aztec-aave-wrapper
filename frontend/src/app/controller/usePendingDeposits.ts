@@ -77,6 +77,8 @@ export interface UsePendingDepositsResult {
   handleRefreshPendingDeposits: (
     addLog: (message: string, level?: LogLevel) => void
   ) => Promise<void>;
+  /** Reload deposits from localStorage into reactive state (no logging) */
+  reloadDeposits: () => void;
 }
 
 // =============================================================================
@@ -346,9 +348,16 @@ export function usePendingDeposits(): UsePendingDepositsResult {
     )
   );
 
+  const reloadDeposits = () => {
+    const entries = loadDeposits();
+    setPendingDepositState("deposits", entries);
+    startPolling();
+  };
+
   return {
     pendingDepositState,
     handleExecuteDeposit,
     handleRefreshPendingDeposits,
+    reloadDeposits,
   };
 }

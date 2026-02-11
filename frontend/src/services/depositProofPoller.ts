@@ -6,8 +6,8 @@
  *
  * Status progression:
  *   'waiting_for_proof'      — L2→L1 message proof not yet available
- *   'waiting_for_checkpoint'  — Proof obtained but L2 block not yet checkpointed on L1
- *   'ready'                   — Checkpoint proven, deposit can be executed on L1
+ *   'waiting_for_checkpoint'  — Proof obtained but L2 block not yet proven
+ *   'ready'                   — Block proven, deposit can be executed on L1
  *   'error'                   — Unexpected failure
  */
 
@@ -45,23 +45,6 @@ const PROOF_CHECK_TIMEOUT_MS = 5_000;
 const PROOF_CHECK_POLL_INTERVAL_MS = 5_000;
 
 // =============================================================================
-// getRootData ABI fragment (inline to avoid extra imports)
-// =============================================================================
-
-const GET_ROOT_DATA_ABI = [
-  {
-    name: "getRootData",
-    type: "function",
-    stateMutability: "view",
-    inputs: [{ name: "_l2BlockNumber", type: "uint256" }],
-    outputs: [
-      { name: "", type: "bytes32" },
-      { name: "", type: "uint256" },
-    ],
-  },
-] as const;
-
-// =============================================================================
 // Main check function
 // =============================================================================
 
@@ -71,7 +54,7 @@ const GET_ROOT_DATA_ABI = [
  * Performs a quick, non-blocking check:
  * 1. Computes the L2→L1 message hash from PendingDeposit fields
  * 2. Attempts to fetch the message proof (5s timeout, 1 poll)
- * 3. If proof found, checks whether the L2 block is checkpointed on L1
+ * 3. If proof found, checks whether the L2 block has been proven via the SDK
  *
  * @param pending - The pending deposit to check
  * @param node - Aztec node client for L2 queries
@@ -151,31 +134,26 @@ export async function checkDepositProofStatus(
     }
 
     // =========================================================================
-    // Step 3: Check if L2 block checkpoint is proven on L1
+    // Step 3: Check if L2 block has been proven via the Aztec node SDK
     // =========================================================================
 
-    try {
-      await publicClient.readContract({
-        address: outboxAddress as `0x${string}`,
-        abi: GET_ROOT_DATA_ABI,
-        functionName: "getRootData",
-        args: [proofResult.l2BlockNumber!],
-      });
+    const tips = await node.getL2Tips();
+    const provenBlockNumber = tips.proven.number;
+    const messageBlockNumber = Number(proofResult.l2BlockNumber!);
 
-      // getRootData succeeded — checkpoint is proven
+    if (provenBlockNumber >= messageBlockNumber) {
       return {
         status: "ready",
-        message: `Deposit ready for L1 execution (L2 block ${proofResult.l2BlockNumber} proven)`,
-        l2BlockNumber: proofResult.l2BlockNumber,
-      };
-    } catch {
-      // getRootData reverts with Outbox__CheckpointNotProven when not yet proven
-      return {
-        status: "waiting_for_checkpoint",
-        message: `L2 block ${proofResult.l2BlockNumber} not yet checkpointed on L1`,
+        message: `Deposit ready for L1 execution (L2 block ${messageBlockNumber} proven, tip: ${provenBlockNumber})`,
         l2BlockNumber: proofResult.l2BlockNumber,
       };
     }
+
+    return {
+      status: "waiting_for_checkpoint",
+      message: `L2 block ${messageBlockNumber} not yet proven (latest proven: ${provenBlockNumber})`,
+      l2BlockNumber: proofResult.l2BlockNumber,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("[depositProofPoller] Error checking proof status:", message);

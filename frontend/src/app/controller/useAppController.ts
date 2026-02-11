@@ -92,8 +92,12 @@ export function useAppController(): AppController {
   // Domain hooks
   const { positionHooks, handleRefreshPositions } = useL2Positions();
   const { bridgeState, readyClaimsCount, handleRefreshBridges, handleClaimBridge } = useBridge();
-  const { pendingDepositState, handleExecuteDeposit, handleRefreshPendingDeposits } =
-    usePendingDeposits();
+  const {
+    pendingDepositState,
+    handleExecuteDeposit,
+    handleRefreshPendingDeposits,
+    reloadDeposits,
+  } = usePendingDeposits();
 
   // Operations (with injected dependencies)
   const operations = useOperations({
@@ -138,9 +142,14 @@ export function useAppController(): AppController {
       handleCancelDeposit: operations.handleCancelDeposit,
       handleFinalizeDeposit: operations.handleFinalizeDeposit,
       handleClaimRefund: operations.handleClaimRefund,
-      handleDepositPhase1: operations.handleDepositPhase1,
-      handleDepositPhase2: (intentId) => handleExecuteDeposit(intentId, addLog),
-      handleClaimBridge: (bridge) => handleClaimBridge(bridge, addLog),
+      handleDepositPhase1: async (amount: bigint, deadline: number) => {
+        await operations.handleDepositPhase1(amount, deadline);
+        reloadDeposits();
+      },
+      handleDepositPhase2: (intentId) =>
+        withBusy("executingDeposit", () => handleExecuteDeposit(intentId, addLog)),
+      handleClaimBridge: (bridge) =>
+        withBusy("claimingBridge", () => handleClaimBridge(bridge, addLog)),
       handleRefreshBridges: () => handleRefreshBridges(addLog),
       handleRefreshPositions: () => handleRefreshPositions(addLog),
       handleRefreshPendingDeposits: () => handleRefreshPendingDeposits(addLog),

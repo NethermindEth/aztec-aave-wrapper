@@ -57,7 +57,7 @@ function getStatusText(status: DepositProofStatus | "unknown", isExecuting: bool
     case "waiting_for_proof":
       return "Waiting for proof";
     case "waiting_for_checkpoint":
-      return "Waiting for checkpoint";
+      return "Waiting for block proof";
     case "ready":
       return "Ready";
     case "error":
