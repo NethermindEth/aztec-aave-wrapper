@@ -207,7 +207,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-### Step 9: Update `DepositFlow.tsx` for Phase 1 only
+### Step 9: Update `DepositFlow.tsx` for Phase 1 only **COMPLETE**
 
 #### Goal
 Update the `DepositFlow` component to show only Phase 1 steps (2 steps: generate secret + request on L2) instead of the full 6-step flow. Add info text explaining that Phase 2 is monitored in the Pending Deposits section below.

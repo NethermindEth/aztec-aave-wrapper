@@ -30,26 +30,6 @@ const DEPOSIT_STEPS: StepConfig[] = [
     description: "Creating a private intent on Aztec L2",
     estimatedSeconds: 15,
   },
-  {
-    label: "Wait for L2→L1 message",
-    description: "Waiting for cross-chain message to propagate",
-    estimatedSeconds: 60,
-  },
-  {
-    label: "Execute deposit on L1",
-    description: "Executing Aave deposit on Ethereum",
-    estimatedSeconds: 30,
-  },
-  {
-    label: "Wait for L1→L2 message",
-    description: "Waiting for confirmation message to propagate",
-    estimatedSeconds: 60,
-  },
-  {
-    label: "Finalize deposit on L2",
-    description: "Creating your private position receipt on Aztec",
-    estimatedSeconds: 15,
-  },
 ];
 
 /**
@@ -417,6 +397,11 @@ export function DepositFlow(props: DepositFlowProps) {
             estimatedSecondsRemaining={currentStepEstimate()}
           />
         </Show>
+
+        {/* Phase 2 info */}
+        <p class="text-xs text-muted-foreground">
+          After submitting, cross-chain execution and finalization are tracked in the Pending Deposits section below.
+        </p>
 
         {/* Error Alert */}
         <Show when={displayError()}>
