@@ -301,7 +301,24 @@ export async function getSecret(
   const secrets = loadStoredSecrets();
   // Note: Case-insensitive comparison since hex strings may vary in case
   const normalizedId = intentId.toLowerCase();
-  const stored = secrets.find((s) => s.intentId.toLowerCase() === normalizedId);
+  let stored = secrets.find((s) => s.intentId.toLowerCase() === normalizedId);
+
+  // Fallback: compare by numeric value to handle padded vs unpadded hex mismatch
+  // e.g., "0x067b..." stored but looked up as "0x00000000...067b..."
+  if (!stored && normalizedId.startsWith("0x")) {
+    try {
+      const lookupValue = BigInt(normalizedId);
+      stored = secrets.find((s) => {
+        try {
+          return BigInt(s.intentId) === lookupValue;
+        } catch {
+          return false;
+        }
+      });
+    } catch {
+      // Not a valid hex number, skip fallback
+    }
+  }
 
   if (!stored) {
     return null;

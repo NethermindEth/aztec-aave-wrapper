@@ -485,19 +485,13 @@ export async function executeWithdrawFlow(
       logInfo("Message already consumed in outbox, skipping L1 execution");
     }
 
-    // Wait for L2 block checkpoint to be proven on L1 Outbox
-    logSection("L2→L1", "Waiting for L2 block proof on L1 Outbox...");
-    const checkpointProven = await waitForCheckpointProven(
-      publicClient,
-      l1Addresses.aztecOutbox,
-      proofResult.l2BlockNumber!
-    );
+    // Wait for L2 block to be proven
+    logSection("L2→L1", "Waiting for L2 block to be proven...");
+    const checkpointProven = await waitForCheckpointProven(node, proofResult.l2BlockNumber!);
     if (!checkpointProven) {
-      throw new Error(
-        `Timed out waiting for L2 block ${proofResult.l2BlockNumber} checkpoint to be proven on L1`
-      );
+      throw new Error(`Timed out waiting for L2 block ${proofResult.l2BlockNumber} to be proven`);
     }
-    logSuccess("Checkpoint proven on L1");
+    logSuccess("Block proven");
 
     // Execute withdraw via relayer
     logSection("Privacy", "Relayer executing L1 withdraw (not user)");

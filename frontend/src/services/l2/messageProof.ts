@@ -361,22 +361,18 @@ export function computeLeafId(leafIndex: bigint, pathSize: number): bigint {
 }
 
 /**
- * Wait for an L2 block checkpoint to be proven on the L1 Outbox.
+ * Wait for an L2 block to be proven, using the Aztec node SDK.
  *
- * Polls `getRootData(l2BlockNumber)` on the Outbox contract. This call reverts
- * with `Outbox__CheckpointNotProven` until the sequencer submits the block proof.
+ * Polls `node.getL2Tips()` and checks whether `tips.proven.number >= l2BlockNumber`.
  *
- * @param publicClient - Viem public client (L1)
- * @param outboxAddress - Aztec outbox address on L1
+ * @param node - Aztec node client
  * @param l2BlockNumber - The L2 block number to wait for
  * @param maxWaitMs - Maximum wait time (default 5 minutes)
  * @param pollIntervalMs - Polling interval (default 10 seconds)
  * @returns True if proven, false if timed out
  */
 export async function waitForCheckpointProven(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  publicClient: any,
-  outboxAddress: string,
+  node: AztecNodeClient,
   l2BlockNumber: bigint,
   maxWaitMs = 300_000,
   pollIntervalMs = 10_000
@@ -385,32 +381,22 @@ export async function waitForCheckpointProven(
 
   while (Date.now() - startTime < maxWaitMs) {
     try {
-      await publicClient.readContract({
-        address: outboxAddress,
-        abi: [
-          {
-            name: "getRootData",
-            type: "function",
-            stateMutability: "view",
-            inputs: [{ name: "_l2BlockNumber", type: "uint256" }],
-            outputs: [
-              { name: "", type: "bytes32" },
-              { name: "", type: "uint256" },
-            ],
-          },
-        ] as const,
-        functionName: "getRootData",
-        args: [l2BlockNumber],
-      });
-      return true;
-    } catch {
-      // getRootData reverts with CheckpointNotProven when not yet proven
+      const tips = await node.getL2Tips();
+      if (tips.proven.number >= Number(l2BlockNumber)) {
+        return true;
+      }
       const elapsed = Math.round((Date.now() - startTime) / 1000);
       console.log(
-        `[messageProof] Checkpoint for block ${l2BlockNumber} not yet proven on L1 (${elapsed}s elapsed)`
+        `[messageProof] Block ${l2BlockNumber} not yet proven (proven tip: ${tips.proven.number}, ${elapsed}s elapsed)`
       );
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    } catch (error) {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      console.log(
+        `[messageProof] Error checking proven status (${elapsed}s elapsed):`,
+        error instanceof Error ? error.message : error
+      );
     }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
   return false;

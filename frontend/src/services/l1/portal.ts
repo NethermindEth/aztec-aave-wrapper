@@ -288,6 +288,7 @@ export async function executeDeposit(
     abi,
     functionName: "executeDeposit",
     args: [intentTuple, proof.l2BlockNumber, proof.leafIndex, proof.siblingPath],
+    gas: 5_000_000n,
   });
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -395,6 +396,7 @@ export async function executeWithdraw(
     abi,
     functionName: "executeWithdraw",
     args: [intentTuple, secretHash, proof.l2BlockNumber, proof.leafIndex, proof.siblingPath],
+    gas: 5_000_000n,
   });
 
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -716,6 +718,63 @@ export async function waitForTransaction(
 }
 
 // =============================================================================
+// Deposit Event Lookup
+// =============================================================================
+
+/**
+ * Recover the L1→L2 message data for a deposit intent that was already consumed.
+ *
+ * When `executeDeposit` was previously called successfully, the portal emits
+ * `L2MessageSent(bytes32 indexed intentId, bytes32 messageLeaf, uint256 messageIndex)`.
+ * This function queries that event to recover the data needed for L2 finalization.
+ *
+ * @param publicClient - Viem public client
+ * @param portalAddress - Portal contract address
+ * @param intentId - The intent ID to look up
+ * @param fromBlock - Starting block to scan (default: 0)
+ * @returns Message leaf and index if found, null otherwise
+ */
+export async function getDepositL2MessageSent(
+  publicClient: PublicClient<Transport, Chain>,
+  portalAddress: Address,
+  intentId: Hex,
+  fromBlock: bigint = 0n
+): Promise<{ messageLeaf: Hex; messageIndex: bigint } | null> {
+  try {
+    const logs = await publicClient.getLogs({
+      address: portalAddress,
+      event: {
+        type: "event",
+        name: "L2MessageSent",
+        inputs: [
+          { name: "intentId", type: "bytes32", indexed: true },
+          { name: "messageLeaf", type: "bytes32", indexed: false },
+          { name: "messageIndex", type: "uint256", indexed: false },
+        ],
+      },
+      args: {
+        intentId: intentId,
+      },
+      fromBlock,
+      toBlock: "latest",
+    });
+
+    if (logs.length > 0) {
+      const latestLog = logs[logs.length - 1];
+      return {
+        messageLeaf: latestLog.args.messageLeaf as Hex,
+        messageIndex: latestLog.args.messageIndex as bigint,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.warn("[getDepositL2MessageSent] Error querying events:", error);
+    return null;
+  }
+}
+
+// =============================================================================
 // Withdrawal Bridge Lookup
 // =============================================================================
 
@@ -766,6 +825,50 @@ export async function getWithdrawalBridgeMessageKey(
     return null;
   } catch (error) {
     console.warn("[getWithdrawalBridgeMessageKey] Error querying events:", error);
+    return null;
+  }
+}
+
+/**
+ * Get the withdrawn amount for a withdrawal intent from L1 events.
+ *
+ * Queries the WithdrawExecuted event emitted by the portal during executeWithdraw.
+ *
+ * @param publicClient - Viem public client
+ * @param portalAddress - Portal contract address
+ * @param intentId - The intent ID to look up
+ * @returns The withdrawn amount if found, null otherwise
+ */
+export async function getWithdrawnAmount(
+  publicClient: PublicClient<Transport, Chain>,
+  portalAddress: Address,
+  intentId: Hex
+): Promise<bigint | null> {
+  try {
+    const logs = await publicClient.getLogs({
+      address: portalAddress,
+      event: {
+        type: "event",
+        name: "WithdrawExecuted",
+        inputs: [
+          { name: "intentId", type: "bytes32", indexed: true },
+          { name: "asset", type: "address", indexed: true },
+          { name: "amount", type: "uint256", indexed: false },
+        ],
+      },
+      args: { intentId },
+      fromBlock: 0n,
+      toBlock: "latest",
+    });
+
+    if (logs.length > 0) {
+      const latestLog = logs[logs.length - 1];
+      return latestLog.args.amount as bigint;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn("[getWithdrawnAmount] Error querying events:", error);
     return null;
   }
 }

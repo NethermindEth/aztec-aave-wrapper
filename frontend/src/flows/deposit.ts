@@ -30,7 +30,13 @@ import {
 import type { L1Clients } from "../services/l1/client.js";
 import type { DepositIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
-import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
+import {
+  executeDeposit,
+  getDepositL2MessageSent,
+  getIntentShares,
+  isDepositIntentConsumed,
+  type MerkleProof,
+} from "../services/l1/portal.js";
 import { balanceOf, type L1AddressesForBalances } from "../services/l1/tokens.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
@@ -377,8 +383,10 @@ export async function executeDepositFlow(
 
     // CRITICAL: Store secret immediately after request_deposit succeeds
     // This ensures we can retry finalize_deposit if it fails later
+    // Use padded hex format to match PendingDeposit.intentId used for lookup
+    const paddedIntentId = pad(toHex(BigInt(intentIdStr)), { size: 32 });
     const l2AddressHex = wallet.address.toString();
-    await storeSecret(intentIdStr, secret.toString(), l2AddressHex);
+    await storeSecret(paddedIntentId, secret.toString(), l2AddressHex);
     logInfo("Secret stored for recovery");
 
     // =========================================================================
@@ -521,55 +529,66 @@ export async function executeDepositFlow(
       logInfo("Message already consumed in outbox, skipping L1 execution");
     }
 
-    // Wait for L2 block checkpoint to be proven on L1 Outbox
-    logSection("L2→L1", "Waiting for L2 block proof on L1 Outbox...");
-    const checkpointProven = await waitForCheckpointProven(
-      publicClient,
-      l1Addresses.aztecOutbox,
-      proofResult.l2BlockNumber!
-    );
+    // Wait for L2 block to be proven
+    logSection("L2→L1", "Waiting for L2 block to be proven...");
+    const checkpointProven = await waitForCheckpointProven(node, proofResult.l2BlockNumber!);
     if (!checkpointProven) {
-      throw new Error(
-        `Timed out waiting for L2 block ${proofResult.l2BlockNumber} checkpoint to be proven on L1`
-      );
+      throw new Error(`Timed out waiting for L2 block ${proofResult.l2BlockNumber} to be proven`);
     }
-    logSuccess("Checkpoint proven on L1");
+    logSuccess("Block proven");
 
-    // Execute deposit via relayer
-    logSection("Privacy", "Relayer executing L1 deposit (not user)");
-
-    const proof: MerkleProof = {
-      l2BlockNumber: proofResult.l2BlockNumber!,
-      leafIndex: proofResult.leafIndex!,
-      siblingPath: proofResult.siblingPath! as `0x${string}`[],
-    };
+    let l1ToL2MessageIndex: bigint;
+    let l1MessageLeaf: Hex;
 
     // Check if intent was already consumed (from a previous failed attempt)
-    const _alreadyConsumed = await publicClient.readContract({
-      address: l1Addresses.portal,
-      abi: [
-        {
-          name: "consumedDepositIntents",
-          type: "function",
-          stateMutability: "view",
-          inputs: [{ type: "bytes32" }],
-          outputs: [{ type: "bool" }],
-        },
-      ] as const,
-      functionName: "consumedDepositIntents",
-      args: [depositIntent.intentId],
-    });
-
-    const executeResult = await executeDeposit(
+    const alreadyConsumed = await isDepositIntentConsumed(
       publicClient,
-      walletClient,
       l1Addresses.portal,
-      depositIntent,
-      proof
+      depositIntent.intentId
     );
-    txHashes.l1Execute = executeResult.txHash;
-    const l1ToL2MessageIndex = executeResult.messageIndex;
-    const l1MessageLeaf = executeResult.messageLeaf;
+
+    if (alreadyConsumed) {
+      logInfo("Intent already consumed on L1 — recovering message data from events");
+
+      const pastMessage = await getDepositL2MessageSent(
+        publicClient,
+        l1Addresses.portal,
+        depositIntent.intentId
+      );
+
+      if (!pastMessage) {
+        throw new Error(
+          "Intent was consumed but L2MessageSent event not found — cannot recover L1→L2 message data"
+        );
+      }
+
+      l1ToL2MessageIndex = pastMessage.messageIndex;
+      l1MessageLeaf = pastMessage.messageLeaf;
+      logSuccess(
+        `Recovered L1→L2 message: index=${l1ToL2MessageIndex}, leaf=${l1MessageLeaf.slice(0, 16)}...`
+      );
+    } else {
+      // Execute deposit via relayer
+      logSection("Privacy", "Relayer executing L1 deposit (not user)");
+
+      const proof: MerkleProof = {
+        l2BlockNumber: proofResult.l2BlockNumber!,
+        leafIndex: proofResult.leafIndex!,
+        siblingPath: proofResult.siblingPath! as `0x${string}`[],
+      };
+
+      const executeResult = await executeDeposit(
+        publicClient,
+        walletClient,
+        l1Addresses.portal,
+        depositIntent,
+        proof
+      );
+      txHashes.l1Execute = executeResult.txHash;
+      l1ToL2MessageIndex = executeResult.messageIndex;
+      l1MessageLeaf = executeResult.messageLeaf;
+    }
+
     logInfo(`L1→L2 message index: ${l1ToL2MessageIndex}`);
 
     // Get shares recorded for this intent
