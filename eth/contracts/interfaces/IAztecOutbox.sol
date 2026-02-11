@@ -7,7 +7,7 @@ import {DataStructures} from "../libraries/DataStructures.sol";
  * @title IAztecOutbox
  * @notice Interface for consuming L2->L1 messages from Aztec
  * @dev Matches the interface from aztec-packages l1-contracts
- *      https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.20251212/l1-contracts/src/core/messagebridge/Outbox.sol
+ *      https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.6-patch.1/l1-contracts/src/core/messagebridge/Outbox.sol
  *
  * The Aztec outbox is part of the rollup infrastructure. When an L2 contract
  * sends a message to L1, it becomes consumable after the L2 block is proven

@@ -5,7 +5,7 @@ pragma solidity ^0.8.33;
  * @title DataStructures
  * @notice Data structures for Aztec L1 message bridge
  * @dev Matches the structures from aztec-packages l1-contracts
- *      https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.20251212/l1-contracts/src/core/libraries/DataStructures.sol
+ *      https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.6-patch.1/l1-contracts/src/core/libraries/DataStructures.sol
  */
 library DataStructures {
     /**

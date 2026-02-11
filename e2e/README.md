@@ -221,7 +221,7 @@ bun run test:watch
 
 ## Full Flow Demo Script
 
-The `scripts/full-flow.ts` script demonstrates the complete deposit and withdrawal flow similar to the [Aztec token bridge tutorial](https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.20251212/docs/examples/tutorials/token_bridge_contract/scripts/index.ts).
+The `scripts/full-flow.ts` script demonstrates the complete deposit and withdrawal flow similar to the [Aztec token bridge tutorial](https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.6-patch.1/docs/examples/tutorials/token_bridge_contract/scripts/index.ts).
 
 ### Usage
 

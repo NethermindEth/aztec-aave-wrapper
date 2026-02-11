@@ -367,7 +367,7 @@ If an Aave operation fails (e.g., pool paused, supply cap reached), the operatio
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| aztec-nr | v3.0.0-devnet.20251212 | Noir contract framework |
+| aztec-nr | v3.0.0-devnet.6-patch.1 | Noir contract framework |
 | Solidity | 0.8.33 | Smart contract language |
 | OpenZeppelin | 5.x | Security utilities (Ownable2Step, Pausable, SafeERC20) |
 | Aave V3 Core | 1.x | Lending pool integration |

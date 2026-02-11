@@ -7,7 +7,7 @@ import {DataStructures} from "../libraries/DataStructures.sol";
  * @title IAztecInbox
  * @notice Interface for sending L1->L2 messages to Aztec
  * @dev Matches the interface from aztec-packages l1-contracts
- *      https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.20251212/l1-contracts/src/core/messagebridge/Inbox.sol
+ *      https://github.com/AztecProtocol/aztec-packages/blob/v3.0.0-devnet.6-patch.1/l1-contracts/src/core/messagebridge/Inbox.sol
  *
  * The Aztec inbox is part of the rollup infrastructure. When an L1 contract
  * sends a message to L2, the message becomes consumable on L2 after the

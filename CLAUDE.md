@@ -69,7 +69,7 @@ make install         # bun install + forge install for l1
 
 ## Dependencies & Versions
 
-- **Noir**: aztec-nr from aztec-packages v3.0.0-devnet.20251212
+- **Noir**: aztec-nr from aztec-packages v3.0.0-devnet.6-patch.1
 - **Solidity**: 0.8.33
 - **Foundry**: Latest (via foundryup)
 - **Bun**: 1.1.0+ (package manager)
