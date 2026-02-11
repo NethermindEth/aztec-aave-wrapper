@@ -153,106 +153,104 @@ const App: Component = () => {
 
       {/* Main content with top padding for fixed header */}
       <main class="pt-12 pb-8 min-h-screen bg-zinc-950">
-        <div class="main-container space-y-6">
-          {/* Hero section with portfolio stats */}
+        <div class="main-container">
+          {/* Hero section with portfolio stats — full width above grid */}
           <Hero
             totalValueLocked={controller.derived.totalValueLocked()}
             activePositionCount={controller.derived.activePositionCount()}
             readyClaimsCount={controller.derived.readyClaimsCount()}
           />
 
-          {/* Contract Deployment */}
-          <ErrorBoundary>
-            <ContractDeployment />
-          </ErrorBoundary>
+          <div class="layout-columns">
+            {/* Left column — sticky action panel */}
+            <div class="layout-left">
+              <ErrorBoundary>
+                <OperationTabs
+                  defaultTab="bridge"
+                  onBridge={controller.actions.handleBridge}
+                  onDeposit={controller.actions.handleDepositPhase1}
+                  onWithdraw={controller.actions.handleWithdraw}
+                />
+              </ErrorBoundary>
 
-          {/* Token Faucet - Get test tokens */}
-          <ErrorBoundary>
-            <FaucetCard
-              faucetAddress={state.contracts.faucet}
-              userAddress={state.wallet.l1Address}
-              publicClient={publicClient()}
-              walletClient={walletClient()}
-              onClaimSuccess={handleFaucetClaimSuccess}
-            />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <ContractDeployment />
+              </ErrorBoundary>
 
-          {/* Wallet Balances - Token holdings across L1/L2 */}
-          <ErrorBoundary>
-            <WalletBalances
-              l1Address={state.wallet.l1Address}
-              l2Address={state.wallet.l2Address}
-              publicClient={publicClient()}
-              mockUsdcAddress={state.contracts.mockUsdc}
-              mockLendingPoolAddress={state.contracts.mockLendingPool}
-              l2BridgedTokenAddress={state.contracts.l2BridgedToken}
-            />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <FaucetCard
+                  faucetAddress={state.contracts.faucet}
+                  userAddress={state.wallet.l1Address}
+                  publicClient={publicClient()}
+                  walletClient={walletClient()}
+                  onClaimSuccess={handleFaucetClaimSuccess}
+                />
+              </ErrorBoundary>
 
-          {/* Main Operations */}
-          <ErrorBoundary>
-            <OperationTabs
-              defaultTab="bridge"
-              onBridge={controller.actions.handleBridge}
-              onDeposit={controller.actions.handleDepositPhase1}
-              onWithdraw={controller.actions.handleWithdraw}
-            />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <RecoverDeposit />
+              </ErrorBoundary>
+            </div>
 
-          {/* Pending Bridge Claims */}
-          <ErrorBoundary>
-            <ClaimPendingBridges
-              bridges={controller.bridge.pendingBridges}
-              isLoading={controller.bridge.isLoading}
-              claimingKey={controller.bridge.claimingKey}
-              error={controller.bridge.error}
-              walletConnected={!!state.contracts.tokenPortal}
-              onClaim={controller.actions.handleClaimBridge}
-              onRefresh={controller.actions.handleRefreshBridges}
-            />
-          </ErrorBoundary>
+            {/* Right column — scrollable context */}
+            <div class="layout-right">
+              <ErrorBoundary>
+                <WalletBalances
+                  l1Address={state.wallet.l1Address}
+                  l2Address={state.wallet.l2Address}
+                  publicClient={publicClient()}
+                  mockUsdcAddress={state.contracts.mockUsdc}
+                  mockLendingPoolAddress={state.contracts.mockLendingPool}
+                  l2BridgedTokenAddress={state.contracts.l2BridgedToken}
+                />
+              </ErrorBoundary>
 
-          {/* Pending Deposits (Phase 2 execution) */}
-          <ErrorBoundary>
-            <PendingDeposits
-              deposits={controller.pendingDeposits.deposits}
-              isLoading={controller.pendingDeposits.isLoading}
-              executingIntentId={controller.pendingDeposits.executingIntentId}
-              error={controller.pendingDeposits.error}
-              onExecute={controller.actions.handleDepositPhase2}
-              onRefresh={controller.actions.handleRefreshPendingDeposits}
-            />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <PositionsList
+                  onWithdraw={controller.actions.handleWithdraw}
+                  onCancel={controller.actions.handleCancelDeposit}
+                  onFinalizeDeposit={controller.actions.handleFinalizeDeposit}
+                  onRefresh={controller.actions.handleRefreshPositions}
+                  isRefreshing={controller.positions.isRefreshing()}
+                  busy={controller.busy}
+                />
+              </ErrorBoundary>
 
-          {/* Pending Withdrawals */}
-          <ErrorBoundary>
-            <PendingWithdrawals
-              onClaimRefund={controller.actions.handleClaimRefund}
-              busy={controller.busy}
-            />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <ClaimPendingBridges
+                  bridges={controller.bridge.pendingBridges}
+                  isLoading={controller.bridge.isLoading}
+                  claimingKey={controller.bridge.claimingKey}
+                  error={controller.bridge.error}
+                  walletConnected={!!state.contracts.tokenPortal}
+                  onClaim={controller.actions.handleClaimBridge}
+                  onRefresh={controller.actions.handleRefreshBridges}
+                />
+              </ErrorBoundary>
 
-          {/* Positions */}
-          <ErrorBoundary>
-            <PositionsList
-              onWithdraw={controller.actions.handleWithdraw}
-              onCancel={controller.actions.handleCancelDeposit}
-              onFinalizeDeposit={controller.actions.handleFinalizeDeposit}
-              onRefresh={controller.actions.handleRefreshPositions}
-              isRefreshing={controller.positions.isRefreshing()}
-              busy={controller.busy}
-            />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <PendingDeposits
+                  deposits={controller.pendingDeposits.deposits}
+                  isLoading={controller.pendingDeposits.isLoading}
+                  executingIntentId={controller.pendingDeposits.executingIntentId}
+                  error={controller.pendingDeposits.error}
+                  onExecute={controller.actions.handleDepositPhase2}
+                  onRefresh={controller.actions.handleRefreshPendingDeposits}
+                />
+              </ErrorBoundary>
 
-          {/* Recover Stuck Deposits */}
-          <ErrorBoundary>
-            <RecoverDeposit />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <PendingWithdrawals
+                  onClaimRefund={controller.actions.handleClaimRefund}
+                  busy={controller.busy}
+                />
+              </ErrorBoundary>
 
-          {/* Logs */}
-          <ErrorBoundary>
-            <LogViewer logs={controller.logs()} title="Operation Logs" maxHeight={300} />
-          </ErrorBoundary>
+              <ErrorBoundary>
+                <LogViewer logs={controller.logs()} title="Operation Logs" maxHeight={300} />
+              </ErrorBoundary>
+            </div>
+          </div>
         </div>
       </main>
     </>

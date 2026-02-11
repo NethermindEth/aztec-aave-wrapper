@@ -660,6 +660,24 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     RECOVER / TROUBLESHOOT CONTENT
+     ────────────────────────────────────────────────────────────────────────── */
+  .recover-content {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .recover-content::-webkit-scrollbar { width: 4px; }
+  .recover-content::-webkit-scrollbar-track { background: transparent; }
+  .recover-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+  }
+  .recover-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      ACCORDION / COLLAPSIBLE
      ────────────────────────────────────────────────────────────────────────── */
   .accordion {
@@ -1567,7 +1585,7 @@
      ────────────────────────────────────────────────────────────────────────── */
   .main-container {
     width: 100%;
-    max-width: 896px; /* 4xl = 56rem */
+    max-width: 1280px;
     margin-left: auto;
     margin-right: auto;
     padding-left: var(--space-md);
@@ -1588,6 +1606,50 @@
   }
 
   /* ──────────────────────────────────────────────────────────────────────────
+     TWO-COLUMN LAYOUT
+     ────────────────────────────────────────────────────────────────────────── */
+  .layout-columns {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: var(--space-lg);
+    align-items: start;
+  }
+
+  .layout-left {
+    position: sticky;
+    top: 72px;
+    max-height: calc(100vh - 72px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding-bottom: var(--space-xl);
+  }
+
+  /* Prevent flex-shrink from collapsing children with overflow:hidden.
+     Without this, glass-card's overflow:hidden changes min-height from
+     auto to 0, allowing the card to shrink below content size and clip. */
+  .layout-left > * {
+    flex-shrink: 0;
+  }
+
+  .layout-left::-webkit-scrollbar { display: none; }
+  .layout-left { scrollbar-width: none; }
+
+  .layout-right {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    min-width: 0;
+  }
+
+  /* Neutralize glass-card margin-bottom inside grid columns */
+  .layout-left .glass-card,
+  .layout-right .glass-card {
+    margin-bottom: 0;
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────────
      RESPONSIVE BREAKPOINTS - MAIN CONTENT (tablet)
      ────────────────────────────────────────────────────────────────────────── */
   @media (max-width: 1024px) {
@@ -1595,6 +1657,17 @@
       max-width: 720px;
       padding-left: var(--space-lg);
       padding-right: var(--space-lg);
+    }
+
+    .layout-columns {
+      grid-template-columns: 1fr;
+    }
+
+    .layout-left {
+      position: static;
+      max-height: none;
+      overflow-y: visible;
+      padding-bottom: 0;
     }
   }
 
