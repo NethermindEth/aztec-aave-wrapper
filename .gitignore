@@ -20,6 +20,8 @@ dist/
 out/
 cache/
 artifacts/
+# Allow frontend ABI fallbacks for Vercel deployment
+!frontend/public/artifacts/
 
 # Foundry
 eth/cache/
@@ -73,3 +75,4 @@ e2e/node_modules
 codegenCache.json
 *.pid
 .aztec-data
+.vercel

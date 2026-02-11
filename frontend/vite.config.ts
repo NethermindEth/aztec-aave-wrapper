@@ -4,7 +4,9 @@ import solidPlugin from 'vite-plugin-solid';
 import devtools from 'solid-devtools/vite';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import wasm from 'vite-plugin-wasm';
-import topLevelAwait from 'vite-plugin-top-level-await';
+// Note: vite-plugin-top-level-await removed — esnext build target + modern browsers
+// handle TLA natively. The plugin's async IIFE wrapping converts class declarations
+// to expressions, breaking self-referencing static fields (e.g. Fr.ZERO = new Fr(0n)).
 import { PolyfillOptions, nodePolyfills } from 'vite-plugin-node-polyfills';
 import path from 'path';
 
@@ -120,7 +122,6 @@ export default defineConfig({
     devtools(),
     solidPlugin(),
     wasm(),
-    topLevelAwait(),
     serveDeploymentsPlugin(),
     nodePolyfillsFix({
       // Polyfills for Node.js built-ins (matches Aztec official vite config)
@@ -128,18 +129,16 @@ export default defineConfig({
     }),
     viteStaticCopy({
       targets: [
-        {
-          src: '../eth/out/MockERC20.sol/MockERC20.json',
-          dest: 'artifacts',
-        },
-        {
-          src: '../eth/out/MockLendingPool.sol/MockLendingPool.json',
-          dest: 'artifacts',
-        },
-        {
-          src: '../eth/out/AztecAavePortalL1.sol/AztecAavePortalL1.json',
-          dest: 'artifacts',
-        },
+        // Copy Foundry artifacts if available (fallback to public/artifacts/)
+        ...(fs.existsSync(path.resolve(__dirname, '../eth/out/MockERC20.sol/MockERC20.json'))
+          ? [{ src: '../eth/out/MockERC20.sol/MockERC20.json', dest: 'artifacts' }]
+          : []),
+        ...(fs.existsSync(path.resolve(__dirname, '../eth/out/MockLendingPool.sol/MockLendingPool.json'))
+          ? [{ src: '../eth/out/MockLendingPool.sol/MockLendingPool.json', dest: 'artifacts' }]
+          : []),
+        ...(fs.existsSync(path.resolve(__dirname, '../eth/out/AztecAavePortalL1.sol/AztecAavePortalL1.json'))
+          ? [{ src: '../eth/out/AztecAavePortalL1.sol/AztecAavePortalL1.json', dest: 'artifacts' }]
+          : []),
         // Copy deployment files if they exist (created during deploy)
         ...(fs.existsSync(path.resolve(__dirname, '../.deployments.local.json'))
           ? [{ src: '../.deployments.local.json', dest: '.' }]

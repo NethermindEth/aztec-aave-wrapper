@@ -1,0 +1,37 @@
+# Vercel ignore file - override .gitignore for deployment
+# Only ignore things truly not needed for the frontend build
+
+# Node modules are reinstalled
+node_modules/
+
+# Test and E2E code
+e2e/
+eth/test/
+aztec/aave_wrapper/src/test/
+
+# Foundry build outputs (artifacts are in frontend/public/artifacts/)
+eth/cache/
+eth/out/
+
+# Noir build targets
+aztec/target/
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+.tmp/
+
+# Local devnet state
+.aztec-data/
+*.pid
