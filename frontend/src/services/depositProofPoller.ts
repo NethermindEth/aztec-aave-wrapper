@@ -11,13 +11,10 @@
  *   'error'                   — Unexpected failure
  */
 
-import type { PublicClient, Transport, Chain } from "viem";
+import type { Chain, PublicClient, Transport } from "viem";
 import type { AztecNodeClient } from "./l2/client.js";
 import { bigIntToBytes32, sha256ToField } from "./l2/crypto.js";
-import {
-  getOutboxVersion,
-  waitForL2ToL1MessageProof,
-} from "./l2/messageProof.js";
+import { getOutboxVersion, waitForL2ToL1MessageProof } from "./l2/messageProof.js";
 import type { PendingDeposit } from "./pendingDeposits.js";
 
 // =============================================================================
@@ -25,11 +22,7 @@ import type { PendingDeposit } from "./pendingDeposits.js";
 // =============================================================================
 
 /** Proof readiness status for a pending deposit */
-export type DepositProofStatus =
-  | "waiting_for_proof"
-  | "waiting_for_checkpoint"
-  | "ready"
-  | "error";
+export type DepositProofStatus = "waiting_for_proof" | "waiting_for_checkpoint" | "ready" | "error";
 
 /** Result of a single proof status check */
 export interface DepositProofCheckResult {

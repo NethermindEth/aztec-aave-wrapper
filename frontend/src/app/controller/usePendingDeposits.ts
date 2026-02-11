@@ -19,14 +19,14 @@ import {
   type Phase2L1Addresses,
   type Phase2L2Context,
 } from "../../flows/depositPhase2";
-import { createL1PublicClient, type L1Clients } from "../../services/l1/client";
-import { getAztecOutbox } from "../../services/l1/portal";
-import { createL2NodeClient } from "../../services/l2/client";
-import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
 import {
   checkDepositProofStatus,
   type DepositProofStatus,
 } from "../../services/depositProofPoller";
+import { createL1PublicClient, type L1Clients } from "../../services/l1/client";
+import { getAztecOutbox } from "../../services/l1/portal";
+import { createL2NodeClient } from "../../services/l2/client";
+import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
 import { getPendingDeposits, type PendingDeposit } from "../../services/pendingDeposits";
 import { connectEthereumWallet } from "../../services/wallet/ethereum";
 import { connectWallet, isDevWallet } from "../../services/wallet/index.js";
@@ -239,11 +239,7 @@ export function usePendingDeposits(): UsePendingDepositsResult {
       return;
     }
 
-    if (
-      !state.contracts.portal ||
-      !state.contracts.mockUsdc ||
-      !state.contracts.l2Wrapper
-    ) {
+    if (!state.contracts.portal || !state.contracts.mockUsdc || !state.contracts.l2Wrapper) {
       addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
       return;
     }
@@ -318,7 +314,7 @@ export function usePendingDeposits(): UsePendingDepositsResult {
           ? error.message
           : typeof error === "string"
             ? error
-            : JSON.stringify(error) ?? "Unknown error";
+            : (JSON.stringify(error) ?? "Unknown error");
       addLog(`Phase 2 failed: ${message}`, LogLevel.ERROR);
       setPendingDepositState("error", message);
     } finally {

@@ -400,7 +400,8 @@ export function DepositFlow(props: DepositFlowProps) {
 
         {/* Phase 2 info */}
         <p class="text-xs text-muted-foreground">
-          After submitting, cross-chain execution and finalization are tracked in the Pending Deposits section below.
+          After submitting, cross-chain execution and finalization are tracked in the Pending
+          Deposits section below.
         </p>
 
         {/* Error Alert */}

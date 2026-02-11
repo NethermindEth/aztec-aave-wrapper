@@ -10,14 +10,12 @@
  * from the persisted PendingDeposit.
  */
 
-import { pad, type PublicClient, toHex, type Chain, type Transport } from "viem";
-// Flow types (shared with deposit.ts)
-import type { DepositConfig, DepositL1Addresses, DepositL2Context } from "./deposit.js";
+import { type Chain, type PublicClient, pad, type Transport, toHex } from "viem";
 // L2 services
 import { computeOwnerHash, computeSalt, generateSecretPair } from "../services/l2/crypto.js";
 import { executeRequestDeposit, type Fr } from "../services/l2/operations.js";
 // Persistence services
-import { savePendingDeposit, type PendingDeposit } from "../services/pendingDeposits.js";
+import { type PendingDeposit, savePendingDeposit } from "../services/pendingDeposits.js";
 import { storeSecret } from "../services/secrets.js";
 // Store actions
 import {
@@ -27,7 +25,7 @@ import {
   setOperationStep,
   startOperation,
 } from "../store/actions.js";
-import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
+import { logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
 // Error types
 import {
   isNetworkError,
@@ -38,6 +36,8 @@ import {
   UserRejectedError,
 } from "../types/errors.js";
 import { formatUSDC } from "../types/state.js";
+// Flow types (shared with deposit.ts)
+import type { DepositConfig, DepositL1Addresses, DepositL2Context } from "./deposit.js";
 
 // =============================================================================
 // Types
@@ -150,7 +150,10 @@ export async function executeDepositPhase1(
     // Compute owner hash for privacy (AFTER getting intent_id)
     // owner_hash = poseidon2_hash([caller, intent_id]) for per-intent unlinkability
     const ownerHashFr = await computeOwnerHash(wallet.address, BigInt(intentIdStr));
-    logSection("Privacy", `Owner hash computed: ${ownerHashFr.toBigInt().toString(16).slice(0, 16)}...`);
+    logSection(
+      "Privacy",
+      `Owner hash computed: ${ownerHashFr.toBigInt().toString(16).slice(0, 16)}...`
+    );
 
     // Compute salt: poseidon2_hash([caller, secret_hash])
     const saltFr = await computeSalt(wallet.address, secretHash);

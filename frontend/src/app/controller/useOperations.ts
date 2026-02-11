@@ -35,11 +35,11 @@ import {
   type WithdrawL2Context,
 } from "../../flows/withdraw";
 import { getPositionStatusLabel, type UsePositionsResult } from "../../hooks/usePositions.js";
-import { getPendingDeposits } from "../../services/pendingDeposits";
 import { createL1PublicClient } from "../../services/l1/client";
 import { getAztecOutbox } from "../../services/l1/portal";
 import { createL2NodeClient } from "../../services/l2/client";
 import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
+import { getPendingDeposits } from "../../services/pendingDeposits";
 import { connectEthereumWallet } from "../../services/wallet/ethereum";
 import { connectWallet, isDevWallet } from "../../services/wallet/index.js";
 import { formatAmount } from "../../shared/format/usdc";
@@ -241,7 +241,11 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
       addLog(`Deposit complete! Intent: ${result.intentId.slice(0, 16)}...`, LogLevel.SUCCESS);
       addLog(`Shares received: ${formatAmount(result.shares)}`, LogLevel.SUCCESS);
 
-      await refreshBalances(l1Clients.publicClient, l1Clients.walletClient.account.address, mockUsdc);
+      await refreshBalances(
+        l1Clients.publicClient,
+        l1Clients.walletClient.account.address,
+        mockUsdc
+      );
     });
   };
 
@@ -324,11 +328,7 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
   // ---------------------------------------------------------------------------
   const handleDepositPhase2 = async (intentId: string) => {
     await withBusy("executingDeposit", async () => {
-      if (
-        !state.contracts.portal ||
-        !state.contracts.mockUsdc ||
-        !state.contracts.l2Wrapper
-      ) {
+      if (!state.contracts.portal || !state.contracts.mockUsdc || !state.contracts.l2Wrapper) {
         addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
         return;
       }

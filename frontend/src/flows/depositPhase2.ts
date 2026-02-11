@@ -12,19 +12,12 @@
  * All PendingDeposit fields are strings — they are reconstituted to bigint/Fr/Hex here.
  */
 
-import {
-  type Address,
-  type Chain,
-  type Hex,
-  type PublicClient,
-  type Transport,
-} from "viem";
+import type { Address, Chain, Hex, PublicClient, Transport } from "viem";
 // L1 Services
 import type { L1Clients } from "../services/l1/client.js";
 import type { DepositIntent } from "../services/l1/intent.js";
 import { mineL1Block } from "../services/l1/mining.js";
 import { executeDeposit, getIntentShares, type MerkleProof } from "../services/l1/portal.js";
-import { balanceOf } from "../services/l1/tokens.js";
 // L2 Services
 import type { AztecNodeClient } from "../services/l2/client.js";
 import { bigIntToBytes32, hexToFr, sha256ToField } from "../services/l2/crypto.js";
@@ -37,10 +30,10 @@ import {
   waitForCheckpointProven,
   waitForL2ToL1MessageProof,
 } from "../services/l2/messageProof.js";
-import { executeFinalizeDeposit, type Fr } from "../services/l2/operations.js";
+import { executeFinalizeDeposit } from "../services/l2/operations.js";
 import type { AztecAddress } from "../services/l2/wallet.js";
 // Persistence services
-import { removePendingDeposit, type PendingDeposit } from "../services/pendingDeposits.js";
+import { type PendingDeposit, removePendingDeposit } from "../services/pendingDeposits.js";
 import { getSecret } from "../services/secrets.js";
 // Store
 import {
@@ -51,7 +44,7 @@ import {
   setOperationStep,
   startOperation,
 } from "../store/actions.js";
-import { logError, logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
+import { logInfo, logSection, logStep, logSuccess } from "../store/logger.js";
 // Error types
 import {
   isNetworkError,
@@ -61,7 +54,6 @@ import {
   TimeoutError,
   UserRejectedError,
 } from "../types/errors.js";
-import { formatUSDC } from "../types/state.js";
 
 // =============================================================================
 // Types
@@ -397,11 +389,7 @@ export async function executeDepositPhase2(
     logInfo(`L1→L2 message index: ${l1ToL2MessageIndex}`);
 
     // Get shares recorded for this intent
-    const shares = await getIntentShares(
-      publicClient,
-      l1Addresses.portal,
-      pending.intentId as Hex
-    );
+    const shares = await getIntentShares(publicClient, l1Addresses.portal, pending.intentId as Hex);
     logSuccess(`Shares recorded: ${shares.toString()}`);
 
     // =========================================================================

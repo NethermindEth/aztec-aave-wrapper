@@ -32,10 +32,7 @@ export interface PendingDepositsProps {
   class?: string;
 }
 
-function getStatusBadgeClass(
-  status: DepositProofStatus | "unknown",
-  isExecuting: boolean,
-): string {
+function getStatusBadgeClass(status: DepositProofStatus | "unknown", isExecuting: boolean): string {
   if (isExecuting) {
     return "bg-blue-500/20 text-blue-600 border-blue-500/30";
   }
@@ -52,10 +49,7 @@ function getStatusBadgeClass(
   }
 }
 
-function getStatusText(
-  status: DepositProofStatus | "unknown",
-  isExecuting: boolean,
-): string {
+function getStatusText(status: DepositProofStatus | "unknown", isExecuting: boolean): string {
   if (isExecuting) {
     return "Executing...";
   }
@@ -117,9 +111,7 @@ export function PendingDeposits(props: PendingDepositsProps) {
 
           {/* Loading State */}
           <Show when={props.isLoading && !hasDeposits()}>
-            <div class="text-center text-muted-foreground py-4">
-              Loading pending deposits...
-            </div>
+            <div class="text-center text-muted-foreground py-4">Loading pending deposits...</div>
           </Show>
 
           {/* Deposit List */}
@@ -127,8 +119,7 @@ export function PendingDeposits(props: PendingDepositsProps) {
             <div class="space-y-2">
               <For each={props.deposits}>
                 {(entry) => {
-                  const isExecuting = () =>
-                    props.executingIntentId === entry.deposit.intentId;
+                  const isExecuting = () => props.executingIntentId === entry.deposit.intentId;
 
                   return (
                     <div class="flex items-center justify-between p-3 rounded-lg border bg-card">
@@ -137,18 +128,13 @@ export function PendingDeposits(props: PendingDepositsProps) {
                           <span class="font-mono text-sm">
                             {formatBalance(entry.deposit.amount, 6)} USDC
                           </span>
-                          <Badge
-                            class={getStatusBadgeClass(
-                              entry.proofStatus,
-                              isExecuting(),
-                            )}
-                          >
+                          <Badge class={getStatusBadgeClass(entry.proofStatus, isExecuting())}>
                             {getStatusText(entry.proofStatus, isExecuting())}
                           </Badge>
                         </div>
                         <div class="text-xs text-muted-foreground">
-                          Intent: {entry.deposit.intentId.slice(0, 12)}...
-                          &middot; {formatTimeSince(entry.deposit.createdAt)}
+                          Intent: {entry.deposit.intentId.slice(0, 12)}... &middot;{" "}
+                          {formatTimeSince(entry.deposit.createdAt)}
                         </div>
                         <Show when={entry.proofMessage && entry.proofStatus !== "ready"}>
                           <div class="text-xs text-muted-foreground italic">
@@ -159,12 +145,8 @@ export function PendingDeposits(props: PendingDepositsProps) {
                       <div class="flex items-center gap-2">
                         <Button
                           size="sm"
-                          onClick={() =>
-                            props.onExecute?.(entry.deposit.intentId)
-                          }
-                          disabled={
-                            isExecuting() || entry.proofStatus !== "ready"
-                          }
+                          onClick={() => props.onExecute?.(entry.deposit.intentId)}
+                          disabled={isExecuting() || entry.proofStatus !== "ready"}
                         >
                           {isExecuting()
                             ? "Executing..."

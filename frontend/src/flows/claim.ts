@@ -675,7 +675,7 @@ export async function executeBridgeClaim(
         ? error.message
         : typeof error === "string"
           ? error
-          : JSON.stringify(error) ?? "Unknown error";
+          : (JSON.stringify(error) ?? "Unknown error");
     logError(`Claim failed: ${errorMessage}`);
 
     return { success: false, error: errorMessage };

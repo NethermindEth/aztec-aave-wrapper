@@ -227,9 +227,10 @@ async function checkMessageReadiness(
             leafIndex = leafIndexRaw;
           } else if (typeof leafIndexRaw === "object" && leafIndexRaw !== null) {
             // Try to extract value from object (e.g., Fr type)
-            const val = (leafIndexRaw as Record<string, unknown>).value ??
-                       (leafIndexRaw as Record<string, unknown>).inner ??
-                       leafIndexRaw;
+            const val =
+              (leafIndexRaw as Record<string, unknown>).value ??
+              (leafIndexRaw as Record<string, unknown>).inner ??
+              leafIndexRaw;
             leafIndex = BigInt(String(val));
           } else {
             leafIndex = BigInt(leafIndexRaw?.toString?.() ?? leafIndexRaw);

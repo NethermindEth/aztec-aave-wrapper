@@ -179,7 +179,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-## Phase 5: UI Layer — Components and DepositFlow Update
+## Phase 5: UI Layer — Components and DepositFlow Update **COMPLETE**
 
 Build the `PendingDeposits` component and update `DepositFlow` to use Phase 1 only.
 
@@ -254,7 +254,7 @@ Verify the complete implementation compiles and builds successfully.
 cd frontend && bun run build 2>&1 | tail -5
 ```
 
-### Step 11: Full build and lint check
+### Step 11: Full build and lint check **COMPLETE**
 
 #### Goal
 Run the full build pipeline to verify no compile errors, lint violations, or runtime import issues.
