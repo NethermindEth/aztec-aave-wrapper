@@ -44,7 +44,7 @@ export PXE_PORT ?= 8080
 .PHONY: help check-tooling check-tool-docker check-tool-foundry check-tool-bun \
         check-tool-aztec check-tool-aztec devnet-up devnet-down devnet-health \
         devnet-logs automine-logs advance-blocks build build-l1 build-l2 test test-l1 test-l2 \
-        deploy-local e2e clean
+        deploy-local deploy-frontend deploy-frontend-preview e2e clean
 
 # ==============================================================================
 # Help
@@ -392,6 +392,50 @@ deploy-local: check-devnet-running
 	@echo -e "$(GREEN)Local deployment complete!$(NC)"
 	@echo ""
 	@echo "Deployment addresses saved to .deployments.local.json"
+	@echo ""
+
+## deploy-frontend: Build frontend and deploy to Vercel production
+deploy-frontend:
+	@echo ""
+	@echo "Deploying frontend to Vercel..."
+	@echo "================================"
+	@echo ""
+	@command -v vercel >/dev/null 2>&1 || \
+		(echo -e "$(RED)Error: Vercel CLI not found. Install with: bun add -g vercel$(NC)" && exit 1)
+	@echo "Building frontend..."
+	cd frontend && bun run build
+	@echo ""
+	@echo "Copying build to .vercel/output/static..."
+	@mkdir -p .vercel/output/static
+	@rm -rf .vercel/output/static/*
+	@cp -r frontend/dist/* .vercel/output/static/
+	@cp frontend/dist/.deployments.* .vercel/output/static/ 2>/dev/null || true
+	@echo "Deploying to production..."
+	vercel deploy --prebuilt --prod --yes
+	@echo ""
+	@echo -e "$(GREEN)Frontend deployed to production!$(NC)"
+	@echo ""
+
+## deploy-frontend-preview: Build frontend and deploy a Vercel preview
+deploy-frontend-preview:
+	@echo ""
+	@echo "Deploying frontend preview to Vercel..."
+	@echo "========================================"
+	@echo ""
+	@command -v vercel >/dev/null 2>&1 || \
+		(echo -e "$(RED)Error: Vercel CLI not found. Install with: bun add -g vercel$(NC)" && exit 1)
+	@echo "Building frontend..."
+	cd frontend && bun run build
+	@echo ""
+	@echo "Copying build to .vercel/output/static..."
+	@mkdir -p .vercel/output/static
+	@rm -rf .vercel/output/static/*
+	@cp -r frontend/dist/* .vercel/output/static/
+	@cp frontend/dist/.deployments.* .vercel/output/static/ 2>/dev/null || true
+	@echo "Deploying preview..."
+	vercel deploy --prebuilt --yes
+	@echo ""
+	@echo -e "$(GREEN)Frontend preview deployed!$(NC)"
 	@echo ""
 
 # Internal target to check if devnet is running
