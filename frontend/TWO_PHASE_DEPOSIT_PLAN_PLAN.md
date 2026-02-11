@@ -161,7 +161,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-### Step 7: Wire `usePendingDeposits` into `useAppController.ts`
+### Step 7: Wire `usePendingDeposits` into `useAppController.ts` **COMPLETE**
 
 #### Goal
 Compose the new `usePendingDeposits` hook into the app controller, exposing pending deposit state and actions to the UI layer.

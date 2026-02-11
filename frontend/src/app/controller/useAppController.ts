@@ -23,11 +23,13 @@ import { type BusyState, useBusy } from "./useBusy";
 import { useL2Positions } from "./useL2Positions";
 import { useLogger } from "./useLogger";
 import { useOperations } from "./useOperations";
+import { type PendingDepositState, usePendingDeposits } from "./usePendingDeposits";
 
 export { formatAmount } from "../../shared/format/usdc";
 export type { BridgeState } from "./useBridge";
 // Re-export types and utilities for consumers
 export type { BusyState } from "./useBusy";
+export type { PendingDepositState } from "./usePendingDeposits";
 
 /** Controller return type */
 export interface AppController {
@@ -35,6 +37,7 @@ export interface AppController {
   logs: () => import("../../components/LogViewer").LogEntry[];
   busy: BusyState;
   bridge: BridgeState;
+  pendingDeposits: PendingDepositState;
 
   // Derived values
   derived: {
@@ -61,9 +64,12 @@ export interface AppController {
       shares: bigint,
       assetId: string
     ) => Promise<void>;
+    handleDepositPhase1: (amount: bigint, deadline: number) => Promise<void>;
+    handleDepositPhase2: (intentId: string) => Promise<void>;
     handleClaimBridge: (bridge: PendingBridge) => Promise<void>;
     handleRefreshBridges: () => Promise<void>;
     handleRefreshPositions: () => Promise<void>;
+    handleRefreshPendingDeposits: () => Promise<void>;
   };
 }
 
@@ -86,6 +92,8 @@ export function useAppController(): AppController {
   // Domain hooks
   const { positionHooks, handleRefreshPositions } = useL2Positions();
   const { bridgeState, readyClaimsCount, handleRefreshBridges, handleClaimBridge } = useBridge();
+  const { pendingDepositState, handleExecuteDeposit, handleRefreshPendingDeposits } =
+    usePendingDeposits();
 
   // Operations (with injected dependencies)
   const operations = useOperations({
@@ -114,6 +122,7 @@ export function useAppController(): AppController {
     logs,
     busy,
     bridge: bridgeState,
+    pendingDeposits: pendingDepositState,
     derived: {
       totalValueLocked,
       activePositionCount,
@@ -129,9 +138,12 @@ export function useAppController(): AppController {
       handleCancelDeposit: operations.handleCancelDeposit,
       handleFinalizeDeposit: operations.handleFinalizeDeposit,
       handleClaimRefund: operations.handleClaimRefund,
+      handleDepositPhase1: operations.handleDepositPhase1,
+      handleDepositPhase2: (intentId) => handleExecuteDeposit(intentId, addLog),
       handleClaimBridge: (bridge) => handleClaimBridge(bridge, addLog),
       handleRefreshBridges: () => handleRefreshBridges(addLog),
       handleRefreshPositions: () => handleRefreshPositions(addLog),
+      handleRefreshPendingDeposits: () => handleRefreshPendingDeposits(addLog),
     },
   };
 }
