@@ -7,6 +7,7 @@
 
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
 import { Show } from "solid-js";
+import type { BusyState } from "~/app/controller/useBusy";
 import { Badge, type BadgeVariant } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import type { Position } from "../hooks/usePositions.js";
@@ -23,10 +24,10 @@ export interface PositionCardProps {
   onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
   /** Callback when finalize button is clicked for pending deposits */
   onFinalizeDeposit?: (intentId: string) => void;
-  /** Callback when refund button is clicked for expired pending withdrawals */
-  onClaimRefund?: (intentId: string, deadline: bigint, shares: bigint, assetId: string) => void;
   /** Current L1 timestamp for deadline comparison (use L1 time, not local) */
   currentL1Timestamp?: bigint;
+  /** Busy state from the app controller — disables buttons during in-flight operations */
+  busy?: BusyState;
   /** Optional: CSS class for the container */
   class?: string;
 }
@@ -40,10 +41,6 @@ function getStatusVariant(status: IntentStatus): BadgeVariant {
       return "secondary";
     case IntentStatus.Confirmed:
       return "default";
-    case IntentStatus.PendingWithdraw:
-      return "outline";
-    case IntentStatus.Withdrawn:
-      return "destructive";
     default:
       return "destructive";
   }
@@ -58,10 +55,6 @@ function getStatusLabel(status: IntentStatus): string {
       return "Pending Deposit";
     case IntentStatus.Confirmed:
       return "Active";
-    case IntentStatus.PendingWithdraw:
-      return "Pending Withdraw";
-    case IntentStatus.Withdrawn:
-      return "Withdrawn";
     default:
       return "Unknown";
   }
@@ -150,33 +143,12 @@ export function PositionCard(props: PositionCardProps) {
     }
   };
 
-  // Check if this is a pending withdrawal that can be refunded
-  // Refund is allowed when:
-  // 1. Status is PendingWithdraw
-  // 2. Deadline has passed (currentL1Timestamp >= deadline)
-  // 3. We have the required data (deadline, shares, onClaimRefund callback)
-  const canClaimRefund = () => {
-    if (props.position.status !== IntentStatus.PendingWithdraw) return false;
-    if (!props.onClaimRefund) return false;
-    if (!props.currentL1Timestamp) return false;
-    if (props.position.deadline === 0n) return false;
-    // Contract uses: current_time >= deadline
-    return props.currentL1Timestamp >= props.position.deadline;
-  };
-
-  const handleClaimRefund = () => {
-    if (props.onClaimRefund && canClaimRefund()) {
-      props.onClaimRefund(
-        props.position.intentId,
-        props.position.deadline,
-        props.position.shares,
-        props.position.assetId
-      );
-    }
-  };
-
   return (
-    <div class={`position-card ${props.class ?? ""}`}>
+    <div
+      class={`position-card ${
+        props.position.status === IntentStatus.PendingDeposit ? "position-card--pending" : ""
+      } ${props.class ?? ""}`}
+    >
       {/* Header with position ID and status badge */}
       <div class="position-header">
         <span class="position-id">#{props.position.intentId.slice(0, 8)}...</span>
@@ -220,41 +192,37 @@ export function PositionCard(props: PositionCardProps) {
         </p>
       </Show>
 
-      {/* Status message for pending withdrawals */}
-      <Show when={props.position.status === IntentStatus.PendingWithdraw && !canClaimRefund()}>
-        <p class="position-status-message">
-          Tokens deposited to L2. Check "Pending Bridge Claims" to claim.
-        </p>
-      </Show>
-
       {/* Action buttons */}
-      <Show
-        when={
-          props.position.status === IntentStatus.Confirmed ||
-          canCancel() ||
-          canFinalize() ||
-          canClaimRefund()
-        }
-      >
+      <Show when={props.position.status === IntentStatus.Confirmed || canCancel() || canFinalize()}>
         <div class="position-actions">
           <Show when={props.position.status === IntentStatus.Confirmed}>
-            <Button class="btn-cta" onClick={() => props.onWithdraw(props.position.intentId)}>
-              Withdraw
+            <Button
+              class="btn-cta"
+              onClick={() => props.onWithdraw(props.position.intentId)}
+              disabled={props.busy?.withdrawing}
+            >
+              <Show when={props.busy?.withdrawing} fallback="Withdraw">
+                <span class="btn-spinner" /> Withdrawing...
+              </Show>
             </Button>
           </Show>
           <Show when={canFinalize()}>
-            <Button class="btn-cta" onClick={handleFinalize}>
-              Finalize Deposit
+            <Button class="btn-cta" onClick={handleFinalize} disabled={props.busy?.finalizing}>
+              <Show when={props.busy?.finalizing} fallback="Finalize Deposit">
+                <span class="btn-spinner" /> Finalizing...
+              </Show>
             </Button>
           </Show>
           <Show when={canCancel()}>
-            <Button variant="destructive" class="btn-cta" onClick={handleCancel}>
-              Cancel Deposit
-            </Button>
-          </Show>
-          <Show when={canClaimRefund()}>
-            <Button variant="secondary" class="btn-cta" onClick={handleClaimRefund}>
-              Claim Refund
+            <Button
+              variant="destructive"
+              class="btn-cta"
+              onClick={handleCancel}
+              disabled={props.busy?.cancelling}
+            >
+              <Show when={props.busy?.cancelling} fallback="Cancel Deposit">
+                <span class="btn-spinner" /> Cancelling...
+              </Show>
             </Button>
           </Show>
         </div>

@@ -90,7 +90,7 @@ function getStatusText(status: PendingBridgeStatus): string {
  */
 export function ClaimPendingBridges(props: ClaimPendingBridgesProps) {
   const hasBridges = () => props.bridges.length > 0;
-  const shouldShow = () => props.walletConnected || hasBridges() || props.isLoading;
+  const shouldShow = () => hasBridges() || props.isLoading;
 
   const handleClaim = async (bridge: PendingBridge) => {
     if (props.onClaim) {

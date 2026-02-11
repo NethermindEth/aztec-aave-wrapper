@@ -5,7 +5,9 @@
  * Uses the usePositions hook for reactive position data with persistence.
  */
 
-import { For, Show } from "solid-js";
+import { IntentStatus } from "@aztec-aave-wrapper/shared";
+import { createMemo, For, Show } from "solid-js";
+import type { BusyState } from "~/app/controller/useBusy";
 import { usePositions } from "../hooks/usePositions.js";
 import { PositionCard } from "./PositionCard.js";
 
@@ -19,8 +21,6 @@ export interface PositionsListProps {
   onCancel?: (intentId: string, deadline: bigint, netAmount: bigint) => void;
   /** Callback when finalize is requested for a pending deposit */
   onFinalizeDeposit?: (intentId: string) => void;
-  /** Callback when refund is requested for an expired pending withdrawal */
-  onClaimRefund?: (intentId: string, deadline: bigint, shares: bigint, assetId: string) => void;
   /** Callback to refresh positions from L2 */
   onRefresh?: () => void;
   /** Whether positions are currently being refreshed from L2 */
@@ -29,6 +29,8 @@ export interface PositionsListProps {
   loading?: boolean;
   /** Current L1 timestamp for deadline comparison (use L1 time, not local) */
   currentL1Timestamp?: bigint;
+  /** Busy state for disabling buttons during in-flight operations */
+  busy?: BusyState;
   /** Optional: CSS class for the container */
   class?: string;
 }
@@ -54,67 +56,42 @@ export interface PositionsListProps {
 export function PositionsList(props: PositionsListProps) {
   const { positions } = usePositions();
 
+  // Filter out PendingWithdraw positions — they're shown in the dedicated PendingWithdrawals section
+  const activePositions = createMemo(() =>
+    positions().filter((p) => p.status !== IntentStatus.PendingWithdraw)
+  );
+
   return (
-    <div class={props.class}>
-      {/* Header */}
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold text-zinc-100">Your Positions</h2>
-      </div>
-
-      <Show when={props.loading}>
-        <div class="flex items-center justify-center py-8">
-          <div class="text-muted-foreground">Loading positions...</div>
+    <Show when={props.loading || activePositions().length > 0}>
+      <div class={props.class}>
+        {/* Header */}
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold text-zinc-100">Your Positions</h2>
         </div>
-      </Show>
 
-      <Show when={!props.loading}>
-        <Show
-          when={positions().length > 0}
-          fallback={
-            <div class="empty-state">
-              {/* Empty state icon - vault/safe representing positions */}
-              <div class="empty-state-icon">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M12 3v3" />
-                  <path d="M12 18v3" />
-                  <path d="M3 12h3" />
-                  <path d="M18 12h3" />
-                </svg>
-              </div>
-              <div class="empty-state-title">No positions yet</div>
-              <div class="empty-state-description">
-                Deposit USDC to create your first privacy-preserving Aave position
-              </div>
-            </div>
-          }
-        >
+        <Show when={props.loading}>
+          <div class="flex items-center justify-center py-8">
+            <div class="text-muted-foreground">Loading positions...</div>
+          </div>
+        </Show>
+
+        <Show when={!props.loading}>
           <div class="grid gap-4">
-            <For each={positions()}>
+            <For each={activePositions()}>
               {(position) => (
                 <PositionCard
                   position={position}
                   onWithdraw={props.onWithdraw}
                   onCancel={props.onCancel}
                   onFinalizeDeposit={props.onFinalizeDeposit}
-                  onClaimRefund={props.onClaimRefund}
                   currentL1Timestamp={props.currentL1Timestamp}
+                  busy={props.busy}
                 />
               )}
             </For>
           </div>
         </Show>
-      </Show>
-    </div>
+      </div>
+    </Show>
   );
 }

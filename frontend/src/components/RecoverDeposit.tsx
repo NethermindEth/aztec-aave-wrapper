@@ -1,15 +1,32 @@
 /**
- * Recover Deposit Component
+ * Troubleshoot Intent Component
  *
- * Allows users to query and cancel stuck pending deposits where
- * finalize_deposit failed but tokens were already burned.
+ * Allows users to query and recover stuck deposits or withdrawals.
+ * For deposits: cancel after deadline to recover tokens.
+ * For withdrawals: claim refund after deadline to restore position.
  */
 
 import { createSignal, For, type JSX, Show } from "solid-js";
+import { pad, toHex } from "viem";
+import { checkBridgeMessageReady } from "../flows/claim";
 import { createL1PublicClient } from "../services/l1/client";
-import { getIntentShares } from "../services/l1/portal";
+import {
+  getIntentShares,
+  getWithdrawalBridgeMessageKey,
+  getWithdrawnAmount,
+} from "../services/l1/portal";
+import {
+  claimPrivate,
+  loadBridgedTokenWithAzguard,
+  loadBridgedTokenWithDevWallet,
+} from "../services/l2/bridgedToken";
+import { createL2NodeClient } from "../services/l2/client";
 import { loadContractWithAzguard, loadContractWithDevWallet } from "../services/l2/contract";
-import { executeFinalizeDeposit, getSponsoredFeePaymentMethod } from "../services/l2/operations";
+import {
+  executeClaimRefund,
+  executeFinalizeDeposit,
+  getSponsoredFeePaymentMethod,
+} from "../services/l2/operations";
 import {
   type FoundIntent,
   L2PositionStatus,
@@ -17,7 +34,7 @@ import {
   queryPendingDeposit,
   scanUserIntentsFromL1,
 } from "../services/l2/positions";
-import { getSecret, hasSecret } from "../services/secrets";
+import { getSecret, hasSecret, removeSecret } from "../services/secrets";
 import { connectWallet, isDevWallet } from "../services/wallet/index.js";
 import { useAppState } from "../store/hooks";
 import { formatUSDC } from "../types/state";
@@ -33,6 +50,14 @@ function formatTimestamp(timestamp: bigint): string {
 /**
  * Get status label from status code
  */
+/**
+ * Pad an intent ID hex string to bytes32 for L1 event topic filtering.
+ * Contract readContract calls auto-pad, but getLogs topic filters don't.
+ */
+function padIntentId(id: string): `0x${string}` {
+  return pad(toHex(BigInt(id)), { size: 32 });
+}
+
 function getStatusLabel(status: number): string {
   switch (status) {
     case L2PositionStatus.PendingDeposit:
@@ -92,6 +117,17 @@ export function RecoverDeposit() {
   const [completeSuccess, setCompleteSuccess] = createSignal<string | null>(null);
   const [secretExists, setSecretExists] = createSignal(false);
 
+  // Withdrawal-specific state
+  const [withdrawShares, setWithdrawShares] = createSignal<bigint>(0n);
+  const [withdrawMessageKey, setWithdrawMessageKey] = createSignal<string | null>(null);
+  const [withdrawSecretExists, setWithdrawSecretExists] = createSignal(false);
+  const [isClaimingRefund, setIsClaimingRefund] = createSignal(false);
+  const [claimRefundError, setClaimRefundError] = createSignal<string | null>(null);
+  const [claimRefundSuccess, setClaimRefundSuccess] = createSignal<string | null>(null);
+  const [isCompletingWithdraw, setIsCompletingWithdraw] = createSignal(false);
+  const [completeWithdrawError, setCompleteWithdrawError] = createSignal<string | null>(null);
+  const [completeWithdrawSuccess, setCompleteWithdrawSuccess] = createSignal<string | null>(null);
+
   /**
    * Query the intent status from L2 public storage
    */
@@ -122,6 +158,13 @@ export function RecoverDeposit() {
     setCompleteSuccess(null);
     setCompleteError(null);
     setSecretExists(false);
+    setWithdrawShares(0n);
+    setWithdrawMessageKey(null);
+    setWithdrawSecretExists(false);
+    setClaimRefundError(null);
+    setClaimRefundSuccess(null);
+    setCompleteWithdrawError(null);
+    setCompleteWithdrawSuccess(null);
 
     try {
       // Connect to wallet and load contract
@@ -143,6 +186,39 @@ export function RecoverDeposit() {
         // Check if we have a stored secret for this intent
         const hasStoredSecret = hasSecret(id);
         setSecretExists(hasStoredSecret);
+
+        // For PendingWithdraw, also query L1 shares, messageKey, and secret
+        if (info.status === L2PositionStatus.PendingWithdraw && state.contracts.portal) {
+          try {
+            const shares = await getIntentShares(
+              publicClient,
+              state.contracts.portal as `0x${string}`,
+              id as `0x${string}`
+            );
+            setWithdrawShares(shares);
+          } catch {
+            // Non-critical — shares display is informational
+          }
+
+          // If consumed, look up the bridge messageKey and check for stored secret
+          if (info.isConsumed) {
+            try {
+              const msgKey = await getWithdrawalBridgeMessageKey(
+                publicClient,
+                state.contracts.portal as `0x${string}`,
+                padIntentId(id)
+              );
+              if (msgKey) {
+                setWithdrawMessageKey(msgKey);
+                // Withdrawal secrets are stored under messageKey, not intentId
+                const hasStoredWithdrawSecret = hasSecret(msgKey);
+                setWithdrawSecretExists(hasStoredWithdrawSecret);
+              }
+            } catch {
+              // Non-critical
+            }
+          }
+        }
       } else {
         setQueryError("Intent not found or has no data in public storage.");
       }
@@ -310,6 +386,131 @@ export function RecoverDeposit() {
   };
 
   /**
+   * Claim refund for an expired pending withdrawal
+   */
+  const handleClaimRefund = async () => {
+    const info = depositInfo();
+    if (!info) return;
+
+    if (!state.contracts.l2Wrapper) {
+      setClaimRefundError("Contracts not loaded");
+      return;
+    }
+
+    setIsClaimingRefund(true);
+    setClaimRefundError(null);
+    setClaimRefundSuccess(null);
+
+    try {
+      const { wallet, address: walletAddress } = await connectWallet();
+      const { contract } = isDevWallet(wallet)
+        ? await loadContractWithDevWallet(wallet, state.contracts.l2Wrapper)
+        : await loadContractWithAzguard(wallet, state.contracts.l2Wrapper);
+
+      const publicClient = createL1PublicClient();
+      const block = await publicClient.getBlock();
+      const currentTime = block.timestamp;
+
+      const { Fr } = await import("@aztec/aztec.js/fields");
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+
+      const intentIdFr = Fr.fromString(info.intentId);
+      const aztecAddress = AztecAddress.fromString(walletAddress);
+
+      await executeClaimRefund(contract, { nonce: intentIdFr, currentTime }, aztecAddress);
+
+      setClaimRefundSuccess("Position restored! Your shares have been returned.");
+      setDepositInfo(null);
+      setIntentId("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setClaimRefundError(`Failed to claim refund: ${message}`);
+    } finally {
+      setIsClaimingRefund(false);
+    }
+  };
+
+  /**
+   * Complete a consumed withdrawal by claiming tokens via BridgedToken
+   */
+  const handleCompleteWithdraw = async () => {
+    const info = depositInfo();
+    const msgKey = withdrawMessageKey();
+    if (!info || !msgKey) return;
+
+    if (!state.contracts.l2BridgedToken || !state.contracts.portal) {
+      setCompleteWithdrawError("Contracts not loaded");
+      return;
+    }
+
+    setIsCompletingWithdraw(true);
+    setCompleteWithdrawError(null);
+    setCompleteWithdrawSuccess(null);
+
+    try {
+      // 1. Get the secret (stored under messageKey)
+      const { wallet, address: walletAddress } = await connectWallet();
+      const secretEntry = await getSecret(msgKey, walletAddress);
+      if (!secretEntry) {
+        throw new Error("Secret not found for this withdrawal's bridge message");
+      }
+
+      // 2. Get the withdrawn amount from L1 events
+      const publicClient = createL1PublicClient();
+      const amount = await getWithdrawnAmount(
+        publicClient,
+        state.contracts.portal as `0x${string}`,
+        padIntentId(info.intentId)
+      );
+      if (!amount) {
+        throw new Error("Could not find withdrawn amount from L1 events");
+      }
+
+      // 3. Check L2 message readiness and get leaf index
+      const node = await createL2NodeClient();
+      const readiness = await checkBridgeMessageReady(node, msgKey);
+      if (!readiness.ready) {
+        const msg = readiness.availableAtBlock
+          ? `L1→L2 message not yet synced (current block ${readiness.currentBlock}, available at ${readiness.availableAtBlock}). Try again shortly.`
+          : "L1→L2 message not yet synced to L2. Try again in a few moments.";
+        throw new Error(msg);
+      }
+
+      // 4. Load BridgedToken contract and call claim_private
+      const { contract: bridgedTokenContract } = isDevWallet(wallet)
+        ? await loadBridgedTokenWithDevWallet(wallet, state.contracts.l2BridgedToken)
+        : await loadBridgedTokenWithAzguard(wallet, state.contracts.l2BridgedToken);
+
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const aztecAddress = AztecAddress.fromString(walletAddress);
+
+      const result = await claimPrivate(
+        bridgedTokenContract,
+        {
+          amount,
+          secret: BigInt(secretEntry.secretHex),
+          messageLeafIndex: readiness.leafIndex ?? 0n,
+        },
+        aztecAddress
+      );
+
+      // Clean up the secret after successful claim
+      removeSecret(msgKey);
+
+      setCompleteWithdrawSuccess(
+        `Withdrawal complete! ${formatUSDC(amount)} USDC claimed. TX: ${result.txHash}`
+      );
+      setDepositInfo(null);
+      setIntentId("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setCompleteWithdrawError(`Failed to complete withdrawal: ${message}`);
+    } finally {
+      setIsCompletingWithdraw(false);
+    }
+  };
+
+  /**
    * Scan L1 events to find user's pending deposits
    */
   const handleScan = async () => {
@@ -396,8 +597,10 @@ export function RecoverDeposit() {
             </svg>
           </div>
           <div class="text-left">
-            <div class="text-sm font-medium text-zinc-200">Recover Stuck Deposit</div>
-            <p class="text-xs text-zinc-500">Query and cancel failed deposits to recover tokens</p>
+            <div class="text-sm font-medium text-zinc-200">Troubleshoot Intent</div>
+            <p class="text-xs text-zinc-500">
+              Investigate and recover stuck deposits or withdrawals
+            </p>
           </div>
         </div>
         <div class={`transition-transform duration-200 ${isExpanded() ? "rotate-180" : ""}`}>
@@ -504,140 +707,258 @@ export function RecoverDeposit() {
             </div>
           </Show>
 
-          {/* Cancel Success */}
+          {/* Cancel / Claim Refund Success */}
           <Show when={cancelSuccess()}>
             <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
               {cancelSuccess()}
             </div>
           </Show>
+          <Show when={claimRefundSuccess()}>
+            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
+              {claimRefundSuccess()}
+            </div>
+          </Show>
+          <Show when={completeWithdrawSuccess()}>
+            <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400">
+              {completeWithdrawSuccess()}
+            </div>
+          </Show>
 
-          {/* Deposit Info */}
+          {/* Intent Info — branches on status */}
           <Show when={depositInfo()}>
             {(info) => (
               <div class="p-4 rounded-lg bg-white/[0.02] border border-white/5 space-y-4">
-                <h3 class="text-sm font-medium text-zinc-200">Pending Deposit Found</h3>
+                {/* ── Pending Withdrawal display ── */}
+                <Show when={info().status === L2PositionStatus.PendingWithdraw}>
+                  <h3 class="text-sm font-medium text-zinc-200">Pending Withdrawal Found</h3>
 
-                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                  <div class="text-zinc-500">Status</div>
-                  <div>
-                    <span
-                      class={`px-2 py-0.5 rounded text-xs font-medium ${
-                        info().status === L2PositionStatus.PendingDeposit
-                          ? "bg-amber-500/20 text-amber-400"
-                          : info().status === L2PositionStatus.Active
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-zinc-500/20 text-zinc-400"
-                      }`}
-                    >
-                      {getStatusLabel(info().status)}
-                    </span>
+                  <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div class="text-zinc-500">Status</div>
+                    <div>
+                      <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-500/20 text-blue-400">
+                        Pending Withdraw
+                      </span>
+                    </div>
+
+                    <div class="text-zinc-500">Shares</div>
+                    <div class="text-zinc-200 font-mono">
+                      {withdrawShares() > 0n ? formatUSDC(withdrawShares()) : "—"}
+                    </div>
+
+                    <div class="text-zinc-500">Deadline</div>
+                    <div class="text-zinc-200 font-mono text-xs">
+                      {formatTimestamp(info().deadline)}
+                    </div>
+
+                    <div class="text-zinc-500">Consumed (L1 Executed)</div>
+                    <div class={info().isConsumed ? "text-emerald-400" : "text-amber-400"}>
+                      {info().isConsumed ? "Yes" : "No"}
+                    </div>
                   </div>
 
-                  <div class="text-zinc-500">Net Amount</div>
-                  <div class="text-zinc-200 font-mono">{formatUSDC(info().netAmount)} USDC</div>
+                  {/* Consumed: L1 executed — offer Complete Withdrawal */}
+                  <Show when={info().isConsumed}>
+                    <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+                      Withdrawal executed on L1. Claim your tokens on L2 to complete the withdrawal.
+                    </div>
 
-                  <div class="text-zinc-500">Deadline</div>
-                  <div class="text-zinc-200 font-mono text-xs">
-                    {formatTimestamp(info().deadline)}
-                  </div>
+                    <Show when={withdrawSecretExists()}>
+                      <button
+                        type="button"
+                        onClick={handleCompleteWithdraw}
+                        disabled={isCompletingWithdraw()}
+                        class="btn-cta ready"
+                      >
+                        {isCompletingWithdraw()
+                          ? "Claiming Tokens..."
+                          : "Complete Withdrawal (Claim Tokens)"}
+                      </button>
+                    </Show>
 
-                  <div class="text-zinc-500">Consumed</div>
-                  <div class={info().isConsumed ? "text-red-400" : "text-emerald-400"}>
-                    {info().isConsumed ? "Yes" : "No"}
-                  </div>
+                    <Show when={withdrawMessageKey() && !withdrawSecretExists()}>
+                      <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                        <strong>Secret not found.</strong> The withdrawal secret for the bridge
+                        message was not found in local storage. The tokens were deposited to L2 via
+                        TokenPortal but cannot be claimed without the original secret.
+                      </div>
+                    </Show>
 
-                  <div class="text-zinc-500">Can Cancel</div>
-                  <div class={info().canCancel ? "text-emerald-400" : "text-amber-400"}>
-                    {info().canCancel ? "Yes" : "No"}
-                  </div>
+                    <Show when={!withdrawMessageKey()}>
+                      <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                        Could not find bridge message on L1. The withdrawal may still be processing.
+                        Try again in a few moments or check Pending Bridge Claims.
+                      </div>
+                    </Show>
 
-                  <Show when={!info().canCancel && info().timeUntilCancellable > 0}>
-                    <div class="text-zinc-500">Time Until Cancellable</div>
-                    <div class="text-amber-400 font-mono">
-                      {Math.ceil(info().timeUntilCancellable / 60)} min
+                    <Show when={completeWithdrawSuccess()}>
+                      <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+                        {completeWithdrawSuccess()}
+                      </div>
+                    </Show>
+
+                    <Show when={completeWithdrawError()}>
+                      <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                        {completeWithdrawError()}
+                      </div>
+                    </Show>
+                  </Show>
+
+                  {/* Not consumed + not expired */}
+                  <Show when={!info().isConsumed && info().timeUntilCancellable > 0}>
+                    <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                      Withdrawal hasn't been executed on L1 yet. Wait for the deadline to pass, then
+                      claim a refund to restore your position.
                     </div>
                   </Show>
 
-                  <div class="text-zinc-500">Secret Stored</div>
-                  <div class={secretExists() ? "text-emerald-400" : "text-red-400"}>
-                    {secretExists() ? "Yes" : "No"}
-                  </div>
-                </div>
+                  {/* Not consumed + expired */}
+                  <Show when={!info().isConsumed && info().timeUntilCancellable <= 0}>
+                    <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                      Withdrawal expired without L1 execution. You can reclaim your shares.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClaimRefund}
+                      disabled={isClaimingRefund()}
+                      class="w-full px-4 py-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-amber-400 font-medium border border-amber-500/30 transition-all"
+                    >
+                      {isClaimingRefund() ? "Claiming Refund..." : "Claim Refund"}
+                    </button>
+                  </Show>
 
-                {/* Complete Deposit Button - show if not consumed and secret exists */}
-                <Show when={!info().isConsumed && secretExists()}>
-                  <button
-                    type="button"
-                    onClick={handleCompleteDeposit}
-                    disabled={isCompleting()}
-                    class="btn-cta ready"
-                  >
-                    {isCompleting() ? "Completing..." : "Complete Deposit (Create Position)"}
-                  </button>
+                  <Show when={claimRefundError()}>
+                    <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                      {claimRefundError()}
+                    </div>
+                  </Show>
                 </Show>
 
-                {/* Complete Success */}
-                <Show when={completeSuccess()}>
-                  <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
-                    {completeSuccess()}
-                  </div>
-                </Show>
+                {/* ── Pending Deposit display (original behavior) ── */}
+                <Show when={info().status !== L2PositionStatus.PendingWithdraw}>
+                  <h3 class="text-sm font-medium text-zinc-200">Pending Deposit Found</h3>
 
-                {/* Complete Error */}
-                <Show when={completeError()}>
-                  <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-                    {completeError()}
-                  </div>
-                </Show>
+                  <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div class="text-zinc-500">Status</div>
+                    <div>
+                      <span
+                        class={`px-2 py-0.5 rounded text-xs font-medium ${
+                          info().status === L2PositionStatus.PendingDeposit
+                            ? "bg-amber-500/20 text-amber-400"
+                            : info().status === L2PositionStatus.Active
+                              ? "bg-emerald-500/20 text-emerald-400"
+                              : "bg-zinc-500/20 text-zinc-400"
+                        }`}
+                      >
+                        {getStatusLabel(info().status)}
+                      </span>
+                    </div>
 
-                {/* No Secret Warning */}
-                <Show when={!info().isConsumed && !secretExists()}>
-                  <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
-                    <strong>Secret not found.</strong> The secret was not stored during the original
-                    deposit. This deposit cannot be completed normally. Your options:
-                    <ul class="list-disc ml-4 mt-1 space-y-0.5">
-                      <li>Wait for the deadline to pass, then cancel to recover your tokens</li>
-                      <li>
-                        If you saved the secret elsewhere, you can complete manually via console
-                      </li>
-                    </ul>
-                  </div>
-                </Show>
+                    <div class="text-zinc-500">Net Amount</div>
+                    <div class="text-zinc-200 font-mono">{formatUSDC(info().netAmount)} USDC</div>
 
-                {/* Cancel Button */}
-                <Show when={info().canCancel}>
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    disabled={isCancelling()}
-                    class="w-full px-4 py-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-amber-400 font-medium border border-amber-500/30 transition-all"
-                  >
-                    {isCancelling()
-                      ? "Cancelling..."
-                      : `Cancel & Recover ${formatUSDC(info().netAmount)} USDC`}
-                  </button>
-                </Show>
+                    <div class="text-zinc-500">Deadline</div>
+                    <div class="text-zinc-200 font-mono text-xs">
+                      {formatTimestamp(info().deadline)}
+                    </div>
 
-                {/* Not Cancellable Warning */}
-                <Show when={!info().canCancel && !info().isConsumed}>
-                  <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
-                    You cannot cancel yet. Wait until the deadline passes.
-                  </div>
-                </Show>
+                    <div class="text-zinc-500">Consumed</div>
+                    <div class={info().isConsumed ? "text-red-400" : "text-emerald-400"}>
+                      {info().isConsumed ? "Yes" : "No"}
+                    </div>
 
-                {/* Already Consumed Warning */}
-                <Show when={info().isConsumed}>
-                  <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-                    This intent has already been consumed. If you have a position, refresh from L2.
-                    If not, the deposit may have failed on L1.
-                  </div>
-                </Show>
+                    <div class="text-zinc-500">Can Cancel</div>
+                    <div class={info().canCancel ? "text-emerald-400" : "text-amber-400"}>
+                      {info().canCancel ? "Yes" : "No"}
+                    </div>
 
-                {/* Cancel Error */}
-                <Show when={cancelError()}>
-                  <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
-                    {cancelError()}
+                    <Show when={!info().canCancel && info().timeUntilCancellable > 0}>
+                      <div class="text-zinc-500">Time Until Cancellable</div>
+                      <div class="text-amber-400 font-mono">
+                        {Math.ceil(info().timeUntilCancellable / 60)} min
+                      </div>
+                    </Show>
+
+                    <div class="text-zinc-500">Secret Stored</div>
+                    <div class={secretExists() ? "text-emerald-400" : "text-red-400"}>
+                      {secretExists() ? "Yes" : "No"}
+                    </div>
                   </div>
+
+                  {/* Complete Deposit Button - show if not consumed and secret exists */}
+                  <Show when={!info().isConsumed && secretExists()}>
+                    <button
+                      type="button"
+                      onClick={handleCompleteDeposit}
+                      disabled={isCompleting()}
+                      class="btn-cta ready"
+                    >
+                      {isCompleting() ? "Completing..." : "Complete Deposit (Create Position)"}
+                    </button>
+                  </Show>
+
+                  {/* Complete Success */}
+                  <Show when={completeSuccess()}>
+                    <div class="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400">
+                      {completeSuccess()}
+                    </div>
+                  </Show>
+
+                  {/* Complete Error */}
+                  <Show when={completeError()}>
+                    <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                      {completeError()}
+                    </div>
+                  </Show>
+
+                  {/* No Secret Warning */}
+                  <Show when={!info().isConsumed && !secretExists()}>
+                    <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                      <strong>Secret not found.</strong> The secret was not stored during the
+                      original deposit. This deposit cannot be completed normally. Your options:
+                      <ul class="list-disc ml-4 mt-1 space-y-0.5">
+                        <li>Wait for the deadline to pass, then cancel to recover your tokens</li>
+                        <li>
+                          If you saved the secret elsewhere, you can complete manually via console
+                        </li>
+                      </ul>
+                    </div>
+                  </Show>
+
+                  {/* Cancel Button */}
+                  <Show when={info().canCancel}>
+                    <button
+                      type="button"
+                      onClick={handleCancel}
+                      disabled={isCancelling()}
+                      class="w-full px-4 py-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-amber-400 font-medium border border-amber-500/30 transition-all"
+                    >
+                      {isCancelling()
+                        ? "Cancelling..."
+                        : `Cancel & Recover ${formatUSDC(info().netAmount)} USDC`}
+                    </button>
+                  </Show>
+
+                  {/* Not Cancellable Warning */}
+                  <Show when={!info().canCancel && !info().isConsumed}>
+                    <div class="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+                      You cannot cancel yet. Wait until the deadline passes.
+                    </div>
+                  </Show>
+
+                  {/* Already Consumed Warning */}
+                  <Show when={info().isConsumed}>
+                    <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                      This intent has already been consumed. If you have a position, refresh from
+                      L2. If not, the deposit may have failed on L1.
+                    </div>
+                  </Show>
+
+                  {/* Cancel Error */}
+                  <Show when={cancelError()}>
+                    <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+                      {cancelError()}
+                    </div>
+                  </Show>
                 </Show>
               </div>
             )}
