@@ -571,7 +571,7 @@ export function RecoverDeposit() {
   };
 
   return (
-    <div class="glass-card !p-0 overflow-hidden">
+    <div class="glass-card !p-0">
       {/* Collapsible Header */}
       <button
         type="button"
@@ -610,7 +610,7 @@ export function RecoverDeposit() {
 
       {/* Collapsible Content */}
       <Show when={isExpanded()}>
-        <div class="px-4 pb-4 space-y-4 border-t border-white/5" id="recover-deposit-content">
+        <div class="recover-content px-4 pb-4 space-y-4 border-t border-white/5" id="recover-deposit-content">
           {/* Scan Section */}
           <div class="mt-4 p-4 rounded-lg bg-black/20 border border-white/5 space-y-3">
             <div class="flex items-center justify-between gap-4">
@@ -650,7 +650,7 @@ export function RecoverDeposit() {
                         <span class="text-zinc-300 font-mono text-xs">
                           {intent.intentId.slice(0, 10)}...{intent.intentId.slice(-8)}
                         </span>
-                        <span class="text-zinc-300 font-medium">
+                        <span class="text-zinc-300 font-medium text-right font-mono tabular-nums">
                           {formatUSDC(intent.amount)} USDC
                         </span>
                       </div>
