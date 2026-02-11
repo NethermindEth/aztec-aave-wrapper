@@ -113,7 +113,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-## Phase 4: Controller Layer — Hook and Operations Wiring
+## Phase 4: Controller Layer — Hook and Operations Wiring **COMPLETE**
 
 Wire the new flows and poller into the SolidJS controller layer.
 
@@ -188,7 +188,7 @@ Build the `PendingDeposits` component and update `DepositFlow` to use Phase 1 on
 cd frontend && npx tsc --noEmit --pretty 2>&1 | head -20
 ```
 
-### Step 8: Create `PendingDeposits.tsx` component
+### Step 8: Create `PendingDeposits.tsx` component **COMPLETE**
 
 #### Goal
 Create a UI component following the `ClaimPendingBridges.tsx` pattern (lines 91-184). Shows each pending deposit as a card with amount, intent ID, status badge, time since creation, and an "Execute on L1" button enabled only when proof status is `'ready'`.
