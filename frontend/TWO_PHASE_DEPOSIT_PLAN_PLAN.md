@@ -226,7 +226,7 @@ cd frontend && npx tsc --noEmit --pretty 2>&1 | grep -c "error" | xargs test 0 -
 
 ---
 
-### Step 10: Wire `PendingDeposits` into `App.tsx` layout
+### Step 10: Wire `PendingDeposits` into `App.tsx` layout **COMPLETE**
 
 #### Goal
 Add the `PendingDeposits` component to the main app layout, placed below `ClaimPendingBridges` and above `PositionsList`. Update `onDeposit` callback in `OperationTabs` to use `handleDepositPhase1`.

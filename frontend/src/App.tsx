@@ -18,6 +18,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FaucetCard } from "./components/FaucetCard";
 import { LogViewer } from "./components/LogViewer";
 import { OperationTabs } from "./components/OperationTabs";
+import { PendingDeposits } from "./components/PendingDeposits";
 import { PositionsList } from "./components/PositionsList";
 import { RecoverDeposit } from "./components/RecoverDeposit";
 import { TopBar } from "./components/TopBar";
@@ -181,7 +182,7 @@ const App: Component = () => {
             <OperationTabs
               defaultTab="bridge"
               onBridge={controller.actions.handleBridge}
-              onDeposit={controller.actions.handleDeposit}
+              onDeposit={controller.actions.handleDepositPhase1}
               onWithdraw={controller.actions.handleWithdraw}
             />
           </ErrorBoundary>
@@ -196,6 +197,18 @@ const App: Component = () => {
               walletConnected={!!state.contracts.tokenPortal}
               onClaim={controller.actions.handleClaimBridge}
               onRefresh={controller.actions.handleRefreshBridges}
+            />
+          </ErrorBoundary>
+
+          {/* Pending Deposits (Phase 2 execution) */}
+          <ErrorBoundary>
+            <PendingDeposits
+              deposits={controller.pendingDeposits.deposits}
+              isLoading={controller.pendingDeposits.isLoading}
+              executingIntentId={controller.pendingDeposits.executingIntentId}
+              error={controller.pendingDeposits.error}
+              onExecute={controller.actions.handleDepositPhase2}
+              onRefresh={controller.actions.handleRefreshPendingDeposits}
             />
           </ErrorBoundary>
 
