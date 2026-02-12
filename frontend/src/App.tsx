@@ -170,6 +170,7 @@ const App: Component = () => {
                   onBridge={controller.actions.handleBridge}
                   onDeposit={controller.actions.handleDepositPhase1}
                   onWithdraw={controller.actions.handleWithdraw}
+                  onClaim={controller.actions.handleClaimWithdrawTokens}
                 />
               </ErrorBoundary>
 

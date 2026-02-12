@@ -18,6 +18,7 @@ export interface BusyState {
   finalizing: boolean;
   claimingRefund: boolean;
   claimingBridge: boolean;
+  claimingWithdrawTokens: boolean;
 }
 
 export interface UseBusyResult {
@@ -64,6 +65,7 @@ export function useBusy(): UseBusyResult {
     finalizing: false,
     claimingRefund: false,
     claimingBridge: false,
+    claimingWithdrawTokens: false,
   });
 
   const isAnyBusy = createMemo(() => Object.values(busy).some(Boolean));

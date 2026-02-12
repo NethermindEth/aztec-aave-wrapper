@@ -66,6 +66,7 @@ export interface AppController {
     ) => Promise<void>;
     handleDepositPhase1: (amount: bigint, deadline: number) => Promise<void>;
     handleDepositPhase2: (intentId: string) => Promise<void>;
+    handleClaimWithdrawTokens: (intentId: string) => Promise<void>;
     handleClaimBridge: (bridge: PendingBridge) => Promise<void>;
     handleRefreshBridges: () => Promise<void>;
     handleRefreshPositions: () => Promise<void>;
@@ -148,6 +149,7 @@ export function useAppController(): AppController {
       },
       handleDepositPhase2: (intentId) =>
         withBusy("executingDeposit", () => handleExecuteDeposit(intentId, addLog)),
+      handleClaimWithdrawTokens: operations.handleClaimWithdrawTokens,
       handleClaimBridge: (bridge) =>
         withBusy("claimingBridge", () => handleClaimBridge(bridge, addLog)),
       handleRefreshBridges: () => handleRefreshBridges(addLog),

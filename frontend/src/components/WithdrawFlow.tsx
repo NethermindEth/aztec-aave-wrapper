@@ -6,7 +6,6 @@
  */
 
 import { createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
-import { hasSecret } from "../services/secrets.js";
 import { useApp } from "../store/hooks.js";
 import { IntentStatus } from "../types/index.js";
 import type { PositionDisplay } from "../types/state.js";
@@ -102,11 +101,11 @@ export function WithdrawFlow(props: WithdrawFlowProps) {
     state.positions.find((p) => p.intentId === selectedPosition())
   );
 
-  // Positions pending claim (PendingWithdraw status with stored secret)
+  // Positions pending claim (PendingWithdraw status)
+  // All PendingWithdraw positions are shown — the claim handler validates
+  // whether the L1 withdrawal was actually executed before proceeding.
   const pendingClaims = createMemo(() =>
-    state.positions.filter(
-      (p) => p.status === IntentStatus.PendingWithdraw && hasSecret(p.intentId)
-    )
+    state.positions.filter((p) => p.status === IntentStatus.PendingWithdraw)
   );
 
   const hasPendingClaims = () => pendingClaims().length > 0;

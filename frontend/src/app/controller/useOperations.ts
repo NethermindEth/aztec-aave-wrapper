@@ -13,9 +13,11 @@
  */
 
 import { IntentStatus } from "@aztec-aave-wrapper/shared";
+import { pad, toHex } from "viem";
 import { LogLevel } from "../../components/LogViewer";
 import { type BridgeL1Addresses, executeBridgeFlow } from "../../flows/bridge";
 import { type CancelL2Context, executeCancelDeposit } from "../../flows/cancel";
+import { checkBridgeMessageReady } from "../../flows/claim";
 import {
   type DepositL1Addresses,
   type DepositL2Context,
@@ -36,10 +38,20 @@ import {
 } from "../../flows/withdraw";
 import { getPositionStatusLabel, type UsePositionsResult } from "../../hooks/usePositions.js";
 import { createL1PublicClient } from "../../services/l1/client";
-import { getAztecOutbox } from "../../services/l1/portal";
+import {
+  getAztecOutbox,
+  getWithdrawalBridgeMessageKey,
+  getWithdrawnAmount,
+} from "../../services/l1/portal";
+import {
+  claimPrivate,
+  loadBridgedTokenWithAzguard,
+  loadBridgedTokenWithDevWallet,
+} from "../../services/l2/bridgedToken";
 import { createL2NodeClient } from "../../services/l2/client";
 import { loadContractWithAzguard, loadContractWithDevWallet } from "../../services/l2/contract";
 import { getPendingDeposits } from "../../services/pendingDeposits";
+import { getSecret, removeSecret } from "../../services/secrets";
 import { connectEthereumWallet } from "../../services/wallet/ethereum";
 import { connectWallet, isDevWallet } from "../../services/wallet/index.js";
 import { formatAmount } from "../../shared/format/usdc";
@@ -79,6 +91,8 @@ export interface UseOperationsResult {
     shares: bigint,
     assetId: string
   ) => Promise<void>;
+  /** Claim tokens on L2 for a completed withdrawal */
+  handleClaimWithdrawTokens: (intentId: string) => Promise<void>;
 }
 
 /**
@@ -677,6 +691,144 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // Claim Withdraw Tokens Handler (L2 BridgedToken claim after L1 withdrawal)
+  // ---------------------------------------------------------------------------
+  const handleClaimWithdrawTokens = async (intentId: string) => {
+    await withBusy("claimingWithdrawTokens", async () => {
+      if (!state.contracts.portal || !state.contracts.l2BridgedToken) {
+        addLog("Contracts not loaded. Please wait for deployment.", LogLevel.ERROR);
+        return;
+      }
+
+      const portal = state.contracts.portal;
+      const l2BridgedToken = state.contracts.l2BridgedToken;
+
+      addLog(`Claiming withdrawal tokens for intent: ${intentId.slice(0, 16)}...`);
+
+      const publicClient = createL1PublicClient();
+      const paddedIntentId = pad(toHex(BigInt(intentId)), { size: 32 });
+
+      // 0. Check if the withdrawal was actually executed on L1
+      addLog("Checking L1 withdrawal status...");
+      try {
+        const consumed = await publicClient.readContract({
+          address: portal as `0x${string}`,
+          abi: [
+            {
+              name: "consumedWithdrawIntents",
+              type: "function",
+              stateMutability: "view",
+              inputs: [{ type: "bytes32" }],
+              outputs: [{ type: "bool" }],
+            },
+          ] as const,
+          functionName: "consumedWithdrawIntents",
+          args: [paddedIntentId as `0x${string}`],
+        });
+
+        if (!consumed) {
+          addLog(
+            "Withdrawal has not been executed on L1 yet. The L2 withdrawal request was made but L1 execution is still pending. Try re-initiating the withdrawal for this position.",
+            LogLevel.ERROR
+          );
+          return;
+        }
+      } catch (err) {
+        addLog(
+          `Failed to check L1 withdrawal status: ${err instanceof Error ? err.message : "Unknown error"}`,
+          LogLevel.WARNING
+        );
+        // Continue - we'll try to find the event anyway
+      }
+
+      // 1. Find the bridge message key from L1 events
+      addLog("Looking up withdrawal bridge message on L1...");
+      const messageKey = await getWithdrawalBridgeMessageKey(
+        publicClient,
+        portal as `0x${string}`,
+        paddedIntentId as `0x${string}`
+      );
+      if (!messageKey) {
+        addLog(
+          "Could not find bridge message on L1. The L1 events may have been lost (e.g., after a devnet restart). Try claiming via 'Pending Bridge Claims' instead.",
+          LogLevel.ERROR
+        );
+        return;
+      }
+      addLog(`Found bridge message: ${messageKey.slice(0, 18)}...`);
+
+      // 2. Get the secret stored under the message key
+      const { wallet, address: walletAddress } = await connectWallet();
+      const secretEntry = await getSecret(messageKey, walletAddress);
+      if (!secretEntry) {
+        addLog(
+          "Secret not found for this withdrawal's bridge message. Cannot claim without the original secret.",
+          LogLevel.ERROR
+        );
+        return;
+      }
+
+      // 3. Get the withdrawn amount from L1 events
+      const amount = await getWithdrawnAmount(
+        publicClient,
+        portal as `0x${string}`,
+        paddedIntentId as `0x${string}`
+      );
+      if (!amount) {
+        addLog("Could not find withdrawn amount from L1 events.", LogLevel.ERROR);
+        return;
+      }
+      addLog(`Withdrawn amount: ${formatAmount(amount)} USDC`);
+
+      // 4. Check L1→L2 message readiness
+      addLog("Checking L1→L2 message readiness...");
+      const node = await createL2NodeClient();
+      const readiness = await checkBridgeMessageReady(node, messageKey);
+      if (!readiness.ready) {
+        const msg = readiness.availableAtBlock
+          ? `L1→L2 message not yet synced (current block ${readiness.currentBlock}, available at ${readiness.availableAtBlock}). Try again shortly.`
+          : "L1→L2 message not yet synced to L2. Try again in a few moments.";
+        addLog(msg, LogLevel.WARNING);
+        return;
+      }
+
+      // 5. Load BridgedToken contract and claim
+      addLog("Claiming tokens on L2 via BridgedToken...");
+      const { contract: bridgedTokenContract } = isDevWallet(wallet)
+        ? await loadBridgedTokenWithDevWallet(wallet, l2BridgedToken)
+        : await loadBridgedTokenWithAzguard(wallet, l2BridgedToken);
+
+      const { AztecAddress } = await import("@aztec/aztec.js/addresses");
+      const aztecAddress = AztecAddress.fromString(walletAddress);
+
+      const result = await claimPrivate(
+        bridgedTokenContract,
+        {
+          amount,
+          secret: BigInt(secretEntry.secretHex),
+          messageLeafIndex: readiness.leafIndex ?? 0n,
+        },
+        aztecAddress
+      );
+
+      // Clean up secret after successful claim
+      removeSecret(messageKey);
+      removePositionById(intentId);
+
+      addLog(
+        `Withdrawal tokens claimed! ${formatAmount(amount)} USDC. TX: ${result.txHash}`,
+        LogLevel.SUCCESS
+      );
+
+      const mockUsdc = state.contracts.mockUsdc;
+      if (mockUsdc) {
+        const { walletClient: ethWallet } = await connectEthereumWallet();
+        await refreshBalances(publicClient, ethWallet.account.address, mockUsdc);
+      }
+    });
+  };
+
   return {
     handleBridge,
     handleDeposit,
@@ -686,5 +838,6 @@ export function useOperations(deps: OperationsDeps): UseOperationsResult {
     handleCancelDeposit,
     handleFinalizeDeposit,
     handleClaimRefund,
+    handleClaimWithdrawTokens,
   };
 }

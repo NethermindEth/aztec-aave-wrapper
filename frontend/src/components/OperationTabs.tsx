@@ -29,6 +29,8 @@ export interface OperationTabsProps {
   onDeposit?: DepositFlowProps["onDeposit"];
   /** Callback when withdrawal is initiated */
   onWithdraw?: WithdrawFlowProps["onWithdraw"];
+  /** Callback when withdrawal token claim is initiated */
+  onClaim?: WithdrawFlowProps["onClaim"];
   /** Optional: CSS class for the container */
   class?: string;
 }
@@ -98,7 +100,7 @@ export function OperationTabs(props: OperationTabsProps) {
       </TabsContent>
 
       <TabsContent value="withdraw">
-        <WithdrawFlow onWithdraw={props.onWithdraw} />
+        <WithdrawFlow onWithdraw={props.onWithdraw} onClaim={props.onClaim} />
       </TabsContent>
     </Tabs>
   );

@@ -610,7 +610,10 @@ export function RecoverDeposit() {
 
       {/* Collapsible Content */}
       <Show when={isExpanded()}>
-        <div class="recover-content px-4 pb-4 space-y-4 border-t border-white/5" id="recover-deposit-content">
+        <div
+          class="recover-content px-4 pb-4 space-y-4 border-t border-white/5"
+          id="recover-deposit-content"
+        >
           {/* Scan Section */}
           <div class="mt-4 p-4 rounded-lg bg-black/20 border border-white/5 space-y-3">
             <div class="flex items-center justify-between gap-4">
