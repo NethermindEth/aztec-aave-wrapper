@@ -19,7 +19,7 @@ use crate::{
     compute_owner_hash,
 };
 use crate::types::DepositIntent;
-use dep::aztec::protocol_types::{address::AztecAddress, traits::FromField};
+use aztec::protocol_types::{address::AztecAddress, traits::FromField};
 
 // ============================================================================
 // compute_intent_id Tests

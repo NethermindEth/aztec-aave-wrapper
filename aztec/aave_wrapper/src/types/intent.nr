@@ -1,4 +1,4 @@
-use dep::aztec::protocol_types::traits::{Deserialize, Serialize};
+use aztec::protocol_types::traits::{Deserialize, Serialize};
 
 /// Intent to deposit assets into Aave on a target chain.
 ///

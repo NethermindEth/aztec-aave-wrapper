@@ -11,7 +11,7 @@
 /// their position if a withdrawal request expires without processing.
 
 use crate::types::{PositionReceiptNote, PositionStatus};
-use dep::aztec::protocol_types::{
+use aztec::protocol_types::{
     address::AztecAddress,
     hash::poseidon2_hash,
     traits::{FromField, ToField},

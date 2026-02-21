@@ -16,7 +16,7 @@
 
 use crate::{compute_owner_hash, compute_withdraw_confirmation_content, compute_withdraw_message_content};
 use crate::types::{PositionReceiptNote, PositionStatus, WithdrawIntent};
-use dep::aztec::protocol_types::{address::AztecAddress, traits::FromField};
+use aztec::protocol_types::{address::AztecAddress, traits::FromField};
 
 // ============================================================================
 // compute_withdraw_message_content Tests

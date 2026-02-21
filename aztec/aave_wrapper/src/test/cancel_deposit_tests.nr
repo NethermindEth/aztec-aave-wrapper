@@ -11,7 +11,7 @@
 /// their tokens if a deposit request expires without L1 execution.
 
 use crate::AaveWrapper::IntentStatus;
-use dep::aztec::protocol_types::{
+use aztec::protocol_types::{
     address::AztecAddress,
     hash::poseidon2_hash,
     traits::{FromField, ToField},

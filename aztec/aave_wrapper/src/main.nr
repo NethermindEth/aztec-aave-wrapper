@@ -1,8 +1,8 @@
 pub mod types;
 mod test;
 
-use dep::aztec::macros::aztec;
-use dep::aztec::protocol_types::{
+use aztec::macros::aztec;
+use aztec::protocol_types::{
     address::AztecAddress,
     hash::{poseidon2_hash, sha256_to_field},
     traits::ToField,
