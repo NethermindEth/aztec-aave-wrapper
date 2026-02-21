@@ -14,7 +14,9 @@
 /// The updated functions use secret_hash instead of owner addresses to preserve
 /// user privacy. The owner is never revealed in public hashes or L1 messages.
 
-use crate::{compute_owner_hash, compute_withdraw_confirmation_content, compute_withdraw_message_content};
+use crate::{
+    compute_owner_hash, compute_withdraw_confirmation_content, compute_withdraw_message_content,
+};
 use crate::types::{PositionReceiptNote, PositionStatus, WithdrawIntent};
 use aztec::protocol_types::{address::AztecAddress, traits::FromField};
 
@@ -569,8 +571,10 @@ unconstrained fn test_withdraw_owner_hash_realistic_multiple_positions() {
     let amount: u128 = 100_000_000;
     let deadline: u64 = 1700000000;
 
-    let intent_1 = WithdrawIntent::new(deposit_1_intent_id, withdraw_owner_hash_1, amount, deadline);
-    let intent_2 = WithdrawIntent::new(deposit_2_intent_id, withdraw_owner_hash_2, amount, deadline);
+    let intent_1 =
+        WithdrawIntent::new(deposit_1_intent_id, withdraw_owner_hash_1, amount, deadline);
+    let intent_2 =
+        WithdrawIntent::new(deposit_2_intent_id, withdraw_owner_hash_2, amount, deadline);
 
     // Verify the intents have different owner_hashes
     assert(intent_1.owner_hash != intent_2.owner_hash, "Intent owner_hashes must differ");

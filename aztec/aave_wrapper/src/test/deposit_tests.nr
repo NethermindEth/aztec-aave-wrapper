@@ -153,9 +153,18 @@ unconstrained fn test_owner_hash_unique_per_intent() {
     let owner_hash_3 = compute_owner_hash(alice, intent_id_3);
 
     // All owner_hashes should be different for the same user
-    assert(owner_hash_1 != owner_hash_2, "Same user with different intents must have different owner_hash");
-    assert(owner_hash_2 != owner_hash_3, "Same user with different intents must have different owner_hash");
-    assert(owner_hash_1 != owner_hash_3, "Same user with different intents must have different owner_hash");
+    assert(
+        owner_hash_1 != owner_hash_2,
+        "Same user with different intents must have different owner_hash",
+    );
+    assert(
+        owner_hash_2 != owner_hash_3,
+        "Same user with different intents must have different owner_hash",
+    );
+    assert(
+        owner_hash_1 != owner_hash_3,
+        "Same user with different intents must have different owner_hash",
+    );
 
     // Verify owner_hash is deterministic (same inputs -> same output)
     let owner_hash_1_again = compute_owner_hash(alice, intent_id_1);
@@ -203,11 +212,21 @@ unconstrained fn test_owner_hash_realistic_deposit_flow() {
 
     // Make another deposit with different salt (simulating user's second deposit)
     let salt_2: Field = 43;
-    let intent_id_2 = compute_intent_id(caller, asset_id, amount, original_decimals, deadline, salt_2);
+    let intent_id_2 = compute_intent_id(
+        caller,
+        asset_id,
+        amount,
+        original_decimals,
+        deadline,
+        salt_2,
+    );
     let owner_hash_2 = compute_owner_hash(caller, intent_id_2);
 
     // The two owner_hashes should be different (privacy guarantee)
-    assert(owner_hash != owner_hash_2, "Multiple deposits from same user must have different owner_hash");
+    assert(
+        owner_hash != owner_hash_2,
+        "Multiple deposits from same user must have different owner_hash",
+    );
 }
 
 /// Test intent ID generation with typical USDC deposit values.
