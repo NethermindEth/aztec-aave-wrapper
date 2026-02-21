@@ -1,4 +1,4 @@
-use dep::aztec::macros::aztec;
+use aztec::macros::aztec;
 
 #[aztec]
 pub contract BridgedToken {
@@ -272,10 +272,9 @@ pub contract BridgedToken {
         // Get the caller who will receive the tokens
         let to = self.msg_sender().unwrap();
 
-        // Compute secret_hash using GeneratorIndex.SECRET_HASH (20) as domain separator
-        // This matches Aztec's computeSecretHash: poseidon2Hash([20, secret])
-        // which is used by consume_l1_to_l2_message to look up messages
-        let secret_hash = poseidon2_hash([20, secret]);
+        // Compute secret_hash using Aztec's canonical domain separator.
+        // This matches the hash expected by consume_l1_to_l2_message.
+        let secret_hash = dep::aztec::hash::compute_secret_hash(secret);
 
         // Try to remove any matching pending claim note (if user registered one)
         // This is best-effort - if no matching note exists, we continue without error
